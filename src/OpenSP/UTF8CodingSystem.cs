@@ -1,6 +1,10 @@
 // Copyright (c) 1994 James Clark
 // See the file COPYING for copying permission.
 
+// Suppress unreachable code warnings - the checks against Constant.charMax
+// are intentionally preserved from original C++ code for when charMax varies
+#pragma warning disable CS0162
+
 namespace OpenSP;
 
 public class UTF8Decoder : Decoder

@@ -35,7 +35,7 @@ public class NamedTable<T> where T : Named
     // T *insert(T *p) { return (T *)table_.insert(p); }
     public T? insert(T? p)
     {
-        return (T?)table_.insert(p);
+        return (T?)table_.insert(p!);
     }
 
     // T *lookup(const StringC &str) const { return (T *)table_.lookup(str); }
