@@ -28,6 +28,8 @@ openjade-net/
 - `FOTBuilder` stays `FOTBuilder`, not `FlowObjectTreeBuilder`
 - `StringC` stays `StringC`, not `StringClass`
 - Even "bad" names like `sp_` prefixes must be kept
+- **Keep original casing**: `size()` stays `size()`, NOT `Size()` - ignore .NET PascalCase conventions
+- Method names like `assign`, `append`, `resize`, `swap` stay lowercase
 
 ### 2. File Merging Strategy
 For OpenSP:
@@ -41,7 +43,29 @@ For OpenJade:
 
 ### 3. Type Mappings
 
-#### Fundamental Types
+#### Global Using Aliases (GlobalUsings.cs)
+OpenSP typedefs are preserved using C# 10 global using aliases in `src/OpenSP/GlobalUsings.cs`:
+```csharp
+global using Unsigned32 = System.UInt32;
+global using Signed32 = System.Int32;
+global using Number = System.UInt32;
+global using Offset = System.UInt32;
+global using Index = System.UInt32;
+global using Char = System.UInt32;      // 32-bit codepoint
+global using Xchar = System.Int32;      // Char + EOF (-1)
+global using UnivChar = System.UInt32;
+global using WideChar = System.UInt32;
+global using SyntaxChar = System.UInt32;
+global using CharClassIndex = System.UInt16;
+global using Token = System.UInt32;
+global using EquivCode = System.UInt16;
+global using Boolean = System.Boolean;
+global using PackedBoolean = System.Boolean;
+```
+
+**IMPORTANT**: Always use these typedef names (Char, Number, Offset, etc.) in ported code, NOT the underlying C# types. This preserves the original code's readability and intent.
+
+#### Fundamental Types (for types not covered by global usings)
 ```python
 TYPE_MAPPINGS = {
     'char': 'sbyte',
@@ -53,12 +77,8 @@ TYPE_MAPPINGS = {
     'long': 'long',
     'unsigned long': 'ulong',
     'size_t': 'nuint',
-    'Boolean': 'bool',
-    'bool': 'bool',
     'void': 'void',
     'const char*': 'string',
-    'Char': 'uint',  # 32-bit codepoint
-    'WideChar': 'uint',
     'float': 'float',
     'double': 'double'
 }
@@ -132,10 +152,10 @@ public class StringC {
 namespace SP_NAMESPACE {
 #endif
 
-// C#
-namespace OpenSP {
-    // classes here
-}
+// C# - use file-scoped namespace declaration (C# 10+)
+namespace OpenSP;
+
+// classes here (no extra indentation needed)
 ```
 
 #### Const Methods
