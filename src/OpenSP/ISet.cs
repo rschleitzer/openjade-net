@@ -210,6 +210,19 @@ public class ISet<T> where T : struct, IComparable<T>
         r_.swap(x.r_);
     }
 
+    // ISet<T> &operator=(const ISet<T> &x);
+    public void operatorAssign(ISet<T> x)
+    {
+        if (!ReferenceEquals(this, x))
+        {
+            r_.clear();
+            for (nuint i = 0; i < x.r_.size(); i++)
+            {
+                r_.push_back(new ISetRange<T>(x.r_[i].min, x.r_[i].max));
+            }
+        }
+    }
+
     // Helper methods for arithmetic on generic types
     private static T Add(T value, int amount)
     {

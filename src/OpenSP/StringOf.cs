@@ -102,6 +102,27 @@ public class String<T> where T : struct
         return this;
     }
 
+    // Overload for assigning from array with offset
+    public String<T> assign(T[]? p, nuint start, nuint n)
+    {
+        if (p == null || n == 0)
+        {
+            length_ = 0;
+            return this;
+        }
+        if (alloc_ < n)
+        {
+            ptr_ = new T[n];
+            alloc_ = n;
+        }
+        length_ = n;
+        for (nuint i = 0; i < n; i++)
+        {
+            ptr_![i] = p[start + i];
+        }
+        return this;
+    }
+
     // String<T> &insert(size_t i, const String<T> &s);
     public String<T> insert(nuint i, String<T> s)
     {

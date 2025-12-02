@@ -68,6 +68,12 @@ public class SubstTable
         c = this[c];
     }
 
+    // Convenience overload that returns the substituted character
+    public Char subst(Char c)
+    {
+        return this[c];
+    }
+
     // void subst(StringC &str) const;
     public void subst(StringC str)
     {
