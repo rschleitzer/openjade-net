@@ -5,8 +5,8 @@ namespace OpenSP;
 
 // Note: C# doesn't support multiple inheritance of classes.
 // String<T> and Resource are both classes, so StringResource inherits from String<T>
-// and contains a Resource instance for reference counting.
-public class StringResource<T> : String<T> where T : struct
+// and implements IResource via composition with a Resource instance.
+public class StringResource<T> : String<T>, IResource where T : struct
 {
     private Resource resource_ = new Resource();
 

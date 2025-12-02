@@ -3,7 +3,16 @@
 
 namespace OpenSP;
 
-public class Resource
+// Interface for reference counting - allows Ptr<T> to work with
+// classes that have Resource-like semantics but can't inherit from Resource
+public interface IResource
+{
+    int count();
+    int unref();
+    void @ref();
+}
+
+public class Resource : IResource
 {
     private int count_;
 

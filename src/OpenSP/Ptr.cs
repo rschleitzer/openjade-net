@@ -6,7 +6,7 @@
 
 namespace OpenSP;
 
-public class Ptr<T> where T : Resource
+public class Ptr<T> where T : class, IResource
 {
     private T? ptr_;
 
@@ -107,7 +107,7 @@ public class Ptr<T> where T : Resource
     }
 }
 
-public class ConstPtr<T> : Ptr<T> where T : Resource
+public class ConstPtr<T> : Ptr<T> where T : class, IResource
 {
     // ConstPtr() { }
     public ConstPtr() : base()

@@ -5,8 +5,8 @@ namespace OpenSP;
 
 // Note: C# doesn't support multiple inheritance of classes.
 // Named and Resource are both classes, so NamedResource inherits from Named
-// and contains a Resource instance for reference counting.
-public class NamedResource : Named
+// and implements IResource via composition with a Resource instance.
+public class NamedResource : Named, IResource
 {
     private Resource resource_ = new Resource();
 
