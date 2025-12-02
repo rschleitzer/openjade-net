@@ -7,8 +7,41 @@ namespace OpenSP;
 
 public static class ParserMessages
 {
-    // Placeholder for list separator fragment
-    public static readonly MessageFragment listSep = new MessageFragment(null, 0, ", ");
+    // Message fragments (starting at 1000 in original)
+    public static readonly MessageFragment delimStart = new MessageFragment(null, 1000, "delimiter ");
+    public static readonly MessageFragment digit = new MessageFragment(null, 1002, "digit");
+    public static readonly MessageFragment nameStartCharacter = new MessageFragment(null, 1003, "name start character");
+    public static readonly MessageFragment sepchar = new MessageFragment(null, 1004, "sepchar");
+    public static readonly MessageFragment separator = new MessageFragment(null, 1005, "separator");
+    public static readonly MessageFragment nameCharacter = new MessageFragment(null, 1006, "name character");
+    public static readonly MessageFragment dataCharacter = new MessageFragment(null, 1007, "data character");
+    public static readonly MessageFragment minimumDataCharacter = new MessageFragment(null, 1008, "minimum data character");
+    public static readonly MessageFragment significantCharacter = new MessageFragment(null, 1009, "significant character");
+    public static readonly MessageFragment recordEnd = new MessageFragment(null, 1010, "record end character");
+    public static readonly MessageFragment recordStart = new MessageFragment(null, 1011, "record start character");
+    public static readonly MessageFragment space = new MessageFragment(null, 1012, "space character");
+    public static readonly MessageFragment listSep = new MessageFragment(null, 1013, ", ");
+    public static readonly MessageFragment rangeSep = new MessageFragment(null, 1014, "-");
+    public static readonly MessageFragment parameterLiteral = new MessageFragment(null, 1015, "parameter literal");
+    public static readonly MessageFragment dataTagGroup = new MessageFragment(null, 1016, "data tag group");
+    public static readonly MessageFragment modelGroup = new MessageFragment(null, 1017, "model group");
+    public static readonly MessageFragment dataTagTemplateGroup = new MessageFragment(null, 1018, "data tag template group");
+    public static readonly MessageFragment name = new MessageFragment(null, 1019, "name");
+    public static readonly MessageFragment nameToken = new MessageFragment(null, 1020, "name token");
+    public static readonly MessageFragment elementToken = new MessageFragment(null, 1021, "element token");
+    public static readonly MessageFragment inclusions = new MessageFragment(null, 1022, "inclusions");
+    public static readonly MessageFragment exclusions = new MessageFragment(null, 1023, "exclusions");
+    public static readonly MessageFragment minimumLiteral = new MessageFragment(null, 1024, "minimum literal");
+    public static readonly MessageFragment attributeValueLiteral = new MessageFragment(null, 1025, "attribute value literal");
+    public static readonly MessageFragment systemIdentifier = new MessageFragment(null, 1026, "system identifier");
+    public static readonly MessageFragment number = new MessageFragment(null, 1027, "number");
+    public static readonly MessageFragment attributeValue = new MessageFragment(null, 1028, "attribute value");
+    public static readonly MessageFragment capacityName = new MessageFragment(null, 1029, "name of capacity");
+    public static readonly MessageFragment generalDelimiterRoleName = new MessageFragment(null, 1030, "name of general delimiter role");
+    public static readonly MessageFragment referenceReservedName = new MessageFragment(null, 1031, "reference reserved name");
+    public static readonly MessageFragment quantityName = new MessageFragment(null, 1032, "name of quantity");
+    public static readonly MessageFragment entityEnd = new MessageFragment(null, 1033, "entity end");
+    public static readonly MessageFragment shortrefDelim = new MessageFragment(null, 1034, "short reference delimiter");
 
     // FPI (Formal Public Identifier) error messages
     public static readonly MessageType1 fpiMissingField = new MessageType1(
