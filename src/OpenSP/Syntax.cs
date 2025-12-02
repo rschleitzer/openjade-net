@@ -198,7 +198,9 @@ public class Syntax : Resource
 
     // Private fields
     private ISet<Char> shunchar_ = new ISet<Char>();
+#pragma warning disable CS0414 // Field is assigned but never used (preserved from upstream C++ code)
     private PackedBoolean shuncharControls_;
+#pragma warning restore CS0414
     private ISet<Char>[] set_ = new ISet<Char>[nSet];
     private Char[] standardFunction_ = new Char[3];
     private PackedBoolean[] standardFunctionValid_ = new PackedBoolean[3];

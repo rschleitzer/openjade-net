@@ -76,8 +76,8 @@ public class AttributeValue : Resource
         TextItem.Type type;
         Char[]? s;
         nuint len;
-        Location loc;
-        while (iter.next(out type, out s, out len, out loc))
+        Location loc = new Location();
+        while (iter.next(out type, out s, out len, out loc!))
         {
             if (startLoc.origin().isNull() && !loc.origin().isNull())
                 startLoc = new Location(loc);
@@ -396,9 +396,9 @@ public class TokenizedDeclaredValue : DeclaredValue
         Vector<nuint> spaceIndex = new Vector<nuint>();
         Syntax syntax = context.attributeSyntax();
         Char space = syntax.space();
-        text.subst(type_ == TokenType.entityName
+        text.subst((type_ == TokenType.entityName
                    ? syntax.entitySubstTable()
-                   : syntax.generalSubstTable(),
+                   : syntax.generalSubstTable())!,
                    space);
         StringC value = text.@string();
         nuint i = 0;
@@ -1454,13 +1454,13 @@ public class CdataAttributeValue : AttributeValue
         TextItem.Type type;
         Char[]? s;
         nuint len;
-        Location loc;
-        if (iter.next(out type, out s, out len, out loc)
+        Location loc = new Location();
+        if (iter.next(out type, out s, out len, out loc!)
             && type == TextItem.Type.data
             && len == text_.size()
             && loc.origin().pointer() == strLoc.origin().pointer()
             && loc.index() + len == strLoc.index()
-            && !iter.next(out type, out s, out len, out loc))
+            && !iter.next(out type, out s, out len, out loc!))
         {
             text_.addChars(str, strLoc);
             context.setNextLocation(strLoc);
@@ -1581,13 +1581,13 @@ public class TokenizedAttributeValue : AttributeValue
         TextItem.Type type;
         Char[]? s;
         nuint len;
-        Location loc;
-        if (iter.next(out type, out s, out len, out loc)
+        Location loc = new Location();
+        if (iter.next(out type, out s, out len, out loc!)
             && type == TextItem.Type.data
             && len == text_.size()
             && loc.origin().pointer() == strLoc.origin().pointer()
             && loc.index() + len == strLoc.index()
-            && !iter.next(out type, out s, out len, out loc))
+            && !iter.next(out type, out s, out len, out loc!))
         {
             context.setNextLocation(strLoc);
             context.message(ParserMessages.attributeValueChar,

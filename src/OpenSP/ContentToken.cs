@@ -333,7 +333,7 @@ public class AndModelGroup : ModelGroup
     }
 
     // unsigned andDepth() const;
-    public new uint andDepth()
+    public uint andDepth()
     {
         return andDepth_;
     }
@@ -921,7 +921,7 @@ public class LeafContentToken : ContentToken
     }
 
     // unsigned andDepth() const;
-    public new uint andDepth()
+    public uint andDepth()
     {
         return andInfo_.hasValue() ? ContentToken.andDepth(andInfo_.pointer()!.andAncestor) : 0;
     }
@@ -1006,7 +1006,9 @@ public class DataTagGroup : SeqModelGroup
 public class DataTagElementToken : ElementToken
 {
     private Vector<Text> templates_ = new Vector<Text>();
+#pragma warning disable CS0414 // Field is assigned but never used (preserved from upstream C++ code)
     private Boolean havePaddingTemplate_;
+#pragma warning restore CS0414
     private Text paddingTemplate_ = new Text();
 
     // DataTagElementToken(const ElementType *, Vector<Text> &templates);
