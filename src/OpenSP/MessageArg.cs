@@ -111,3 +111,23 @@ public class StringVectorMessageArg : MessageArg
         }
     }
 }
+
+public class LocationMessageArg : OtherMessageArg
+{
+    private Location loc_ = new Location();
+
+    public LocationMessageArg(Location loc)
+    {
+        loc_ = new Location(loc);
+    }
+
+    public override MessageArg copy()
+    {
+        return new LocationMessageArg(loc_);
+    }
+
+    public Location location()
+    {
+        return loc_;
+    }
+}

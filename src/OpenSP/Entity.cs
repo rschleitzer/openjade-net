@@ -78,6 +78,12 @@ public abstract class Entity : EntityDecl
     {
         defaulted_ = true;
     }
+
+    // virtual void generateSystemId(ParserState &);
+    public virtual void generateSystemId(ParserState parser)
+    {
+        // Default implementation - subclasses may override
+    }
 }
 
 public abstract class InternalEntity : Entity

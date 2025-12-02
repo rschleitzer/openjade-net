@@ -172,6 +172,11 @@ public class Syntax : Resource
         otherNameCategory = 8
     }
 
+    // Static constants for category bit masks (for use in Attribute.cs)
+    public const uint nameStartCategory = (uint)Category.nameStartCategory;
+    public const uint digitCategory = (uint)Category.digitCategory;
+    public const uint otherNameCategory = (uint)Category.otherNameCategory;
+
     // Static reference quantities
     private static readonly int[] referenceQuantity_ = {
         40,   // qATTCNT

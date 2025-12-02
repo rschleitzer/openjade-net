@@ -22,4 +22,25 @@ public class StringC : String<Char>
     public StringC(String<Char> s) : base(s)
     {
     }
+
+    // Single character constructor
+    public StringC(Char c) : base()
+    {
+        operatorPlusAssign(c);
+    }
+
+    // StringC substr(size_t start, size_t length) const
+    public StringC substr(nuint start, nuint length)
+    {
+        Char[]? srcData = data();
+        if (srcData == null || start >= size())
+            return new StringC();
+        nuint actualLength = length;
+        if (start + length > size())
+            actualLength = size() - start;
+        Char[] result = new Char[actualLength];
+        for (nuint i = 0; i < actualLength; i++)
+            result[i] = srcData[start + i];
+        return new StringC(result, actualLength);
+    }
 }

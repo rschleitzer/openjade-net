@@ -188,6 +188,20 @@ public class MessageType1L : MessageType
     }
 }
 
+public class MessageType2L : MessageType
+{
+    public MessageType2L(
+        Severity severity = Severity.info,
+        MessageModule? module = null,
+        uint number = unchecked((uint)-1),
+        string? text = null,
+        string? clauses = null,
+        string? auxText = null)
+        : base(severity, module ?? MessageModules.libModule, number, text, clauses, auxText)
+    {
+    }
+}
+
 public class OpenElementInfo
 {
     public PackedBoolean included;
@@ -366,6 +380,16 @@ public abstract class Messenger
         msg.args[0] = new CopyOwner<MessageArg>(arg0.copy());
         msg.type = type;
         msg.auxLoc = new Location(loc);
+        dispatchMessage(msg);
+    }
+
+    public void message(MessageType2L type, MessageArg arg0, MessageArg arg1)
+    {
+        Message msg = new Message(2);
+        doInitMessage(msg);
+        msg.args[0] = new CopyOwner<MessageArg>(arg0.copy());
+        msg.args[1] = new CopyOwner<MessageArg>(arg1.copy());
+        msg.type = type;
         dispatchMessage(msg);
     }
 

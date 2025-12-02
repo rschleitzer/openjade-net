@@ -3,18 +3,8 @@
 
 namespace OpenSP;
 
-// Forward declaration for AttributeDefinitionList
-// Will be fully implemented when Attribute.cs is ported
-public class AttributeDefinitionList : Resource
-{
-    // Stub implementation - will be expanded later
-    public AttributeDefinitionList()
-    {
-    }
-}
-
 // This is used for things that have attribute definitions
-// that notations and elements.
+// like notations and elements.
 
 public class Attributed
 {
