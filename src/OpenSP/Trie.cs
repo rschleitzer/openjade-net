@@ -111,6 +111,7 @@ public class Trie
     internal void setNCodes(int value) => nCodes_ = value;
     internal void setToken(ushort value) => token_ = value;
     internal void setTokenLength(byte value) => tokenLength_ = value;
+    internal byte getPriority() => priority_;
     internal void setPriority(byte value) => priority_ = value;
     internal CopyOwner<BlankTrie> getBlank() => blank_;
     internal void setBlank(CopyOwner<BlankTrie> value) => blank_ = value;
