@@ -44,6 +44,16 @@ public class SdText
     {
     }
 
+    // SdText(const SdText &);
+    public SdText(SdText from)
+    {
+        lita_ = from.lita_;
+        chars_ = new String<SyntaxChar>(from.chars_);
+        items_ = new Vector<SdTextItem>(from.items_.size());
+        for (nuint i = 0; i < from.items_.size(); i++)
+            items_[i] = new SdTextItem(from.items_[i]);
+    }
+
     // SdText(const Location &loc, Boolean lita);
     public SdText(Location loc, Boolean lita)
     {

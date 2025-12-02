@@ -227,6 +227,25 @@ public class Message
         args = new Vector<CopyOwner<MessageArg>>((nuint)nArgs);
     }
 
+    // Copy constructor
+    public Message(Message from)
+    {
+        type = from.type;
+        loc = new Location(from.loc);
+        auxLoc = new Location(from.auxLoc);
+        // Deep copy args
+        args = new Vector<CopyOwner<MessageArg>>(from.args.size());
+        for (nuint i = 0; i < from.args.size(); i++)
+        {
+            MessageArg? arg = from.args[i].pointer();
+            args[i] = new CopyOwner<MessageArg>(arg?.copy());
+        }
+        // Deep copy openElementInfo
+        openElementInfo = new Vector<OpenElementInfo>(from.openElementInfo.size());
+        for (nuint i = 0; i < from.openElementInfo.size(); i++)
+            openElementInfo[i] = new OpenElementInfo(from.openElementInfo[i]);
+    }
+
     public void swap(Message to)
     {
         MessageType? tem = type;

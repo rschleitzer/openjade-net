@@ -12,4 +12,10 @@ public struct MarkupScan
         @out,
         suppress
     }
+
+    // Static constants for convenient access (matches C++ MarkupScan::normal syntax)
+    public const byte normal = (byte)Type.normal;
+    public const byte @in = (byte)Type.@in;
+    public const byte @out = (byte)Type.@out;
+    public const byte suppress = (byte)Type.suppress;
 }

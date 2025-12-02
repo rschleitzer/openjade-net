@@ -69,6 +69,15 @@ public class Text
     {
     }
 
+    // Text(const Text &);
+    public Text(Text from)
+    {
+        chars_ = new StringC(from.chars_);
+        items_ = new Vector<TextItem>(from.items_.size());
+        for (nuint i = 0; i < from.items_.size(); i++)
+            items_[i] = new TextItem(from.items_[i]);
+    }
+
     // ~Text();
     // C# handles cleanup via GC
 

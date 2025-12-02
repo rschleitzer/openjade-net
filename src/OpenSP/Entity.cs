@@ -167,3 +167,20 @@ public abstract class SubdocEntity : ExternalEntity
         return this;
     }
 }
+
+// Processing Instruction Entity
+public class PiEntity : InternalEntity
+{
+    // PiEntity(const StringC &, DeclType, const Location &, Text &);
+    public PiEntity(StringC name, DeclType declType, Location defLocation, Text text)
+        : base(name, declType, DataType.pi, defLocation, text)
+    {
+    }
+
+    public override Entity copy()
+    {
+        Text textCopy = new Text();
+        text_.swap(textCopy);
+        return new PiEntity(name(), declType(), defLocation(), textCopy);
+    }
+}

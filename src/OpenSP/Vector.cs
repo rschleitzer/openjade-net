@@ -9,7 +9,7 @@ using System;
 
 namespace OpenSP;
 
-public class Vector<T> where T : new()
+public class Vector<T>
 {
     // typedef size_t size_type;
     // typedef T *iterator;
@@ -232,7 +232,7 @@ public class Vector<T> where T : new()
     {
         reserve(size_ + n);
         while (n-- > 0)
-            ptr_![size_++] = new T();
+            ptr_![size_++] = default!;
     }
 
     // void reserve1(size_t);
