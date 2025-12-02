@@ -502,8 +502,8 @@ public class CharMap<T>
 
 // Note: C# doesn't support multiple inheritance of classes.
 // CharMap<T> and Resource are both classes, so CharMapResource inherits from CharMap<T>
-// and contains a Resource instance for reference counting.
-public class CharMapResource<T> : CharMap<T>
+// and implements IResource interface with composition.
+public class CharMapResource<T> : CharMap<T>, IResource
 {
     private Resource resource_ = new Resource();
 
@@ -517,7 +517,7 @@ public class CharMapResource<T> : CharMap<T>
     {
     }
 
-    // Resource methods delegated to internal Resource instance
+    // IResource implementation - delegated to internal Resource instance
     public int count()
     {
         return resource_.count();

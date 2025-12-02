@@ -336,11 +336,75 @@ public abstract class InputSource : Link
     }
 }
 
-// Forward declaration placeholder
-public abstract class InternalInputSource : InputSource
+public class InternalInputSource : InputSource
 {
-    protected InternalInputSource(InputSourceOrigin? origin, Char[]? start, nuint startIdx, Char[]? end, nuint endIdx)
-        : base(origin, start, startIdx, end, endIdx)
+    private Char[]? buf_;
+    private StringC? contents_;
+
+    // InternalInputSource(const StringC &str, InputSourceOrigin *origin);
+    public InternalInputSource(StringC str, InputSourceOrigin? origin)
+        : base(origin, str.data(), 0, str.data(), (nuint)str.size())
     {
+        buf_ = null;
+        contents_ = str;
+    }
+
+    // ~InternalInputSource();
+    // C# GC handles cleanup
+
+    // Xchar fill(Messenger &);
+    protected override Xchar fill(Messenger mgr)
+    {
+        return eE;
+    }
+
+    // void pushCharRef(Char ch, const NamedCharRef &);
+    public override void pushCharRef(Char ch, NamedCharRef charRef)
+    {
+        System.Diagnostics.Debug.Assert(curIdx() == startIdx());
+        noteCharRef(getStartIndex() + (Index)(curIdx() - startIdx()), charRef);
+        if (buf_ == null)
+        {
+            nuint len = endIdx() - startIdx();
+            buf_ = new Char[len + 1];
+            // Copy contents starting at index 1
+            Char[]? curBuf = currentTokenStart();
+            if (curBuf != null)
+            {
+                for (nuint i = 0; i < len; i++)
+                    buf_[i + 1] = curBuf[startIdx() + i];
+            }
+            // Change buffer: new base starts at index 1
+            changeBuffer(buf_, currentTokenStart());
+        }
+        moveLeft();
+        // Set the character at current position
+        buf_![curIdx()] = ch;
+    }
+
+    // Boolean rewind(Messenger &);
+    public override Boolean rewind(Messenger mgr)
+    {
+        if (contents_ != null)
+        {
+            reset(contents_.data(), 0, contents_.data(), (nuint)contents_.size());
+        }
+        if (buf_ != null)
+        {
+            buf_ = null;
+        }
+        return true;
+    }
+
+    // const StringC *contents();
+    public StringC? contents()
+    {
+        return contents_;
+    }
+
+    // InternalInputSource *asInternalInputSource();
+    public override InternalInputSource? asInternalInputSource()
+    {
+        return this;
     }
 }
