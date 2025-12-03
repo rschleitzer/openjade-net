@@ -865,4 +865,44 @@ public static class ParserMessages
         MessageType.Severity.error, null, 554, "syntax reference character set must be ISO 646 when scope is INSTANCE");
     public static readonly MessageType1 missingMinimumChars = new MessageType1(
         MessageType.Severity.error, null, 555, "missing minimum data characters in document character set: %1");
+    public static readonly MessageType1 scopeInstanceQuantity = new MessageType1(
+        MessageType.Severity.error, null, 556, "quantity %1 in declared syntax is less than in prolog syntax");
+    public static readonly MessageType1 entityNameSyntax = new MessageType1(
+        MessageType.Severity.error, null, 557, "entity name \"%1\" is not a valid name in the declared syntax");
+
+    // Additional SGML declaration parsing messages
+    public static readonly MessageType1 namingBeforeLcnmstrt = new MessageType1(
+        MessageType.Severity.error, null, 558, "parameter before LCNMSTRT must be NAMING not %1");
+    public static readonly MessageType0 msocharRequiresMsichar = new MessageType0(
+        MessageType.Severity.error, null, 559, "when there is an MSOCHAR there must also be an MSICHAR");
+    public static readonly MessageType1 duplicateFunctionName = new MessageType1(
+        MessageType.Severity.error, null, 560, "%1 is already a function name");
+    public static readonly MessageType0 nmstrtLength = new MessageType0(
+        MessageType.Severity.error, null, 561, "UCNMSTRT must have the same number of characters as LCNMSTRT");
+    public static readonly MessageType0 nmcharLength = new MessageType0(
+        MessageType.Severity.error, null, 562, "UCNMCHAR must have the same number of characters as LCNMCHAR");
+    public static readonly MessageType0 enrRequired = new MessageType0(
+        MessageType.Severity.error, null, 563, "ENR extensions were used but minimum literal was not \"ISO 8879:1986 (ENR)\" or \"ISO 8879:1986 (WWW)\"");
+    public static readonly MessageType0 sdInvalidRange = new MessageType0(
+        MessageType.Severity.error, null, 564, "number of first character in range must not exceed number of second character in range");
+    public static readonly MessageType1 nmcharNmstrt = new MessageType1(
+        MessageType.Severity.error, null, 565, "character numbers assigned to both LCNMCHAR or UCNMCHAR and LCNMSTRT or UCNMSTRT: %1");
+    public static readonly MessageType1 duplicateDelimGeneral = new MessageType1(
+        MessageType.Severity.error, null, 566, "general delimiter role %1 already defined");
+    public static readonly MessageType0 sdEmptyDelimiter = new MessageType0(
+        MessageType.Severity.error, null, 567, "delimiter cannot be an empty string");
+    public static readonly MessageType1 duplicateDelimShortrefSet = new MessageType1(
+        MessageType.Severity.error, null, 568, "single character short references were already specified for character numbers: %1");
+    public static readonly MessageType0 sdRangeNotSingleChar = new MessageType0(
+        MessageType.Severity.error, null, 569, "start or end of range must specify a single character");
+    public static readonly MessageType1 ambiguousReservedName = new MessageType1(
+        MessageType.Severity.error, null, 570, "%1 cannot be the replacement for a reference reserved name because it is the replacement of another reference reserved name");
+    public static readonly MessageType1 duplicateReservedName = new MessageType1(
+        MessageType.Severity.error, null, 571, "replacement for reserved name %1 already specified");
+    public static readonly MessageType1 reservedNameSyntax = new MessageType1(
+        MessageType.Severity.warning, null, 572, "%1 is not a valid name in the declared concrete syntax");
+    public static readonly MessageType1 multipleBSequence = new MessageType1(
+        MessageType.Severity.error, null, 573, "%1 is not a valid short reference delimiter because it has more than one B sequence");
+    public static readonly MessageType1 blankAdjacentBSequence = new MessageType1(
+        MessageType.Severity.error, null, 574, "%1 is not a valid short reference delimiter because it is adjacent to a character that can occur in a blank sequence");
 }

@@ -811,6 +811,37 @@ public class Syntax : Resource
             set_[(int)Set.significant].add(str[i]);
     }
 
+    // void addDelimShortrefs(const ISet<Char> &shortrefChars, const CharsetInfo &charset);
+    public void addDelimShortrefs(ISet<Char> shortrefChars, CharsetInfo charset)
+    {
+        ISetIter<Char> blankIter = new ISetIter<Char>(set_[(int)Set.blank]);
+        Char min, max;
+        StringC specialChars = new StringC();
+        while (blankIter.next(out min, out max) != 0)
+        {
+            do
+            {
+                specialChars.operatorPlusAssign(min);
+            } while (min++ != max);
+        }
+        specialChars.operatorPlusAssign(charset.execToDesc((sbyte)'B'));
+        ISet<Char> simpleChars = new ISet<Char>(shortrefChars);
+        Boolean modified = false;
+        for (nuint i = 0; i < specialChars.size(); i++)
+            if (shortrefChars.contains(specialChars[i]))
+            {
+                modified = true;
+                simpleChars.remove(specialChars[i]);
+            }
+        ISet<Char> simpleCharsPtr = modified ? simpleChars : shortrefChars;
+        ISetIter<Char> iter = new ISetIter<Char>(simpleCharsPtr);
+        while (iter.next(out min, out max) != 0)
+        {
+            delimShortrefSimple_.addRange(min, max);
+            set_[(int)Set.significant].addRange(min, max);
+        }
+    }
+
     // void addFunctionChar(const StringC &str, FunctionClass fun, Char c);
     public void addFunctionChar(StringC str, FunctionClass fun, Char c)
     {
