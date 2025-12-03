@@ -23,6 +23,18 @@ openjade-net/
 
 ## Core Requirements
 
+### 0. Stub Methods
+When stubbing out methods with TODO comments, always throw `NotImplementedException` instead of returning default values:
+```csharp
+// WRONG:
+protected virtual Boolean parseComment(Mode mode) { return false; }
+protected virtual void doInit() { /* TODO */ }
+
+// CORRECT:
+protected virtual Boolean parseComment(Mode mode) { throw new NotImplementedException(); }
+protected virtual void doInit() { throw new NotImplementedException(); }
+```
+
 ### 1. Name Preservation
 - ALL class names, method names, variable names must be EXACTLY preserved
 - `FOTBuilder` stays `FOTBuilder`, not `FlowObjectTreeBuilder`
