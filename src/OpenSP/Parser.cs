@@ -842,6 +842,23 @@ public class Parser : ParserState
         return new ConstPtr<Notation>(nt.pointer());
     }
 
+    // ElementType *lookupCreateElement(const StringC &name);
+    protected ElementType? lookupCreateElement(StringC name)
+    {
+        ElementType? e = defDtd().lookupElementType(name);
+        if (e == null)
+        {
+            if (haveDefLpd())
+                message(ParserMessages.noSuchSourceElement, new StringMessageArg(name));
+            else
+            {
+                e = new ElementType(name, defDtd().allocElementTypeIndex());
+                defDtd().insertElementType(e);
+            }
+        }
+        return e;
+    }
+
     // From parseCommon.cxx
     protected virtual void doInit() { throw new NotImplementedException(); }
 
@@ -2195,15 +2212,1017 @@ public class Parser : ParserState
     protected virtual Boolean parseAfdrDecl() { throw new NotImplementedException(); }
 
     // From parseParam.cxx
-    protected virtual Boolean parseParam(AllowedParams allow, uint tok, Param parm) { throw new NotImplementedException(); }
+
+    // Boolean parseParam(const AllowedParams &allow, unsigned declInputLevel, Param &parm);
+    protected virtual Boolean parseParam(AllowedParams allow, uint declInputLevel, Param parm)
+    {
+        for (;;)
+        {
+            Token token = getToken(allow.mainMode());
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    message(ParserMessages.markupDeclarationCharacter,
+                            new StringMessageArg(currentToken()),
+                            new AllowedParamsMessageArg(allow, syntaxPointer()));
+                    return false;
+                case Tokens.tokenEe:
+                    if (inputLevel() <= declInputLevel)
+                    {
+                        message(ParserMessages.declarationLevel);
+                        return false;
+                    }
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addEntityEnd();
+                    popInputStack();
+                    break;
+                case Tokens.tokenCom:
+                    if (!parseComment(Mode.comMode))
+                        return false;
+                    if (options().warnPsComment)
+                        message(ParserMessages.psComment);
+                    break;
+                case Tokens.tokenDso:
+                    if (!allow.dso())
+                    {
+                        paramInvalidToken(token, allow);
+                        return false;
+                    }
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dDSO);
+                    parm.type = Param.dso;
+                    return true;
+                case Tokens.tokenGrpo:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dGRPO);
+                    switch (allow.group())
+                    {
+                        case Param.invalid:
+                            paramInvalidToken(token, allow);
+                            return false;
+                        case Param.modelGroup:
+                            {
+                                ModelGroup? group;
+                                if (!parseModelGroup(1, declInputLevel, out group, Mode.grpsufMode))
+                                    return false;
+                                parm.type = Param.modelGroup;
+                                parm.modelGroupPtr = new Owner<ModelGroup>(group);
+                            }
+                            break;
+                        case Param.nameGroup:
+                            if (!parseNameGroup(declInputLevel, parm))
+                                return false;
+                            break;
+                        case Param.nameTokenGroup:
+                            if (!parseNameTokenGroup(declInputLevel, parm))
+                                return false;
+                            break;
+                        default:
+                            throw new InvalidOperationException("CANNOT_HAPPEN");
+                    }
+                    parm.type = allow.group();
+                    return true;
+                case Tokens.tokenLita:
+                case Tokens.tokenLit:
+                    parm.type = allow.literal();
+                    parm.lita = token == Tokens.tokenLita;
+                    switch (allow.literal())
+                    {
+                        case Param.invalid:
+                            paramInvalidToken(token, allow);
+                            return false;
+                        case Param.minimumLiteral:
+                            if (!parseMinimumLiteral(parm.lita, parm.literalText))
+                                return false;
+                            break;
+                        case Param.attributeValueLiteral:
+                            if (!parseAttributeValueLiteral(parm.lita, parm.literalText))
+                                return false;
+                            break;
+                        case Param.tokenizedAttributeValueLiteral:
+                            if (!parseTokenizedAttributeValueLiteral(parm.lita, parm.literalText))
+                                return false;
+                            break;
+                        case Param.systemIdentifier:
+                            if (!parseSystemIdentifier(parm.lita, parm.literalText))
+                                return false;
+                            break;
+                        case Param.paramLiteral:
+                            if (!parseParameterLiteral(parm.lita, parm.literalText))
+                                return false;
+                            break;
+                    }
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addLiteral(parm.literalText);
+                    return true;
+                case Tokens.tokenMdc:
+                    if (!allow.mdc())
+                    {
+                        paramInvalidToken(token, allow);
+                        return false;
+                    }
+                    if (inputLevel() > declInputLevel)
+                        message(ParserMessages.parameterEntityNotEnded);
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDC);
+                    parm.type = Param.mdc;
+                    return true;
+                case Tokens.tokenMinus:
+                    parm.type = Param.minus;
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dMINUS);
+                    return true;
+                case Tokens.tokenMinusGrpo:
+                    if (!allow.exclusions())
+                    {
+                        paramInvalidToken(token, allow);
+                        return false;
+                    }
+                    if (currentMarkup() != null)
+                    {
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dMINUS);
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dGRPO);
+                    }
+                    parm.type = Param.exclusions;
+                    return parseElementNameGroup(declInputLevel, parm);
+                case Tokens.tokenPero:
+                    parm.type = Param.pero;
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dPERO);
+                    return true;
+                case Tokens.tokenPeroGrpo:
+                    if (!inInstance())
+                        message(ParserMessages.peroGrpoProlog);
+                    goto case Tokens.tokenPeroNameStart;
+                case Tokens.tokenPeroNameStart:
+                    {
+                        if (inInstance())
+                        {
+                            if (options().warnInstanceParamEntityRef)
+                                message(ParserMessages.instanceParamEntityRef);
+                        }
+                        else
+                        {
+                            if (options().warnInternalSubsetPsParamEntityRef && inputLevel() == 1)
+                                message(ParserMessages.internalSubsetPsParamEntityRef);
+                        }
+                        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+                        Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>();
+                        if (!parseEntityReference(true, token == Tokens.tokenPeroGrpo ? 1 : 0, entity, origin))
+                            return false;
+                        if (!entity.isNull())
+                            entity.pointer()!.declReference(this, origin);
+                    }
+                    break;
+                case Tokens.tokenPlusGrpo:
+                    if (!allow.inclusions())
+                    {
+                        paramInvalidToken(token, allow);
+                        return false;
+                    }
+                    if (currentMarkup() != null)
+                    {
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dPLUS);
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dGRPO);
+                    }
+                    parm.type = Param.inclusions;
+                    return parseElementNameGroup(declInputLevel, parm);
+                case Tokens.tokenRni:
+                    if (!allow.rni())
+                    {
+                        paramInvalidToken(token, allow);
+                        return false;
+                    }
+                    return parseIndicatedReservedName(allow, parm);
+                case Tokens.tokenS:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addS(currentChar());
+                    break;
+                case Tokens.tokenNameStart:
+                    switch (allow.nameStart())
+                    {
+                        case Param.invalid:
+                            paramInvalidToken(token, allow);
+                            return false;
+                        case Param.reservedName:
+                            return parseReservedName(allow, parm);
+                        case Param.name:
+                            {
+                                extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+                                parm.type = Param.name;
+                                getCurrentToken(parm.origToken);
+                                parm.token = new StringC(parm.origToken);
+                                SubstTable? subst = syntax().generalSubstTable();
+                                nuint count = parm.token.size();
+                                Char[]? tokenData = parm.token.data();
+                                for (nuint i = 0; i < count; i++)
+                                    parm.token[i] = subst![tokenData![i]];
+                                if (currentMarkup() != null)
+                                    currentMarkup()!.addName(currentInput()!);
+                                return true;
+                            }
+                        case Param.entityName:
+                            extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+                            parm.type = Param.entityName;
+                            getCurrentToken(syntax().entitySubstTable(), parm.token);
+                            if (currentMarkup() != null)
+                                currentMarkup()!.addName(currentInput()!);
+                            return true;
+                        case Param.paramEntityName:
+                            extendNameToken(syntax().penamelen(), ParserMessages.parameterEntityNameLength);
+                            parm.type = Param.paramEntityName;
+                            getCurrentToken(syntax().entitySubstTable(), parm.token);
+                            if (currentMarkup() != null)
+                                currentMarkup()!.addName(currentInput()!);
+                            return true;
+                        case Param.attributeValue:
+                            return parseAttributeValueParam(parm);
+                    }
+                    break;
+                case Tokens.tokenDigit:
+                    switch (allow.digit())
+                    {
+                        case Param.invalid:
+                            paramInvalidToken(token, allow);
+                            return false;
+                        case Param.number:
+                            extendNumber(syntax().namelen(), ParserMessages.numberLength);
+                            parm.type = Param.number;
+                            getCurrentToken(parm.token);
+                            if (currentMarkup() != null)
+                                currentMarkup()!.addNumber(currentInput()!);
+                            return true;
+                        case Param.attributeValue:
+                            return parseAttributeValueParam(parm);
+                    }
+                    break;
+                case Tokens.tokenLcUcNmchar:
+                    switch (allow.nmchar())
+                    {
+                        case Param.invalid:
+                            paramInvalidToken(token, allow);
+                            return false;
+                        case Param.attributeValue:
+                            return parseAttributeValueParam(parm);
+                    }
+                    break;
+                default:
+                    throw new InvalidOperationException("CANNOT_HAPPEN");
+            }
+        }
+    }
+
+    // void paramInvalidToken(Token token, const AllowedParams &allow);
+    protected void paramInvalidToken(Token token, AllowedParams allow)
+    {
+        if (!allow.silent())
+            message(ParserMessages.paramInvalidToken,
+                    new TokenMessageArg(token, allow.mainMode(), syntaxPointer(), sdPointer()),
+                    new AllowedParamsMessageArg(allow, syntaxPointer()));
+    }
+
+    // Boolean parseIndicatedReservedName(const AllowedParams &allow, Param &parm);
+    protected Boolean parseIndicatedReservedName(AllowedParams allow, Param parm)
+    {
+        Syntax.ReservedName rn;
+        if (!getIndicatedReservedName(out rn))
+            return false;
+        if (!allow.reservedName(rn))
+        {
+            message(ParserMessages.invalidReservedName,
+                    new StringMessageArg(currentToken()));
+            return false;
+        }
+        parm.type = (byte)(Param.indicatedReservedName + (byte)rn);
+        return true;
+    }
+
+    // Boolean parseReservedName(const AllowedParams &allow, Param &parm);
+    protected Boolean parseReservedName(AllowedParams allow, Param parm)
+    {
+        Syntax.ReservedName rn;
+        if (!getReservedName(out rn))
+            return false;
+        if (!allow.reservedName(rn))
+        {
+            message(ParserMessages.invalidReservedName,
+                    new StringMessageArg(syntax().reservedName(rn)));
+            return false;
+        }
+        parm.type = (byte)(Param.reservedName + (byte)rn);
+        return true;
+    }
+
+    // Boolean getIndicatedReservedName(Syntax::ReservedName *result);
+    protected Boolean getIndicatedReservedName(out Syntax.ReservedName result)
+    {
+        result = Syntax.ReservedName.rALL;
+        if (currentMarkup() != null)
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dRNI);
+        InputSource? inSrc = currentInput();
+        inSrc!.startToken();
+        if (!syntax().isNameStartCharacter(inSrc.tokenChar(messenger())))
+        {
+            message(ParserMessages.rniNameStart);
+            return false;
+        }
+        extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        StringC buffer = nameBuffer();
+        getCurrentToken(syntax().generalSubstTable(), buffer);
+        if (!syntax().lookupReservedName(buffer, out result))
+        {
+            message(ParserMessages.noSuchReservedName, new StringMessageArg(buffer));
+            return false;
+        }
+        if (currentMarkup() != null)
+            currentMarkup()!.addReservedName(result, currentInput()!);
+        return true;
+    }
+
+    // Boolean getReservedName(Syntax::ReservedName *result);
+    protected Boolean getReservedName(out Syntax.ReservedName result)
+    {
+        result = Syntax.ReservedName.rALL;
+        extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        StringC buffer = nameBuffer();
+        getCurrentToken(syntax().generalSubstTable(), buffer);
+        if (!syntax().lookupReservedName(buffer, out result))
+        {
+            message(ParserMessages.noSuchReservedName, new StringMessageArg(buffer));
+            return false;
+        }
+        if (currentMarkup() != null)
+            currentMarkup()!.addReservedName(result, currentInput()!);
+        return true;
+    }
+
+    // Boolean parseAttributeValueParam(Param &parm);
+    protected Boolean parseAttributeValueParam(Param parm)
+    {
+        nuint maxLen = syntax().litlen() > syntax().normsep()
+                       ? syntax().litlen() - syntax().normsep()
+                       : 0;
+        extendNameToken(maxLen, ParserMessages.attributeValueLength);
+        parm.type = Param.attributeValue;
+        Text text = new Text();
+        text.addChars(currentInput()!.currentTokenStart(),
+                      currentInput()!.currentTokenLength(),
+                      currentLocation());
+        text.swap(parm.literalText);
+        if (currentMarkup() != null)
+            currentMarkup()!.addAttributeValue(currentInput()!);
+        return true;
+    }
+
+    // Boolean parseMinimumLiteral(Boolean lita, Text &text);
+    protected virtual Boolean parseMinimumLiteral(Boolean lita, Text text)
+    {
+        return parseLiteral(lita ? Mode.mlitaMode : Mode.mlitMode, Mode.mlitMode,
+                            (nuint)Syntax.referenceQuantity(Syntax.Quantity.qLITLEN),
+                            ParserMessages.minimumLiteralLength,
+                            (uint)(literalSingleSpace | literalMinimumData
+                                   | (eventsWanted().wantPrologMarkup()
+                                      ? literalDelimInfo
+                                      : 0)),
+                            text);
+    }
+
+    // Boolean parseSystemIdentifier(Boolean lita, Text &text);
+    protected virtual Boolean parseSystemIdentifier(Boolean lita, Text text)
+    {
+        return parseLiteral(lita ? Mode.slitaMode : Mode.slitMode, Mode.slitMode,
+                            syntax().litlen(),
+                            ParserMessages.systemIdentifierLength,
+                            (uint)(eventsWanted().wantPrologMarkup()
+                                   ? literalDelimInfo
+                                   : 0),
+                            text);
+    }
+
+    // Boolean parseParameterLiteral(Boolean lita, Text &text);
+    protected virtual Boolean parseParameterLiteral(Boolean lita, Text text)
+    {
+        return parseLiteral(lita ? Mode.plitaMode : Mode.plitMode, Mode.pliteMode,
+                            syntax().litlen(),
+                            ParserMessages.parameterLiteralLength,
+                            (uint)(eventsWanted().wantPrologMarkup()
+                                   ? literalDelimInfo
+                                   : 0),
+                            text);
+    }
+
+    // Boolean parseDataTagParameterLiteral(Boolean lita, Text &text);
+    protected virtual Boolean parseDataTagParameterLiteral(Boolean lita, Text text)
+    {
+        return parseLiteral(lita ? Mode.plitaMode : Mode.plitMode, Mode.pliteMode,
+                            syntax().dtemplen(),
+                            ParserMessages.dataTagPatternLiteralLength,
+                            (uint)(literalDataTag
+                                   | (eventsWanted().wantPrologMarkup()
+                                      ? literalDelimInfo
+                                      : 0)),
+                            text);
+    }
+
+    // Boolean parseAttributeValueLiteral(Boolean lita, Text &text);
+    protected virtual Boolean parseAttributeValueLiteral(Boolean lita, Text text)
+    {
+        throw new NotImplementedException();
+    }
+
+    // Boolean parseTokenizedAttributeValueLiteral(Boolean lita, Text &text);
+    protected virtual Boolean parseTokenizedAttributeValueLiteral(Boolean lita, Text text)
+    {
+        throw new NotImplementedException();
+    }
+
+    // Boolean parseExternalId(...);
     protected virtual Boolean parseExternalId(AllowedParams systemIdAllow, AllowedParams publicIdAllow,
-                                               Boolean optional, uint tok, Param parm, ExternalId id) { throw new NotImplementedException(); }
-    protected virtual Boolean parseMinimumLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
-    protected virtual Boolean parseAttributeValueLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
-    protected virtual Boolean parseTokenizedAttributeValueLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
-    protected virtual Boolean parseSystemIdentifier(Boolean lita, Text text) { throw new NotImplementedException(); }
-    protected virtual Boolean parseParameterLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
-    protected virtual Boolean parseDataTagParameterLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
+                                               Boolean optional, uint declInputLevel, Param parm, ExternalId id)
+    {
+        throw new NotImplementedException();
+    }
+
+    // Group parsing methods from parseParam.cxx
+
+    // Boolean parseGroupToken(const AllowedGroupTokens &allow, unsigned nestingLevel,
+    //                         unsigned declInputLevel, unsigned groupInputLevel, GroupToken &gt);
+    protected Boolean parseGroupToken(AllowedGroupTokens allow, uint nestingLevel,
+                                      uint declInputLevel, uint groupInputLevel, GroupToken gt)
+    {
+        for (;;)
+        {
+            Token token = getToken(Mode.grpMode);
+            switch (token)
+            {
+                case Tokens.tokenEe:
+                    if (inputLevel() <= groupInputLevel)
+                    {
+                        message(ParserMessages.groupLevel);
+                        if (inputLevel() <= declInputLevel)
+                            return false;
+                    }
+                    else if (!sd().www())
+                        message(ParserMessages.groupEntityEnd);
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addEntityEnd();
+                    popInputStack();
+                    break;
+                case Tokens.tokenPeroGrpo:
+                    {
+                        if (!inInstance())
+                            message(ParserMessages.peroGrpoProlog);
+                        Boolean start = false;
+                        if (inTag(ref start))
+                            message(start
+                                    ? ParserMessages.peroGrpoStartTag
+                                    : ParserMessages.peroGrpoEndTag);
+                    }
+                    goto case Tokens.tokenPeroNameStart;
+                case Tokens.tokenPeroNameStart:
+                    {
+                        if (options().warnInternalSubsetTsParamEntityRef && inputLevel() == 1)
+                            message(ParserMessages.internalSubsetTsParamEntityRef);
+                        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+                        Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>();
+                        if (!parseEntityReference(true, token == Tokens.tokenPeroGrpo ? 1 : 0, entity, origin))
+                            return false;
+                        if (!entity.isNull())
+                            entity.pointer()!.declReference(this, origin);
+                    }
+                    break;
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    message(ParserMessages.groupCharacter,
+                            new StringMessageArg(currentToken()),
+                            new AllowedGroupTokensMessageArg(allow, syntaxPointer()));
+                    return false;
+                case Tokens.tokenDtgo:
+                    if (!allow.groupToken(GroupToken.Type.dataTagGroup))
+                    {
+                        groupTokenInvalidToken(token, allow);
+                        return false;
+                    }
+                    if (sd().datatag())
+                        message(ParserMessages.datatagNotImplemented);
+                    if (!defDtd().isBase())
+                        message(ParserMessages.datatagBaseDtd);
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dDTGO);
+                    return parseDataTagGroup(nestingLevel + 1, declInputLevel, gt);
+                case Tokens.tokenGrpo:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dGRPO);
+                    switch (allow.group())
+                    {
+                        case GroupToken.Type.modelGroup:
+                            {
+                                ModelGroup? modelGroup;
+                                if (!parseModelGroup(nestingLevel + 1, declInputLevel, out modelGroup, Mode.grpMode))
+                                    return false;
+                                gt.model = new Owner<ModelGroup>(modelGroup);
+                                gt.type = GroupToken.Type.modelGroup;
+                                return true;
+                            }
+                        case GroupToken.Type.dataTagTemplateGroup:
+                            return parseDataTagTemplateGroup(nestingLevel + 1, declInputLevel, gt);
+                        default:
+                            groupTokenInvalidToken(token, allow);
+                            return false;
+                    }
+                case Tokens.tokenRni:
+                    if (!allow.groupToken(GroupToken.Type.pcdata)
+                        && !allow.groupToken(GroupToken.Type.all)
+                        && !allow.groupToken(GroupToken.Type.@implicit))
+                    {
+                        groupTokenInvalidToken(token, allow);
+                        return false;
+                    }
+                    Syntax.ReservedName rn;
+                    if (!getIndicatedReservedName(out rn))
+                        return false;
+                    if (rn == Syntax.ReservedName.rPCDATA && allow.groupToken(GroupToken.Type.pcdata))
+                    {
+                        gt.type = GroupToken.Type.pcdata;
+                        gt.contentToken = new Owner<ContentToken>(new PcdataToken());
+                        return true;
+                    }
+                    else if (rn == Syntax.ReservedName.rALL && allow.groupToken(GroupToken.Type.all))
+                    {
+                        message(ParserMessages.sorryAllImplicit);
+                        return false;
+                    }
+                    else if (rn == Syntax.ReservedName.rIMPLICIT && allow.groupToken(GroupToken.Type.@implicit))
+                    {
+                        message(ParserMessages.sorryAllImplicit);
+                        return false;
+                    }
+                    else
+                    {
+                        StringC tok = new StringC(syntax().delimGeneral((int)Syntax.DelimGeneral.dRNI));
+                        tok.operatorPlusAssign(syntax().reservedName(rn));
+                        message(ParserMessages.invalidToken, new StringMessageArg(tok));
+                        return false;
+                    }
+                case Tokens.tokenS:
+                    if (currentMarkup() != null)
+                    {
+                        extendS();
+                        currentMarkup()!.addS(currentInput()!);
+                    }
+                    break;
+                case Tokens.tokenNameStart:
+                    switch (allow.nameStart())
+                    {
+                        case GroupToken.Type.elementToken:
+                            {
+                                extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+                                gt.type = GroupToken.Type.elementToken;
+                                StringC buffer = nameBuffer();
+                                getCurrentToken(syntax().generalSubstTable(), buffer);
+                                if (currentMarkup() != null)
+                                    currentMarkup()!.addName(currentInput()!);
+                                ElementType? e = lookupCreateElement(buffer);
+                                ContentToken.OccurrenceIndicator oi = getOccurrenceIndicator(Mode.grpMode);
+                                gt.contentToken = new Owner<ContentToken>(new ElementToken(e, oi));
+                                return true;
+                            }
+                        case GroupToken.Type.name:
+                        case GroupToken.Type.nameToken:
+                            extendNameToken(syntax().namelen(),
+                                            allow.nameStart() == GroupToken.Type.name
+                                            ? ParserMessages.nameLength
+                                            : ParserMessages.nameTokenLength);
+                            getCurrentToken(syntax().generalSubstTable(), gt.token);
+                            gt.type = allow.nameStart();
+                            if (currentMarkup() != null)
+                            {
+                                if (gt.type == GroupToken.Type.nameToken)
+                                    currentMarkup()!.addNameToken(currentInput()!);
+                                else
+                                    currentMarkup()!.addName(currentInput()!);
+                            }
+                            return true;
+                        default:
+                            groupTokenInvalidToken(token, allow);
+                            return false;
+                    }
+                case Tokens.tokenDigit:
+                case Tokens.tokenLcUcNmchar:
+                    if (!allow.groupToken(GroupToken.Type.nameToken))
+                    {
+                        groupTokenInvalidToken(token, allow);
+                        return false;
+                    }
+                    extendNameToken(syntax().namelen(), ParserMessages.nameTokenLength);
+                    getCurrentToken(syntax().generalSubstTable(), gt.token);
+                    gt.type = GroupToken.Type.nameToken;
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addNameToken(currentInput()!);
+                    return true;
+                case Tokens.tokenLit:
+                case Tokens.tokenLita:
+                    // parameter literal in data tag pattern
+                    if (!allow.groupToken(GroupToken.Type.dataTagLiteral))
+                    {
+                        groupTokenInvalidToken(token, allow);
+                        return false;
+                    }
+                    if (!parseDataTagParameterLiteral(token == Tokens.tokenLita, gt.text))
+                        return false;
+                    gt.type = GroupToken.Type.dataTagLiteral;
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addLiteral(gt.text);
+                    return true;
+                case Tokens.tokenAnd:
+                case Tokens.tokenSeq:
+                case Tokens.tokenOr:
+                case Tokens.tokenDtgc:
+                case Tokens.tokenGrpc:
+                case Tokens.tokenOpt:
+                case Tokens.tokenPlus:
+                case Tokens.tokenRep:
+                    groupTokenInvalidToken(token, allow);
+                    return false;
+            }
+        }
+    }
+
+    // void groupTokenInvalidToken(Token token, const AllowedGroupTokens &allow);
+    protected void groupTokenInvalidToken(Token token, AllowedGroupTokens allow)
+    {
+        message(ParserMessages.groupTokenInvalidToken,
+                new TokenMessageArg(token, Mode.grpMode, syntaxPointer(), sdPointer()),
+                new AllowedGroupTokensMessageArg(allow, syntaxPointer()));
+    }
+
+    // Boolean parseGroupConnector(const AllowedGroupConnectors &allow, unsigned declInputLevel,
+    //                             unsigned groupInputLevel, GroupConnector &gc);
+    protected Boolean parseGroupConnector(AllowedGroupConnectors allow, uint declInputLevel,
+                                          uint groupInputLevel, ref GroupConnector gc)
+    {
+        for (;;)
+        {
+            Token token = getToken(Mode.grpMode);
+            switch (token)
+            {
+                case Tokens.tokenEe:
+                    if (inputLevel() <= groupInputLevel)
+                    {
+                        message(ParserMessages.groupLevel);
+                        if (inputLevel() <= declInputLevel)
+                            return false;
+                    }
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addEntityEnd();
+                    popInputStack();
+                    break;
+                case Tokens.tokenS:
+                    if (currentMarkup() != null)
+                    {
+                        extendS();
+                        currentMarkup()!.addS(currentInput()!);
+                    }
+                    break;
+                case Tokens.tokenPeroGrpo:
+                    if (inInstance())
+                    {
+                        message(ParserMessages.peroGrpoProlog);
+                        break;
+                    }
+                    goto case Tokens.tokenPeroNameStart;
+                case Tokens.tokenPeroNameStart:
+                    if (!sd().www())
+                        message(ParserMessages.groupEntityReference);
+                    else
+                    {
+                        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+                        Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>();
+                        if (!parseEntityReference(true, token == Tokens.tokenPeroGrpo ? 1 : 0, entity, origin))
+                            return false;
+                        if (!entity.isNull())
+                            entity.pointer()!.declReference(this, origin);
+                    }
+                    break;
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    message(ParserMessages.groupCharacter,
+                            new StringMessageArg(currentToken()),
+                            new AllowedGroupConnectorsMessageArg(allow, syntaxPointer()));
+                    return false;
+                case Tokens.tokenAnd:
+                    if (!allow.groupConnector(GroupConnector.Type.andGC))
+                    {
+                        groupConnectorInvalidToken(token, allow);
+                        return false;
+                    }
+                    gc.type = GroupConnector.Type.andGC;
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dAND);
+                    return true;
+                case Tokens.tokenSeq:
+                    if (!allow.groupConnector(GroupConnector.Type.seqGC))
+                    {
+                        groupConnectorInvalidToken(token, allow);
+                        return false;
+                    }
+                    gc.type = GroupConnector.Type.seqGC;
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dSEQ);
+                    return true;
+                case Tokens.tokenOr:
+                    if (!allow.groupConnector(GroupConnector.Type.orGC))
+                    {
+                        groupConnectorInvalidToken(token, allow);
+                        return false;
+                    }
+                    gc.type = GroupConnector.Type.orGC;
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dOR);
+                    return true;
+                case Tokens.tokenDtgc:
+                    if (!allow.groupConnector(GroupConnector.Type.dtgcGC))
+                    {
+                        groupConnectorInvalidToken(token, allow);
+                        return false;
+                    }
+                    gc.type = GroupConnector.Type.dtgcGC;
+                    if (inputLevel() > groupInputLevel)
+                        message(ParserMessages.groupParameterEntityNotEnded);
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dDTGC);
+                    return true;
+                case Tokens.tokenGrpc:
+                    if (!allow.groupConnector(GroupConnector.Type.grpcGC))
+                    {
+                        groupConnectorInvalidToken(token, allow);
+                        return false;
+                    }
+                    gc.type = GroupConnector.Type.grpcGC;
+                    if (inputLevel() > groupInputLevel)
+                        message(ParserMessages.groupParameterEntityNotEnded);
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dGRPC);
+                    return true;
+                default:
+                    groupConnectorInvalidToken(token, allow);
+                    return false;
+            }
+        }
+    }
+
+    // void groupConnectorInvalidToken(Token token, const AllowedGroupConnectors &allow);
+    protected void groupConnectorInvalidToken(Token token, AllowedGroupConnectors allow)
+    {
+        message(ParserMessages.connectorInvalidToken,
+                new TokenMessageArg(token, Mode.grpMode, syntaxPointer(), sdPointer()),
+                new AllowedGroupConnectorsMessageArg(allow, syntaxPointer()));
+    }
+
+    // Static AllowedGroupTokens for name
+    private static readonly AllowedGroupTokens allowName_ = new AllowedGroupTokens(GroupToken.Type.name);
+
+    // Boolean parseElementNameGroup(unsigned declInputLevel, Param &parm);
+    protected Boolean parseElementNameGroup(uint declInputLevel, Param parm)
+    {
+        AllowedGroupTokens allowCommonName = new AllowedGroupTokens(
+            GroupToken.Type.name, GroupToken.Type.all, GroupToken.Type.@implicit);
+        if (!parseGroup(sd().www() ? allowCommonName : allowName_, declInputLevel, parm))
+            return false;
+        parm.elementVector.resize(parm.nameTokenVector.size());
+        for (nuint i = 0; i < parm.nameTokenVector.size(); i++)
+            parm.elementVector[(int)i] = lookupCreateElement(parm.nameTokenVector[(int)i].name);
+        return true;
+    }
+
+    // Boolean parseNameGroup(unsigned declInputLevel, Param &parm);
+    protected Boolean parseNameGroup(uint declInputLevel, Param parm)
+    {
+        return parseGroup(allowName_, declInputLevel, parm);
+    }
+
+    // Boolean parseNameTokenGroup(unsigned declInputLevel, Param &parm);
+    protected Boolean parseNameTokenGroup(uint declInputLevel, Param parm)
+    {
+        AllowedGroupTokens allowNameToken = new AllowedGroupTokens(GroupToken.Type.nameToken);
+        return parseGroup(allowNameToken, declInputLevel, parm);
+    }
+
+    // static Boolean groupContains(const Vector<NameToken> &vec, const StringC &str);
+    private static Boolean groupContains(Vector<NameToken> vec, StringC str)
+    {
+        for (nuint i = 0; i < vec.size(); i++)
+            if (vec[(int)i].name == str)
+                return true;
+        return false;
+    }
+
+    // Boolean parseGroup(const AllowedGroupTokens &allowToken, unsigned declInputLevel, Param &parm);
+    protected Boolean parseGroup(AllowedGroupTokens allowToken, uint declInputLevel, Param parm)
+    {
+        uint groupInputLevel = inputLevel();
+        int nDuplicates = 0;
+        Vector<NameToken> vec = parm.nameTokenVector;
+        vec.clear();
+        GroupConnector.Type connector = GroupConnector.Type.grpcGC;
+        GroupToken gt = new GroupToken();
+        for (;;)
+        {
+            if (!parseGroupToken(allowToken, 0, declInputLevel, groupInputLevel, gt))
+                return false;
+            if (groupContains(vec, gt.token))
+            {
+                nDuplicates++;
+                message(ParserMessages.duplicateGroupToken, new StringMessageArg(gt.token));
+            }
+            else
+            {
+                vec.resize(vec.size() + 1);
+                gt.token.swap(vec[(int)(vec.size() - 1)].name);
+                getCurrentToken(vec[(int)(vec.size() - 1)].origName);
+                vec[(int)(vec.size() - 1)].loc = currentLocation();
+            }
+            GroupConnector gc = new GroupConnector();
+            AllowedGroupConnectors allowAnyConnectorGrpc = new AllowedGroupConnectors(
+                GroupConnector.Type.orGC, GroupConnector.Type.andGC,
+                GroupConnector.Type.seqGC, GroupConnector.Type.grpcGC);
+            if (!parseGroupConnector(allowAnyConnectorGrpc, declInputLevel, groupInputLevel, ref gc))
+                return false;
+            if (gc.type == GroupConnector.Type.grpcGC)
+                break;
+            if (options().warnNameGroupNotOr)
+            {
+                if (gc.type != GroupConnector.Type.orGC)
+                    message(ParserMessages.nameGroupNotOr);
+            }
+            else if (options().warnShould)
+            {
+                if (connector == GroupConnector.Type.grpcGC)
+                    connector = gc.type;
+                else if (gc.type != connector)
+                {
+                    message(ParserMessages.mixedConnectors);
+                    connector = gc.type;
+                }
+            }
+        }
+        if ((nuint)(nDuplicates) + vec.size() > syntax().grpcnt())
+            message(ParserMessages.groupCount, new NumberMessageArg(syntax().grpcnt()));
+        return true;
+    }
+
+    // Boolean parseModelGroup(unsigned nestingLevel, unsigned declInputLevel,
+    //                         ModelGroup *&group, Mode oiMode);
+    protected Boolean parseModelGroup(uint nestingLevel, uint declInputLevel,
+                                      out ModelGroup? group, Mode oiMode)
+    {
+        group = null;
+        if (nestingLevel - 1 == syntax().grplvl())
+            message(ParserMessages.grplvl, new NumberMessageArg(syntax().grplvl()));
+        uint groupInputLevel = inputLevel();
+        GroupToken gt = new GroupToken();
+        Vector<Owner<ContentToken>> tokenVector = new Vector<Owner<ContentToken>>();
+        GroupConnector.Type connector = GroupConnector.Type.grpcGC;
+
+        AllowedGroupTokens allowContentToken = new AllowedGroupTokens(
+            GroupToken.Type.pcdata, GroupToken.Type.dataTagGroup,
+            GroupToken.Type.elementToken, GroupToken.Type.modelGroup);
+        AllowedGroupTokens allowCommonContentToken = new AllowedGroupTokens(
+            GroupToken.Type.pcdata, GroupToken.Type.all, GroupToken.Type.@implicit,
+            GroupToken.Type.dataTagGroup, GroupToken.Type.elementToken, GroupToken.Type.modelGroup);
+        AllowedGroupConnectors allowAnyConnectorGrpc = new AllowedGroupConnectors(
+            GroupConnector.Type.orGC, GroupConnector.Type.andGC,
+            GroupConnector.Type.seqGC, GroupConnector.Type.grpcGC);
+        AllowedGroupConnectors allowOrGrpc = new AllowedGroupConnectors(
+            GroupConnector.Type.orGC, GroupConnector.Type.grpcGC);
+        AllowedGroupConnectors allowAndGrpc = new AllowedGroupConnectors(
+            GroupConnector.Type.andGC, GroupConnector.Type.grpcGC);
+        AllowedGroupConnectors allowSeqGrpc = new AllowedGroupConnectors(
+            GroupConnector.Type.seqGC, GroupConnector.Type.grpcGC);
+        AllowedGroupConnectors connectorp = allowAnyConnectorGrpc;
+
+        GroupConnector gc = new GroupConnector();
+        Boolean pcdataCheck = false;
+        do
+        {
+            if (!parseGroupToken(sd().www() ? allowCommonContentToken : allowContentToken,
+                                 nestingLevel, declInputLevel, groupInputLevel, gt))
+                return false;
+            ContentToken? contentToken;
+            if (gt.type == GroupToken.Type.modelGroup)
+                contentToken = gt.model.extract();
+            else
+                contentToken = gt.contentToken.extract();
+            if (tokenVector.size() == syntax().grpcnt())
+                message(ParserMessages.groupCount, new NumberMessageArg(syntax().grpcnt()));
+            tokenVector.resize(tokenVector.size() + 1);
+            tokenVector[(int)(tokenVector.size() - 1)] = new Owner<ContentToken>(contentToken);
+            if (!parseGroupConnector(connectorp, declInputLevel, groupInputLevel, ref gc))
+                return false;
+            if (options().warnMixedContentRepOrGroup && gt.type == GroupToken.Type.pcdata)
+            {
+                if (tokenVector.size() != 1)
+                    message(ParserMessages.pcdataNotFirstInGroup);
+                else if (gc.type == GroupConnector.Type.seqGC)
+                    message(ParserMessages.pcdataInSeqGroup);
+                else
+                    pcdataCheck = true;
+                if (nestingLevel != 1)
+                    message(ParserMessages.pcdataInNestedModelGroup);
+            }
+            else if (pcdataCheck)
+            {
+                if (gt.type == GroupToken.Type.modelGroup)
+                    message(ParserMessages.pcdataGroupMemberModelGroup);
+                if (contentToken!.occurrenceIndicator() != ContentToken.OccurrenceIndicator.none)
+                    message(ParserMessages.pcdataGroupMemberOccurrenceIndicator);
+            }
+            if (tokenVector.size() == 1)
+            {
+                connector = gc.type;
+                switch (gc.type)
+                {
+                    case GroupConnector.Type.orGC:
+                        connectorp = allowOrGrpc;
+                        break;
+                    case GroupConnector.Type.seqGC:
+                        connectorp = allowSeqGrpc;
+                        break;
+                    case GroupConnector.Type.andGC:
+                        connectorp = allowAndGrpc;
+                        if (options().warnAndGroup)
+                            message(ParserMessages.andGroup);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        } while (gc.type != GroupConnector.Type.grpcGC);
+
+        ContentToken.OccurrenceIndicator oi = getOccurrenceIndicator(oiMode);
+        switch (connector)
+        {
+            case GroupConnector.Type.orGC:
+                group = new OrModelGroup(tokenVector, oi);
+                if (pcdataCheck && oi != ContentToken.OccurrenceIndicator.rep)
+                    message(ParserMessages.pcdataGroupNotRep);
+                break;
+            case GroupConnector.Type.grpcGC:
+                if (pcdataCheck && oi != ContentToken.OccurrenceIndicator.rep && oi != ContentToken.OccurrenceIndicator.none)
+                    message(ParserMessages.pcdataGroupNotRep);
+                goto case GroupConnector.Type.seqGC;
+            case GroupConnector.Type.seqGC:
+                group = new SeqModelGroup(tokenVector, oi);
+                break;
+            case GroupConnector.Type.andGC:
+                group = new AndModelGroup(tokenVector, oi);
+                break;
+            default:
+                break;
+        }
+        return true;
+    }
+
+    // ContentToken::OccurrenceIndicator getOccurrenceIndicator(Mode oiMode);
+    protected ContentToken.OccurrenceIndicator getOccurrenceIndicator(Mode oiMode)
+    {
+        Token token = getToken(oiMode);
+        switch (token)
+        {
+            case Tokens.tokenPlus:
+                if (currentMarkup() != null)
+                    currentMarkup()!.addDelim(Syntax.DelimGeneral.dPLUS);
+                return ContentToken.OccurrenceIndicator.plus;
+            case Tokens.tokenOpt:
+                if (currentMarkup() != null)
+                    currentMarkup()!.addDelim(Syntax.DelimGeneral.dOPT);
+                return ContentToken.OccurrenceIndicator.opt;
+            case Tokens.tokenRep:
+                if (currentMarkup() != null)
+                    currentMarkup()!.addDelim(Syntax.DelimGeneral.dREP);
+                return ContentToken.OccurrenceIndicator.rep;
+            default:
+                currentInput()!.ungetToken();
+                return ContentToken.OccurrenceIndicator.none;
+        }
+    }
+
+    // Boolean parseDataTagGroup(unsigned nestingLevel, unsigned declInputLevel, GroupToken &result);
+    protected Boolean parseDataTagGroup(uint nestingLevel, uint declInputLevel, GroupToken result)
+    {
+        throw new NotImplementedException();
+    }
+
+    // Boolean parseDataTagTemplateGroup(unsigned nestingLevel, unsigned declInputLevel, GroupToken &result);
+    protected Boolean parseDataTagTemplateGroup(uint nestingLevel, uint declInputLevel, GroupToken result)
+    {
+        throw new NotImplementedException();
+    }
+
     // Boolean parseLiteral(Mode litMode, Mode liteMode, size_t maxLength,
     //                       const MessageType1 &tooLongMessage, unsigned flags, Text &text);
     protected Boolean parseLiteral(Mode litMode, Mode liteMode, nuint maxLength,

@@ -414,4 +414,88 @@ public static class ParserMessages
         MessageType.Severity.error, null, 445, "notation %1 for entity %2 undefined");
     public static readonly MessageType1 attlistNotationUndefined = new MessageType1(
         MessageType.Severity.error, null, 446, "notation %1 for which an ATTLIST was defined is not defined");
+
+    // parseParam.cxx messages
+    public static readonly MessageType2 markupDeclarationCharacter = new MessageType2(
+        MessageType.Severity.error, null, 8, "character %1 invalid: only %2 and parameter separators allowed");
+    public static readonly MessageType0 psComment = new MessageType0(
+        MessageType.Severity.warning, null, 382, "comment in parameter separator");
+    public static readonly MessageType2 groupCharacter = new MessageType2(
+        MessageType.Severity.error, null, 6, "character %1 invalid: only %2 and token separators allowed");
+    public static readonly MessageType0 groupLevel = new MessageType0(
+        MessageType.Severity.error, null, 5, "an entity end in a token separator must terminate an entity referenced in the same group");
+    public static readonly MessageType0 groupEntityEnd = new MessageType0(
+        MessageType.Severity.error, null, 10, "an entity end is not allowed in a token separator that does not follow a token");
+    public static readonly MessageType0 groupEntityReference = new MessageType0(
+        MessageType.Severity.error, null, 12, "a parameter entity reference can only occur in a group where a token could occur");
+    public static readonly MessageType1 grplvl = new MessageType1(
+        MessageType.Severity.error, null, 248, "content model nesting level exceeds GRPLVL (%1)");
+    public static readonly MessageType1 groupCount = new MessageType1(
+        MessageType.Severity.error, null, 14, "the number of tokens in a group must not exceed GRPCNT (%1)");
+    public static readonly MessageType1 duplicateGroupToken = new MessageType1(
+        MessageType.Severity.error, null, 13, "token %1 has already occurred in this group");
+    // peroGrpoProlog already defined above
+    public static readonly MessageType0 peroGrpoStartTag = new MessageType0(
+        MessageType.Severity.error, null, 447, "a name group is not allowed in a parameter entity reference in a start tag");
+    public static readonly MessageType0 peroGrpoEndTag = new MessageType0(
+        MessageType.Severity.warning, null, 448, "name group in a parameter entity reference in an end tag (SGML forbids them in start tags)");
+    public static readonly MessageType0 instanceParamEntityRef = new MessageType0(
+        MessageType.Severity.warning, null, 394, "parameter entity reference in document instance");
+    public static readonly MessageType0 internalSubsetPsParamEntityRef = new MessageType0(
+        MessageType.Severity.warning, null, 415, "reference to parameter entity in parameter separator in internal subset");
+    public static readonly MessageType0 internalSubsetTsParamEntityRef = new MessageType0(
+        MessageType.Severity.warning, null, 416, "reference to parameter entity in token separator in internal subset");
+    public static readonly MessageType0 groupParameterEntityNotEnded = new MessageType0(
+        MessageType.Severity.error, null, 195, "a parameter entity referenced in a token separator must end in the same group");
+    public static readonly MessageType2 paramInvalidToken = new MessageType2(
+        MessageType.Severity.error, null, 39, "%1 invalid: only %2 and parameter separators are allowed");
+    public static readonly MessageType2 groupTokenInvalidToken = new MessageType2(
+        MessageType.Severity.error, null, 40, "%1 invalid: only %2 and token separators are allowed");
+    public static readonly MessageType2 connectorInvalidToken = new MessageType2(
+        MessageType.Severity.error, null, 41, "%1 invalid: only %2 and token separators are allowed");
+    public static readonly MessageType0 datatagNotImplemented = new MessageType0(
+        MessageType.Severity.error, null, 322, "DATATAG feature not implemented");
+    public static readonly MessageType0 datatagBaseDtd = new MessageType0(
+        MessageType.Severity.error, null, 429, "datatag group can only be specified in base document type");
+    public static readonly MessageType1 invalidToken = new MessageType1(
+        MessageType.Severity.error, null, 11, "%1 is not a valid token here");
+    public static readonly MessageType0 sorryAllImplicit = new MessageType0(
+        MessageType.Severity.error, null, 451, "Sorry, #ALL and #IMPLICIT content tokens not implemented");
+    public static readonly MessageType0 mixedConnectors = new MessageType0(
+        MessageType.Severity.warning, null, 30, "only one type of connector should be used in a single group");
+    public static readonly MessageType0 nameGroupNotOr = new MessageType0(
+        MessageType.Severity.warning, null, 402, "name group or name token group used connector other than OR");
+    public static readonly MessageType0 andGroup = new MessageType0(
+        MessageType.Severity.warning, null, 384, "AND group");
+    public static readonly MessageType0 pcdataNotFirstInGroup = new MessageType0(
+        MessageType.Severity.warning, null, 398, "#PCDATA not first in model group");
+    public static readonly MessageType0 pcdataInSeqGroup = new MessageType0(
+        MessageType.Severity.warning, null, 399, "#PCDATA in SEQ group");
+    public static readonly MessageType0 pcdataInNestedModelGroup = new MessageType0(
+        MessageType.Severity.warning, null, 400, "#PCDATA in nested model group");
+    public static readonly MessageType0 pcdataGroupMemberModelGroup = new MessageType0(
+        MessageType.Severity.warning, null, 422, "member of model group containing #PCDATA is a model group");
+    public static readonly MessageType0 pcdataGroupMemberOccurrenceIndicator = new MessageType0(
+        MessageType.Severity.warning, null, 421, "member of model group containing #PCDATA has occurrence indicator");
+    public static readonly MessageType0 pcdataGroupNotRep = new MessageType0(
+        MessageType.Severity.warning, null, 401, "#PCDATA in model group that does not have REP occurrence indicator");
+    public static readonly MessageType1 minimumLiteralLength = new MessageType1(
+        MessageType.Severity.error, null, 33, "length of interpreted minimum literal must not exceed reference LITLEN (%1)");
+    public static readonly MessageType1 systemIdentifierLength = new MessageType1(
+        MessageType.Severity.error, null, 35, "length of system identifier must not exceed LITLEN (%1)");
+    public static readonly MessageType1 parameterLiteralLength = new MessageType1(
+        MessageType.Severity.error, null, 36, "length of interpreted parameter literal must not exceed LITLEN (%1)");
+    public static readonly MessageType1 dataTagPatternLiteralLength = new MessageType1(
+        MessageType.Severity.error, null, 37, "length of interpreted parameter literal in data tag pattern must not exceed DTEMPLEN (%1)");
+    public static readonly MessageType0 rniNameStart = new MessageType0(
+        MessageType.Severity.error, null, 26, "RNI delimiter must be followed by name start character");
+    public static readonly MessageType1 noSuchReservedName = new MessageType1(
+        MessageType.Severity.error, null, 31, "%1 is not a reserved name");
+    public static readonly MessageType1 invalidReservedName = new MessageType1(
+        MessageType.Severity.error, null, 32, "%1 is not allowed as a reserved name here");
+    public static readonly MessageType1 attributeValueLength = new MessageType1(
+        MessageType.Severity.error, null, 3, "length of attribute value must not exceed LITLEN less NORMSEP (%1)");
+    // nameTokenLength already defined above
+    public static readonly MessageType1 noSuchSourceElement = new MessageType1(
+        MessageType.Severity.error, null, 476, "no such source element '%1'");
 }
