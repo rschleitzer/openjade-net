@@ -88,6 +88,18 @@ public abstract class OutputCharStream : Link
         return this;
     }
 
+    // Convenience method: put(string) - equivalent to operatorOutput
+    public OutputCharStream put(string s)
+    {
+        return operatorOutput(s);
+    }
+
+    // Convenience method: put(StringC) - equivalent to operatorOutput
+    public OutputCharStream put(StringC str)
+    {
+        return operatorOutput(str);
+    }
+
     // OutputCharStream &operator<<(const StringC &);
     public OutputCharStream operatorOutput(StringC str)
     {

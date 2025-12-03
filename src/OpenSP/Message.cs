@@ -277,7 +277,15 @@ public class Message
     }
 }
 
-public abstract class Messenger
+// Interface for classes that need messenger functionality without inheriting from Messenger
+public interface IMessenger
+{
+    void dispatchMessage(Message msg);
+    void initMessage(Message msg);
+    void setNextLocation(Location loc);
+}
+
+public abstract class Messenger : IMessenger
 {
     private Boolean haveNextLocation_;
     private Location nextLocation_ = new Location();

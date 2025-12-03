@@ -86,6 +86,34 @@ public class String<T> where T : struct
         return length_;
     }
 
+    // String<T> &assign(const String<T> &s);
+    public String<T> assign(String<T> s)
+    {
+        if (s.ptr_ != null)
+            return assign(s.ptr_, s.length_);
+        else
+        {
+            length_ = 0;
+            return this;
+        }
+    }
+
+    // String<T> &assign(string s) - for convenience with C# strings
+    public String<T> assign(string s)
+    {
+        clear();
+        if (s != null)
+        {
+            foreach (char c in s)
+            {
+                // Handle conversion from char to T (requires T to be value type)
+                // This only works properly for String<char>
+                operatorPlusAssign((T)(object)c);
+            }
+        }
+        return this;
+    }
+
     // String<T> &assign(const T *, size_t);
     public String<T> assign(T[] p, nuint n)
     {
@@ -199,6 +227,14 @@ public class String<T> where T : struct
         return this;
     }
 
+    // String<T> &append(const String<T> &s);
+    public String<T> append(String<T> s)
+    {
+        if (s.ptr_ != null)
+            return append(s.ptr_, s.length_);
+        return this;
+    }
+
     // String<T> &append(const T *, size_t);
     public String<T> append(T[] p, nuint length)
     {
@@ -206,6 +242,19 @@ public class String<T> where T : struct
             grow(length);
         Array.Copy(p, 0, ptr_!, (int)length_, (int)length);
         length_ += length;
+        return this;
+    }
+
+    // String<T> &append(string s) - for convenience with C# strings
+    public String<T> append(string s)
+    {
+        if (s != null)
+        {
+            foreach (char c in s)
+            {
+                operatorPlusAssign((T)(object)c);
+            }
+        }
         return this;
     }
 
@@ -230,6 +279,12 @@ public class String<T> where T : struct
     public Boolean operatorNotEqual(String<T> str)
     {
         return !operatorEqual(str);
+    }
+
+    // void clear();
+    public void clear()
+    {
+        length_ = 0;
     }
 
     // void resize(size_t n);
