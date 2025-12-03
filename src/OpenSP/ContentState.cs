@@ -3,7 +3,12 @@
 
 namespace OpenSP;
 
-public class ContentState
+// In C++, ParserState inherits from both ContentState and AttributeContext.
+// Since C# doesn't support multiple inheritance, we have ContentState inherit
+// from AttributeContext so that ParserState can inherit from ContentState.
+// ContentState is abstract because it doesn't implement all abstract methods
+// from AttributeContext/Messenger - ParserState provides those implementations.
+public abstract class ContentState : AttributeContext
 {
     public static readonly ShortReferenceMap theEmptyMap = new ShortReferenceMap();
 

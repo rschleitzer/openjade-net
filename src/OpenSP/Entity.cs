@@ -84,6 +84,36 @@ public abstract class Entity : EntityDecl
     {
         // Default implementation - subclasses may override
     }
+
+    // virtual void dsReference(ParserState &, const Ptr<EntityOrigin> &) const;
+    public virtual void dsReference(ParserState parser, Ptr<EntityOrigin> origin)
+    {
+        // Default implementation - subclasses may override
+    }
+
+    // virtual void contentReference(ParserState &, const Ptr<EntityOrigin> &) const;
+    public virtual void contentReference(ParserState parser, Ptr<EntityOrigin> origin)
+    {
+        // Default implementation - subclasses may override
+    }
+
+    // virtual void litReference(Text &, ParserState &, const Ptr<EntityOrigin> &, Boolean) const;
+    public virtual void litReference(Text text, ParserState parser, Ptr<EntityOrigin> origin, Boolean squeezeSpaces)
+    {
+        // Default implementation - subclasses may override
+    }
+
+    // virtual void declReference(ParserState &, const Ptr<EntityOrigin> &) const;
+    public virtual void declReference(ParserState parser, Ptr<EntityOrigin> origin)
+    {
+        // Default implementation - subclasses may override
+    }
+
+    // virtual void rcdataReference(ParserState &, const Ptr<EntityOrigin> &) const;
+    public virtual void rcdataReference(ParserState parser, Ptr<EntityOrigin> origin)
+    {
+        // Default implementation - subclasses may override
+    }
 }
 
 public abstract class InternalEntity : Entity
@@ -148,22 +178,54 @@ public abstract class ExternalEntity : Entity
     }
 }
 
-public abstract class ExternalDataEntity : ExternalEntity
+public class ExternalDataEntity : ExternalNonTextEntity
 {
-    protected ExternalDataEntity(StringC name, DataType dataType, Location defLocation, ExternalId externalId)
-        : base(name, DeclType.generalEntity, dataType, defLocation, externalId)
+    private ConstPtr<Notation> notation_ = new ConstPtr<Notation>();
+    private AttributeList attributes_ = new AttributeList();
+
+    public ExternalDataEntity(StringC name, DataType dataType, Location defLocation, ExternalId externalId,
+                              ConstPtr<Notation> notation, AttributeList attributes,
+                              DeclType declType = DeclType.generalEntity)
+        : base(name, declType, dataType, defLocation, externalId)
     {
+        notation_ = notation;
+        attributes_ = attributes;
+    }
+
+    public AttributeList attributes()
+    {
+        return attributes_;
+    }
+
+    public Notation? notation()
+    {
+        return notation_.pointer();
     }
 
     public override ExternalDataEntity? asExternalDataEntity()
     {
         return this;
     }
+
+    public override Entity copy()
+    {
+        // Create a copy of the AttributeList
+        // For the copy, we create a new AttributeList with the same definition
+        AttributeList attrCopy = new AttributeList();
+        // TODO: Implement proper AttributeList copying if needed
+        return new ExternalDataEntity(name(), dataType(), defLocation(), externalId(), notation_, attrCopy, declType());
+    }
+
+    public void setNotation(ConstPtr<Notation> notation, AttributeList attributes)
+    {
+        notation_ = notation;
+        attributes_ = attributes;
+    }
 }
 
-public abstract class SubdocEntity : ExternalEntity
+public class SubdocEntity : ExternalNonTextEntity
 {
-    protected SubdocEntity(StringC name, Location defLocation, ExternalId externalId)
+    public SubdocEntity(StringC name, Location defLocation, ExternalId externalId)
         : base(name, DeclType.generalEntity, DataType.subdoc, defLocation, externalId)
     {
     }
@@ -171,6 +233,11 @@ public abstract class SubdocEntity : ExternalEntity
     public override SubdocEntity? asSubdocEntity()
     {
         return this;
+    }
+
+    public override Entity copy()
+    {
+        return new SubdocEntity(name(), defLocation(), externalId());
     }
 }
 
@@ -185,8 +252,144 @@ public class PiEntity : InternalEntity
 
     public override Entity copy()
     {
-        Text textCopy = new Text();
-        text_.swap(textCopy);
+        Text textCopy = new Text(text_);
         return new PiEntity(name(), declType(), defLocation(), textCopy);
+    }
+}
+
+// Internal Data Entity (abstract base for cdata/sdata)
+public abstract class InternalDataEntity : InternalEntity
+{
+    protected InternalDataEntity(StringC name, DataType dataType, Location defLocation, Text text)
+        : base(name, DeclType.generalEntity, dataType, defLocation, text)
+    {
+    }
+
+    public override Boolean isDataOrSubdoc()
+    {
+        return true;
+    }
+}
+
+// Internal CDATA Entity
+public class InternalCdataEntity : InternalDataEntity
+{
+    public InternalCdataEntity(StringC name, Location defLocation, Text text)
+        : base(name, DataType.cdata, defLocation, text)
+    {
+    }
+
+    public override Entity copy()
+    {
+        Text textCopy = new Text(text_);
+        return new InternalCdataEntity(name(), defLocation(), textCopy);
+    }
+
+    public override Boolean isCharacterData()
+    {
+        return true;
+    }
+}
+
+// Predefined Entity (extends InternalCdataEntity)
+public class PredefinedEntity : InternalCdataEntity
+{
+    public PredefinedEntity(StringC name, Location defLocation, Text text)
+        : base(name, defLocation, text)
+    {
+    }
+}
+
+// Internal SDATA Entity
+public class InternalSdataEntity : InternalDataEntity
+{
+    public InternalSdataEntity(StringC name, Location defLocation, Text text)
+        : base(name, DataType.sdata, defLocation, text)
+    {
+    }
+
+    public override Entity copy()
+    {
+        Text textCopy = new Text(text_);
+        return new InternalSdataEntity(name(), defLocation(), textCopy);
+    }
+
+    public override Boolean isCharacterData()
+    {
+        return true;
+    }
+}
+
+// Internal Text Entity
+public class InternalTextEntity : InternalEntity
+{
+    public enum Bracketed
+    {
+        none,
+        starttag,
+        endtag,
+        ms,
+        md
+    }
+
+    private Bracketed bracketed_;
+
+    public InternalTextEntity(StringC name, DeclType declType, Location defLocation, Text text, Bracketed bracketed)
+        : base(name, declType, DataType.sgmlText, defLocation, text)
+    {
+        bracketed_ = bracketed;
+    }
+
+    public override Entity copy()
+    {
+        Text textCopy = new Text(text_);
+        return new InternalTextEntity(name(), declType(), defLocation(), textCopy, bracketed_);
+    }
+}
+
+// External Text Entity
+public class ExternalTextEntity : ExternalEntity
+{
+    public ExternalTextEntity(StringC name, DeclType declType, Location defLocation, ExternalId externalId)
+        : base(name, declType, DataType.sgmlText, defLocation, externalId)
+    {
+    }
+
+    public override Entity copy()
+    {
+        return new ExternalTextEntity(name(), declType(), defLocation(), externalId());
+    }
+}
+
+// External Non-Text Entity (abstract base for data and subdoc entities)
+public abstract class ExternalNonTextEntity : ExternalEntity
+{
+    protected ExternalNonTextEntity(StringC name, DeclType declType, DataType dataType, Location defLocation, ExternalId externalId)
+        : base(name, declType, dataType, defLocation, externalId)
+    {
+    }
+
+    public override Boolean isDataOrSubdoc()
+    {
+        return true;
+    }
+
+    public override Boolean isCharacterData()
+    {
+        return false;
+    }
+}
+
+// Ignored Entity (for conditional sections)
+public class IgnoredEntity : Entity
+{
+    public IgnoredEntity(StringC name, DeclType declType)
+        : base(name, declType, DataType.sgmlText, new Location())
+    {
+    }
+
+    public override Entity copy()
+    {
+        return new IgnoredEntity(name(), declType());
     }
 }

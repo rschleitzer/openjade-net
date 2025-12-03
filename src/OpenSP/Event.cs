@@ -1808,4 +1808,9 @@ public class Pass1EventHandler : EventHandler
     {
         queue_.clear();
     }
+
+    public EventHandler? origHandler()
+    {
+        return origHandler_;
+    }
 }

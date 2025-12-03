@@ -112,4 +112,22 @@ public static class ParserMessages
         MessageType.Severity.error, null, 120, "number of entity name values exceeds GRPCNT (%1)");
     public static readonly MessageType0 conrefNotation = new MessageType0(
         MessageType.Severity.error, null, 121, "CONREF attribute not allowed with NOTATION");
+
+    // Parser state related messages
+    public static readonly MessageType0 pass2Ee = new MessageType0(
+        MessageType.Severity.error, null, 200, "unexpected entity end during second pass");
+    public static readonly MessageType0 activeDocLink = new MessageType0(
+        MessageType.Severity.error, null, 201, "cannot have both active document type and link type");
+    public static readonly MessageType0 sorryActiveDoctypes = new MessageType0(
+        MessageType.Severity.error, null, 202, "sorry, only one active document type supported");
+    public static readonly MessageType1 unstableLpdParameterEntity = new MessageType1(
+        MessageType.Severity.error, null, 203, "definition of parameter entity '%1' changed in LPD");
+    public static readonly MessageType1 unstableLpdGeneralEntity = new MessageType1(
+        MessageType.Severity.error, null, 204, "definition of general entity '%1' changed in LPD");
+    public static readonly MessageType0 linkActivateTooLate = new MessageType0(
+        MessageType.Severity.error, null, 205, "too late to activate link type");
+    public static readonly MessageType1 defaultEntityInAttribute = new MessageType1(
+        MessageType.Severity.warning, null, 206, "reference to default entity '%1' in attribute value");
+    public static readonly MessageType1 concurrentInstances = new MessageType1(
+        MessageType.Severity.error, null, 207, "number of concurrent document instances exceeds %1");
 }

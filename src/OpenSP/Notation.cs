@@ -3,35 +3,13 @@
 
 namespace OpenSP;
 
-// Forward declaration - will be fully implemented when parser is ported
-public class ParserState
-{
-    // Stub - to be implemented later
-    public ParserState()
-    {
-    }
-
-    // Methods needed by Undo classes - will be properly implemented later
-    public virtual OpenElement currentElement()
-    {
-        throw new NotImplementedException("ParserState.currentElement() not yet implemented");
-    }
-
-    public virtual void popElement()
-    {
-        throw new NotImplementedException("ParserState.popElement() not yet implemented");
-    }
-
-    public virtual void pushElement(OpenElement? e)
-    {
-        throw new NotImplementedException("ParserState.pushElement() not yet implemented");
-    }
-}
-
+// In C++, Notation also inherits from Attributed for attribute support.
+// Since C# doesn't support multiple inheritance, we include Attributed functionality here.
 public class Notation : EntityDecl
 {
     private PackedBoolean defined_;
     private ExternalId externalId_ = new ExternalId();
+    private Ptr<AttributeDefinitionList> attributeDef_ = new Ptr<AttributeDefinitionList>();
 
     // Notation(const StringC &, const ConstPtr<StringResource<Char> > &dtdName, Boolean dtdIsBase);
     public Notation(StringC name, ConstPtr<StringResource<Char>> dtdName, Boolean dtdIsBase)
@@ -39,6 +17,27 @@ public class Notation : EntityDecl
     {
         defined_ = false;
         setDeclIn(dtdName, dtdIsBase);
+    }
+
+    // Attributed methods - included here since C# doesn't support multiple inheritance
+    public ConstPtr<AttributeDefinitionList> attributeDef()
+    {
+        return new ConstPtr<AttributeDefinitionList>(attributeDef_.pointer());
+    }
+
+    public AttributeDefinitionList? attributeDefTemp()
+    {
+        return attributeDef_.pointer();
+    }
+
+    public Ptr<AttributeDefinitionList> attributeDefMutable()
+    {
+        return attributeDef_;
+    }
+
+    public void setAttributeDef(Ptr<AttributeDefinitionList> def)
+    {
+        attributeDef_ = def;
     }
 
     // virtual ~Notation();
