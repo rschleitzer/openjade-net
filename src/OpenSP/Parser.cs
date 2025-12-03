@@ -832,8 +832,370 @@ public class Parser : ParserState
 
     // From parseCommon.cxx
     protected virtual void doInit() { throw new NotImplementedException(); }
-    protected virtual void doProlog() { throw new NotImplementedException(); }
-    protected virtual void doDeclSubset() { throw new NotImplementedException(); }
+
+    // void doProlog();
+    protected void doProlog()
+    {
+        const uint maxTries = 10;
+        uint tries = 0;
+        do
+        {
+            if (cancelled())
+            {
+                allDone();
+                return;
+            }
+            Token token = getToken(Mode.proMode);
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    if (hadDtd())
+                    {
+                        currentInput()!.ungetToken();
+                        endProlog();
+                        return;
+                    }
+                    {
+                        StringC gi = new StringC();
+                        if (lookingAtStartTag(gi))
+                        {
+                            currentInput()!.ungetToken();
+                            implyDtd(gi);
+                            return;
+                        }
+                    }
+                    if (++tries >= maxTries)
+                    {
+                        message(ParserMessages.notSgml);
+                        giveUp();
+                        return;
+                    }
+                    message(ParserMessages.prologCharacter, new StringMessageArg(currentToken()));
+                    prologRecover();
+                    break;
+                case Tokens.tokenEe:
+                    if (hadDtd())
+                    {
+                        endProlog();
+                        return;
+                    }
+                    message(ParserMessages.documentEndProlog);
+                    allDone();
+                    return;
+                case Tokens.tokenMdoMdc:
+                    // empty comment
+                    emptyCommentDecl();
+                    break;
+                case Tokens.tokenMdoCom:
+                    if (!parseCommentDecl())
+                        prologRecover();
+                    break;
+                case Tokens.tokenMdoNameStart:
+                    setPass2Start();
+                    if (startMarkup(eventsWanted().wantPrologMarkup(), currentLocation()) != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDO);
+                    Syntax.ReservedName name;
+                    if (parseDeclarationName(out name))
+                    {
+                        switch (name)
+                        {
+                            case Syntax.ReservedName.rDOCTYPE:
+                                if (!parseDoctypeDeclStart())
+                                    giveUp();
+                                return;
+                            case Syntax.ReservedName.rLINKTYPE:
+                                if (!parseLinktypeDeclStart())
+                                    giveUp();
+                                return;
+                            case Syntax.ReservedName.rELEMENT:
+                            case Syntax.ReservedName.rATTLIST:
+                            case Syntax.ReservedName.rENTITY:
+                            case Syntax.ReservedName.rNOTATION:
+                            case Syntax.ReservedName.rSHORTREF:
+                            case Syntax.ReservedName.rUSEMAP:
+                            case Syntax.ReservedName.rUSELINK:
+                            case Syntax.ReservedName.rLINK:
+                            case Syntax.ReservedName.rIDLINK:
+                                message(ParserMessages.prologDeclaration,
+                                        new StringMessageArg(syntax().reservedName(name)));
+                                if (!hadDtd())
+                                    tries++;
+                                prologRecover();
+                                break;
+                            default:
+                                message(ParserMessages.noSuchDeclarationType,
+                                        new StringMessageArg(syntax().reservedName(name)));
+                                prologRecover();
+                                break;
+                        }
+                    }
+                    else
+                        prologRecover();
+                    break;
+                case Tokens.tokenPio:
+                    if (!parseProcessingInstruction())
+                        prologRecover();
+                    break;
+                case Tokens.tokenS:
+                    if (eventsWanted().wantPrologMarkup())
+                    {
+                        extendS();
+                        eventHandler().sSep(new SSepEvent(currentInput()!.currentTokenStart(),
+                                                          currentInput()!.currentTokenLength(),
+                                                          currentLocation(),
+                                                          true));
+                    }
+                    break;
+                default:
+                    // CANNOT_HAPPEN();
+                    break;
+            }
+        } while (eventQueueEmpty());
+    }
+
+    // void doDeclSubset();
+    protected void doDeclSubset()
+    {
+        do
+        {
+            if (cancelled())
+            {
+                allDone();
+                return;
+            }
+            Token token = getToken(currentMode());
+            uint startLevel = inputLevel();
+            Boolean inDtd = !haveDefLpd();
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    message(ParserMessages.declSubsetCharacter, new StringMessageArg(currentToken()));
+                    declSubsetRecover(startLevel);
+                    break;
+                case Tokens.tokenEe:
+                    if (inputLevel() == specialParseInputLevel())
+                    {
+                        // FIXME have separate messages for each type of special parse
+                        message(ParserMessages.specialParseEntityEnd);
+                    }
+                    if (eventsWanted().wantPrologMarkup())
+                        eventHandler().entityEnd(new EntityEndEvent(currentLocation()));
+                    if (inputLevel() == 2)
+                    {
+                        EntityDecl? e = currentLocation().origin().pointer()?.entityDecl();
+                        if (e != null
+                            && (e.declType() == EntityDecl.DeclType.doctype
+                                || e.declType() == EntityDecl.DeclType.linktype))
+                        {
+                            // popInputStack may destroy e
+                            Boolean fake = e.defLocation().origin().isNull();
+                            popInputStack();
+                            if (inDtd)
+                                parseDoctypeDeclEnd(fake);
+                            else
+                                parseLinktypeDeclEnd();
+                            setPhase(Phase.prologPhase);
+                            return;
+                        }
+                    }
+                    if (inputLevel() == 1)
+                    {
+                        if (finalPhase() == Phase.declSubsetPhase)
+                        {
+                            checkDtd(defDtd());
+                            endDtd();
+                        }
+                        else
+                            // Give message before popping stack.
+                            message(inDtd
+                                    ? ParserMessages.documentEndDtdSubset
+                                    : ParserMessages.documentEndLpdSubset);
+                        popInputStack();
+                        allDone();
+                    }
+                    else
+                        popInputStack();
+                    return;
+                case Tokens.tokenDsc: // end of declaration subset
+                    // FIXME what's the right location?
+                    if (!referenceDsEntity(currentLocation()))
+                    {
+                        if (inDtd)
+                            parseDoctypeDeclEnd();
+                        else
+                            parseLinktypeDeclEnd();
+                        setPhase(Phase.prologPhase);
+                    }
+                    return;
+                case Tokens.tokenMdoNameStart: // named markup declaration
+                    if (startMarkup(eventsWanted().wantPrologMarkup(), currentLocation()) != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDO);
+                    Syntax.ReservedName declName;
+                    Boolean result;
+                    if (parseDeclarationName(out declName, inDtd && !options().errorAfdr))
+                    {
+                        switch (declName)
+                        {
+                            case Syntax.ReservedName.rANY: // used for <!AFDR
+                                result = parseAfdrDecl();
+                                break;
+                            case Syntax.ReservedName.rELEMENT:
+                                if (inDtd)
+                                    result = parseElementDecl();
+                                else
+                                {
+                                    message(ParserMessages.lpdSubsetDeclaration,
+                                            new StringMessageArg(syntax().reservedName(declName)));
+                                    result = false;
+                                }
+                                break;
+                            case Syntax.ReservedName.rATTLIST:
+                                result = parseAttlistDecl();
+                                break;
+                            case Syntax.ReservedName.rENTITY:
+                                result = parseEntityDecl();
+                                break;
+                            case Syntax.ReservedName.rNOTATION:
+                                result = parseNotationDecl();
+                                if (!inDtd && !sd().www())
+                                    message(ParserMessages.lpdSubsetDeclaration,
+                                            new StringMessageArg(syntax().reservedName(declName)));
+                                break;
+                            case Syntax.ReservedName.rSHORTREF:
+                                if (inDtd)
+                                    result = parseShortrefDecl();
+                                else
+                                {
+                                    message(ParserMessages.lpdSubsetDeclaration,
+                                            new StringMessageArg(syntax().reservedName(declName)));
+                                    result = false;
+                                }
+                                break;
+                            case Syntax.ReservedName.rUSEMAP:
+                                if (inDtd)
+                                    result = parseUsemapDecl();
+                                else
+                                {
+                                    message(ParserMessages.lpdSubsetDeclaration,
+                                            new StringMessageArg(syntax().reservedName(declName)));
+                                    result = false;
+                                }
+                                break;
+                            case Syntax.ReservedName.rLINK:
+                                if (inDtd)
+                                {
+                                    message(ParserMessages.dtdSubsetDeclaration,
+                                            new StringMessageArg(syntax().reservedName(declName)));
+                                    result = false;
+                                }
+                                else
+                                    result = parseLinkDecl();
+                                break;
+                            case Syntax.ReservedName.rIDLINK:
+                                if (inDtd)
+                                {
+                                    message(ParserMessages.dtdSubsetDeclaration,
+                                            new StringMessageArg(syntax().reservedName(declName)));
+                                    result = false;
+                                }
+                                else
+                                    result = parseIdlinkDecl();
+                                break;
+                            case Syntax.ReservedName.rDOCTYPE:
+                            case Syntax.ReservedName.rLINKTYPE:
+                            case Syntax.ReservedName.rUSELINK:
+                                result = false;
+                                message(inDtd
+                                        ? ParserMessages.dtdSubsetDeclaration
+                                        : ParserMessages.lpdSubsetDeclaration,
+                                        new StringMessageArg(syntax().reservedName(declName)));
+                                break;
+                            default:
+                                result = false;
+                                message(ParserMessages.noSuchDeclarationType,
+                                        new StringMessageArg(syntax().reservedName(declName)));
+                                break;
+                        }
+                    }
+                    else
+                        result = false;
+                    if (!result)
+                        declSubsetRecover(startLevel);
+                    break;
+                case Tokens.tokenMdoMdc: // empty comment declaration
+                    emptyCommentDecl();
+                    break;
+                case Tokens.tokenMdoCom: // comment declaration
+                    if (!parseCommentDecl())
+                        declSubsetRecover(startLevel);
+                    break;
+                case Tokens.tokenMdoDso: // marked section declaration
+                    if (!parseMarkedSectionDeclStart())
+                        declSubsetRecover(startLevel);
+                    break;
+                case Tokens.tokenMscMdc:
+                    handleMarkedSectionEnd();
+                    break;
+                case Tokens.tokenPeroGrpo: // parameter entity reference with name group
+                    message(ParserMessages.peroGrpoProlog);
+                    goto case Tokens.tokenPeroNameStart;
+                case Tokens.tokenPeroNameStart: // parameter entity reference
+                    {
+                        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+                        Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>();
+                        if (parseEntityReference(true, token == Tokens.tokenPeroGrpo ? 1 : 0, entity, origin))
+                        {
+                            if (!entity.isNull())
+                                entity.pointer()!.dsReference(this, origin);
+                        }
+                        else
+                            declSubsetRecover(startLevel);
+                    }
+                    break;
+                case Tokens.tokenPio: // processing instruction
+                    if (!parseProcessingInstruction())
+                        declSubsetRecover(startLevel);
+                    break;
+                case Tokens.tokenS: // white space
+                    if (eventsWanted().wantPrologMarkup())
+                    {
+                        extendS();
+                        eventHandler().sSep(new SSepEvent(currentInput()!.currentTokenStart(),
+                                                          currentInput()!.currentTokenLength(),
+                                                          currentLocation(),
+                                                          true));
+                    }
+                    break;
+                case Tokens.tokenIgnoredChar:
+                    // from an ignored marked section
+                    if (eventsWanted().wantPrologMarkup())
+                        eventHandler().ignoredChars(new IgnoredCharsEvent(currentInput()!.currentTokenStart(),
+                                                                          currentInput()!.currentTokenLength(),
+                                                                          currentLocation(),
+                                                                          true));
+                    break;
+                case Tokens.tokenRe:
+                case Tokens.tokenRs:
+                case Tokens.tokenCroNameStart:
+                case Tokens.tokenCroDigit:
+                case Tokens.tokenHcroHexDigit:
+                case Tokens.tokenEroNameStart:
+                case Tokens.tokenEroGrpo:
+                case Tokens.tokenChar:
+                    // these can occur in a cdata or rcdata marked section
+                    message(ParserMessages.dataMarkedSectionDeclSubset);
+                    declSubsetRecover(startLevel);
+                    break;
+                default:
+                    // CANNOT_HAPPEN();
+                    break;
+            }
+        } while (eventQueueEmpty());
+    }
     // void doInstanceStart();
     protected virtual void doInstanceStart()
     {
@@ -1231,8 +1593,84 @@ public class Parser : ParserState
     }
 
     // From parseDecl.cxx
-    protected virtual void declSubsetRecover(uint startLevel) { throw new NotImplementedException(); }
-    protected virtual void prologRecover() { throw new NotImplementedException(); }
+
+    // void declSubsetRecover(unsigned startLevel);
+    protected void declSubsetRecover(uint startLevel)
+    {
+        for (;;)
+        {
+            Token token = getToken(currentMode());
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    getChar();
+                    break;
+                case Tokens.tokenEe:
+                    if (inputLevel() <= startLevel)
+                        return;
+                    popInputStack();
+                    break;
+                case Tokens.tokenMdoCom:
+                case Tokens.tokenDsc:
+                case Tokens.tokenMdoNameStart:
+                case Tokens.tokenMdoMdc:
+                case Tokens.tokenMdoDso:
+                case Tokens.tokenMscMdc:
+                case Tokens.tokenPio:
+                    if (inputLevel() == startLevel)
+                    {
+                        currentInput()!.ungetToken();
+                        return;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    // void prologRecover();
+    protected void prologRecover()
+    {
+        uint skipCount = 0;
+        const uint skipMax = 250;
+        for (;;)
+        {
+            Token token = getToken(Mode.proMode);
+            skipCount++;
+            if (token == Tokens.tokenUnrecognized)
+            {
+                token = getToken(Mode.mdMode);
+                if (token == Tokens.tokenMdc)
+                {
+                    token = getToken(Mode.proMode);
+                    if (token == Tokens.tokenS)
+                        return;
+                }
+            }
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    getChar();
+                    break;
+                case Tokens.tokenEe:
+                    return;
+                case Tokens.tokenMdoMdc:
+                case Tokens.tokenMdoCom:
+                case Tokens.tokenMdoNameStart:
+                case Tokens.tokenPio:
+                    currentInput()!.ungetToken();
+                    return;
+                case Tokens.tokenS:
+                    if (currentChar() == syntax().standardFunction((int)Syntax.StandardFunction.fRE)
+                        && skipCount >= skipMax)
+                        return;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
     // void skipDeclaration(unsigned startLevel);
     protected void skipDeclaration(uint startLevel)
     {
@@ -1273,7 +1711,32 @@ public class Parser : ParserState
     protected virtual Boolean parseEntityDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseShortrefDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseUsemapDecl() { throw new NotImplementedException(); }
-    protected virtual Boolean parseDeclarationName(out Syntax.ReservedName name) { name = default; throw new NotImplementedException(); }
+    // Boolean parseDeclarationName(Syntax::ReservedName *result, Boolean allowAfdr = 0);
+    protected Boolean parseDeclarationName(out Syntax.ReservedName result, Boolean allowAfdr = false)
+    {
+        currentInput()!.discardInitial();
+        extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        StringC name = nameBuffer();
+        getCurrentToken(syntax().generalSubstTable(), name);
+        if (!syntax().lookupReservedName(name, out result))
+        {
+            if (allowAfdr && name == sd().execToInternal("AFDR"))
+            {
+                result = Syntax.ReservedName.rANY;
+                if (currentMarkup() != null)
+                    currentMarkup()!.addName(currentInput()!);
+            }
+            else
+            {
+                result = default;
+                message(ParserMessages.noSuchDeclarationType, new StringMessageArg(name));
+                return false;
+            }
+        }
+        else if (currentMarkup() != null)
+            currentMarkup()!.addReservedName(result, currentInput()!);
+        return true;
+    }
     protected virtual Boolean parseUselinkDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseDoctypeDeclStart() { throw new NotImplementedException(); }
     protected virtual Boolean parseDoctypeDeclEnd(Boolean fake = false) { throw new NotImplementedException(); }
@@ -2341,13 +2804,62 @@ public class Parser : ParserState
             > syntax().taglen())
             message(ParserMessages.taglen, new NumberMessageArg(syntax().taglen()));
     }
-    protected virtual void endProlog() { throw new NotImplementedException(); }
+    // void endProlog();
+    protected void endProlog()
+    {
+        if (baseDtd().isNull())
+        {
+            // We could continue, but there's not a lot of point.
+            giveUp();
+            return;
+        }
+        if (maybeStartPass2())
+            setPhase(Phase.prologPhase);
+        else
+        {
+            if (inputLevel() == 0)
+            {
+                allDone();
+                return;
+            }
+            if (pass2())
+                checkEntityStability();
+            setPhase(Phase.instanceStartPhase);
+            startInstance();
+            ConstPtr<ComplexLpd> lpd = new ConstPtr<ComplexLpd>();
+            Vector<AttributeList> simpleLinkAtts = new Vector<AttributeList>();
+            Vector<StringC> simpleLinkNames = new Vector<StringC>();
+            for (nuint i = 0; i < nActiveLink(); i++)
+            {
+                if (activeLpd(i).type() == Lpd.Type.simpleLink)
+                {
+                    SimpleLpd slpd = (SimpleLpd)activeLpd(i);
+                    simpleLinkNames.push_back(slpd.name());
+                    simpleLinkAtts.resize(simpleLinkAtts.size() + 1);
+                    simpleLinkAtts.back().init(slpd.attributeDef());
+                    simpleLinkAtts.back().finish(this);
+                }
+                else
+                    lpd = new ConstPtr<ComplexLpd>((ComplexLpd)activeLpd(i));
+            }
+            eventHandler().endProlog(new EndPrologEvent(currentDtdPointer(),
+                                                        lpd,
+                                                        simpleLinkNames,
+                                                        simpleLinkAtts,
+                                                        currentLocation()));
+        }
+    }
 
     // From parseAttribute.cxx
     protected virtual Boolean parseAttributeSpec(Mode mode, AttributeList atts, out Boolean netEnabling,
                                                   Ptr<AttributeDefinitionList> newAttDefList)
     { throw new NotImplementedException(); }
     protected virtual Boolean handleAttributeNameToken(Text text, AttributeList atts, ref uint specLength) { throw new NotImplementedException(); }
+
+    // Helper methods from parseDecl.cxx (stubs)
+    protected virtual Boolean lookingAtStartTag(StringC gi) { throw new NotImplementedException(); }
+    protected virtual void implyDtd(StringC gi) { throw new NotImplementedException(); }
+    protected virtual void checkDtd(Dtd dtd) { throw new NotImplementedException(); }
 
     // From parseSd.cxx
     protected virtual Boolean implySgmlDecl() { throw new NotImplementedException(); }

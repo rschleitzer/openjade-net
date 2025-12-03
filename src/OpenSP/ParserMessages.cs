@@ -314,4 +314,26 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 340, "element '%2' at position %1 in '%3' excluded but required");
     public static readonly MessageType1 noCurrentRank = new MessageType1(
         MessageType.Severity.error, null, 341, "no current rank for rank stem '%1'");
+
+    // parseDecl messages
+    public static readonly MessageType0 notSgml = new MessageType0(
+        MessageType.Severity.error, null, 400, "this does not look like an SGML document");
+    public static readonly MessageType1 prologCharacter = new MessageType1(
+        MessageType.Severity.error, null, 401, "invalid character '%1' in prolog");
+    public static readonly MessageType0 documentEndProlog = new MessageType0(
+        MessageType.Severity.error, null, 402, "document end in prolog");
+    public static readonly MessageType1 prologDeclaration = new MessageType1(
+        MessageType.Severity.error, null, 403, "%1 declaration not allowed in prolog");
+    public static readonly MessageType1 declSubsetCharacter = new MessageType1(
+        MessageType.Severity.error, null, 404, "invalid character '%1' in declaration subset");
+    public static readonly MessageType0 documentEndDtdSubset = new MessageType0(
+        MessageType.Severity.error, null, 405, "document end in DTD subset");
+    public static readonly MessageType0 documentEndLpdSubset = new MessageType0(
+        MessageType.Severity.error, null, 406, "document end in LPD subset");
+    public static readonly MessageType1 dtdSubsetDeclaration = new MessageType1(
+        MessageType.Severity.error, null, 407, "%1 declaration not allowed in DTD subset");
+    public static readonly MessageType1 lpdSubsetDeclaration = new MessageType1(
+        MessageType.Severity.error, null, 408, "%1 declaration not allowed in LPD subset");
+    public static readonly MessageType0 dataMarkedSectionDeclSubset = new MessageType0(
+        MessageType.Severity.error, null, 409, "data in marked section in declaration subset");
 }
