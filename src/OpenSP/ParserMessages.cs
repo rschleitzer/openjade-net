@@ -130,4 +130,12 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 206, "reference to default entity '%1' in attribute value");
     public static readonly MessageType1 concurrentInstances = new MessageType1(
         MessageType.Severity.error, null, 207, "number of concurrent document instances exceeds %1");
+
+    // Additional parser messages
+    public static readonly MessageType1 subdocLevel = new MessageType1(
+        MessageType.Severity.warning, null, 208, "subdocument nesting level exceeds %1");
+    public static readonly MessageType0 subdocGiveUp = new MessageType0(
+        MessageType.Severity.error, null, 209, "cannot continue with subdocument");
+    public static readonly MessageType0 giveUp = new MessageType0(
+        MessageType.Severity.error, null, 210, "cannot continue");
 }
