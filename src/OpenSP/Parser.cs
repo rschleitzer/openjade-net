@@ -7651,7 +7651,481 @@ public class Parser : ParserState
         return true;
     }
 
-    protected virtual Boolean parseSgmlDecl() { throw new NotImplementedException(); }
+    // Boolean parseSdParam(const AllowedSdParams &allow, SdParam &parm);
+    protected Boolean parseSdParam(AllowedSdParams allow, SdParam parm)
+    {
+        for (;;)
+        {
+            Token token = getToken(ModeConstants.sdMode);
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    message(ParserMessages.markupDeclarationCharacter,
+                        new StringMessageArg(currentToken()),
+                        new AllowedSdParamsMessageArg(allow, sdPointer()));
+                    return false;
+                case Tokens.tokenEe:
+                    if (allow.param(SdParam.eE))
+                    {
+                        parm.type = SdParam.eE;
+                        if (currentMarkup() != null)
+                            currentMarkup()!.addEntityEnd();
+                        popInputStack();
+                        return true;
+                    }
+                    message(ParserMessages.sdEntityEnd,
+                        new AllowedSdParamsMessageArg(allow, sdPointer()));
+                    return false;
+                case Tokens.tokenS:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addS(currentChar());
+                    break;
+                case Tokens.tokenCom:
+                    if (!parseComment(ModeConstants.sdcomMode))
+                        return false;
+                    break;
+                case Tokens.tokenDso:
+                case Tokens.tokenGrpo:
+                case Tokens.tokenMinusGrpo:
+                case Tokens.tokenPlusGrpo:
+                case Tokens.tokenRni:
+                case Tokens.tokenPeroNameStart:
+                case Tokens.tokenPeroGrpo:
+                    sdParamInvalidToken(token, allow);
+                    return false;
+                case Tokens.tokenMinus:
+                    if (allow.param(SdParam.minus))
+                    {
+                        parm.type = SdParam.minus;
+                        return true;
+                    }
+                    sdParamInvalidToken(Tokens.tokenMinus, allow);
+                    return false;
+                case Tokens.tokenLita:
+                case Tokens.tokenLit:
+                    {
+                        Boolean lita = (token == Tokens.tokenLita);
+                        if (allow.param(SdParam.minimumLiteral))
+                        {
+                            if (!parseMinimumLiteral(lita, parm.literalText))
+                                return false;
+                            parm.type = SdParam.minimumLiteral;
+                            if (currentMarkup() != null)
+                                currentMarkup()!.addLiteral(parm.literalText);
+                        }
+                        else if (allow.param(SdParam.paramLiteral))
+                        {
+                            if (!parseSdParamLiteral(lita, parm.paramLiteralText))
+                                return false;
+                            parm.type = SdParam.paramLiteral;
+                        }
+                        else if (allow.param(SdParam.systemIdentifier))
+                        {
+                            if (!parseSdSystemIdentifier(lita, parm.literalText))
+                                return false;
+                            parm.type = SdParam.systemIdentifier;
+                        }
+                        else
+                        {
+                            sdParamInvalidToken(token, allow);
+                            return false;
+                        }
+                        return true;
+                    }
+                case Tokens.tokenMdc:
+                    if (allow.param(SdParam.mdc))
+                    {
+                        parm.type = SdParam.mdc;
+                        if (currentMarkup() != null)
+                            currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDC);
+                        return true;
+                    }
+                    sdParamInvalidToken(Tokens.tokenMdc, allow);
+                    return false;
+                case Tokens.tokenNameStart:
+                    {
+                        extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+                        getCurrentToken(syntax().generalSubstTable(), parm.token);
+                        if (allow.param(SdParam.capacityName))
+                        {
+                            if (sd().lookupCapacityName(parm.token, out parm.capacityIndex))
+                            {
+                                parm.type = SdParam.capacityName;
+                                if (currentMarkup() != null)
+                                    currentMarkup()!.addName(currentInput()!);
+                                return true;
+                            }
+                        }
+                        if (allow.param(SdParam.referenceReservedName))
+                        {
+                            if (syntax().lookupReservedName(parm.token, out parm.reservedNameIndex))
+                            {
+                                parm.type = SdParam.referenceReservedName;
+                                if (currentMarkup() != null)
+                                    currentMarkup()!.addName(currentInput()!);
+                                return true;
+                            }
+                        }
+                        if (allow.param(SdParam.generalDelimiterName))
+                        {
+                            if (sd().lookupGeneralDelimiterName(parm.token, out parm.delimGeneralIndex))
+                            {
+                                parm.type = SdParam.generalDelimiterName;
+                                if (currentMarkup() != null)
+                                    currentMarkup()!.addName(currentInput()!);
+                                return true;
+                            }
+                        }
+                        if (allow.param(SdParam.quantityName))
+                        {
+                            if (sd().lookupQuantityName(parm.token, out parm.quantityIndex))
+                            {
+                                parm.type = SdParam.quantityName;
+                                if (currentMarkup() != null)
+                                    currentMarkup()!.addName(currentInput()!);
+                                return true;
+                            }
+                        }
+                        for (int i = 0; ; i++)
+                        {
+                            byte t = allow.get(i);
+                            if (t == SdParam.invalid)
+                                break;
+                            if (t >= SdParam.reservedName)
+                            {
+                                Sd.ReservedName sdReservedName = (Sd.ReservedName)(t - SdParam.reservedName);
+                                if (parm.token.Equals(sd().reservedName((int)sdReservedName)))
+                                {
+                                    parm.type = t;
+                                    if (currentMarkup() != null)
+                                        currentMarkup()!.addSdReservedName(sdReservedName, currentInput()!);
+                                    return true;
+                                }
+                            }
+                        }
+                        if (allow.param(SdParam.name))
+                        {
+                            parm.type = SdParam.name;
+                            if (currentMarkup() != null)
+                                currentMarkup()!.addName(currentInput()!);
+                            return true;
+                        }
+                        message(ParserMessages.sdInvalidNameToken,
+                            new StringMessageArg(parm.token),
+                            new AllowedSdParamsMessageArg(allow, sdPointer()));
+                        return false;
+                    }
+                case Tokens.tokenDigit:
+                    if (allow.param(SdParam.number))
+                    {
+                        extendNumber(syntax().namelen(), ParserMessages.numberLength);
+                        parm.type = SdParam.number;
+                        ulong n;
+                        if (!stringToNumber(currentInput()!.currentTokenStart(),
+                                           currentInput()!.currentTokenLength(),
+                                           out n)
+                            || n > Number.MaxValue)
+                        {
+                            message(ParserMessages.numberTooBig,
+                                new StringMessageArg(currentToken()));
+                            parm.n = Number.MaxValue;
+                        }
+                        else
+                        {
+                            if (currentMarkup() != null)
+                                currentMarkup()!.addNumber(currentInput()!);
+                            parm.n = (Number)n;
+                        }
+                        Token nextToken = getToken(ModeConstants.sdMode);
+                        if (nextToken == Tokens.tokenNameStart)
+                            message(ParserMessages.psRequired);
+                        currentInput()!.ungetToken();
+                        return true;
+                    }
+                    sdParamInvalidToken(Tokens.tokenDigit, allow);
+                    return false;
+                default:
+                    throw new InvalidOperationException("CANNOT_HAPPEN");
+            }
+        }
+    }
+
+    // void sdParamInvalidToken(Token token, const AllowedSdParams &allow);
+    protected void sdParamInvalidToken(Token token, AllowedSdParams allow)
+    {
+        message(ParserMessages.sdParamInvalidToken,
+            new TokenMessageArg(token, ModeConstants.sdMode, syntaxPointer(), sdPointer()),
+            new AllowedSdParamsMessageArg(allow, sdPointer()));
+    }
+
+    // Boolean parseSdParamLiteral(Boolean lita, String<SyntaxChar> &str);
+    protected Boolean parseSdParamLiteral(Boolean lita, String<SyntaxChar> str)
+    {
+        // Simplified implementation - full implementation would handle all syntax literal parsing
+        str.resize(0);
+        Mode mode = lita ? ModeConstants.sdplitaMode : ModeConstants.sdplitMode;
+        for (;;)
+        {
+            Token token = getToken(mode);
+            switch (token)
+            {
+                case Tokens.tokenEe:
+                    message(ParserMessages.literalLevel);
+                    return false;
+                case Tokens.tokenLit:
+                case Tokens.tokenLita:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(lita ? Syntax.DelimGeneral.dLITA : Syntax.DelimGeneral.dLIT);
+                    return true;
+                default:
+                    // Add character to literal
+                    str.operatorPlusAssign((SyntaxChar)currentChar());
+                    break;
+            }
+        }
+    }
+
+    // Boolean parseSdSystemIdentifier(Boolean lita, Text &text);
+    protected Boolean parseSdSystemIdentifier(Boolean lita, Text text)
+    {
+        // Reuse the system identifier parsing from parseSystemIdentifier
+        return parseSystemIdentifier(lita, text);
+    }
+
+    // Boolean parseSgmlDecl();
+    protected virtual Boolean parseSgmlDecl()
+    {
+        SdParam parm = new SdParam();
+        SdBuilder sdBuilder = new SdBuilder();
+
+        AllowedSdParams allowMinLitOrName = new AllowedSdParams(SdParam.minimumLiteral, SdParam.name);
+        if (!parseSdParam(allowMinLitOrName, parm))
+            return false;
+
+        if (parm.type == SdParam.name)
+        {
+            sdBuilder.external = true;
+            Location loc = new Location(currentLocation());
+            StringC name = new StringC();
+            parm.token.swap(name);
+            ExternalId externalId = new ExternalId();
+            if (!sdParseSgmlDeclRef(sdBuilder, parm, externalId))
+                return false;
+            // Create and open the external entity for the SGML declaration
+            ExternalTextEntity entity = new ExternalTextEntity(name, EntityDecl.DeclType.sgml, loc, externalId);
+            ConstPtr<Entity> entityPtr = new ConstPtr<Entity>(entity);
+            entity.generateSystemId(this);
+            if (entity.externalId().effectiveSystemId().size() == 0)
+            {
+                message(ParserMessages.cannotGenerateSystemIdSgml);
+                return false;
+            }
+            Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>(EntityOrigin.make(internalAllocator(), entityPtr, loc));
+            if (currentMarkup() != null)
+                currentMarkup()!.addEntityStart(origin);
+            pushInput(entityManager().open(entity.externalId().effectiveSystemId(),
+                sd().docCharset(),
+                origin.pointer(),
+                0,
+                messenger()));
+            AllowedSdParams allowMinLit = new AllowedSdParams(SdParam.minimumLiteral);
+            if (!parseSdParam(allowMinLit, parm))
+                return false;
+        }
+
+        // Check version string
+        StringC version = sd().execToInternal("ISO 8879:1986");
+        StringC enrVersion = sd().execToInternal("ISO 8879:1986 (ENR)");
+        StringC wwwVersion = sd().execToInternal("ISO 8879:1986 (WWW)");
+
+        if (parm.literalText.@string().Equals(enrVersion))
+            sdBuilder.enr = true;
+        else if (parm.literalText.@string().Equals(wwwVersion))
+        {
+            sdBuilder.enr = true;
+            sdBuilder.www = true;
+        }
+        else if (!parm.literalText.@string().Equals(version))
+            message(ParserMessages.standardVersion,
+                new StringMessageArg(parm.literalText.@string()));
+
+        if (sdBuilder.external && !sdBuilder.www)
+            message(ParserMessages.sgmlDeclRefRequiresWww);
+
+        sdBuilder.sd.operatorAssign(new Sd(entityManagerPtr()));
+        if (sdBuilder.www)
+            sdBuilder.sd.pointer()!.setWww(true);
+
+        // Parse the major sections of the SGML declaration
+        if (!sdParseDocumentCharset(sdBuilder, parm)) return false;
+        if (!sdBuilder.valid) return false;
+
+        if (!sdParseCapacity(sdBuilder, parm)) return false;
+        if (!sdBuilder.valid) return false;
+
+        if (!sdParseScope(sdBuilder, parm)) return false;
+        if (!sdBuilder.valid) return false;
+
+        if (!sdParseSyntax(sdBuilder, parm)) return false;
+        if (!sdBuilder.valid) return false;
+
+        if (!sdParseFeatures(sdBuilder, parm)) return false;
+        if (!sdBuilder.valid) return false;
+
+        if (!sdParseAppinfo(sdBuilder, parm)) return false;
+        if (!sdBuilder.valid) return false;
+
+        if (!sdParseSeealso(sdBuilder, parm)) return false;
+        if (!sdBuilder.valid) return false;
+
+        setSdOverrides(sdBuilder.sd.pointer()!);
+
+        if (sdBuilder.sd.pointer()!.formal())
+        {
+            while (!sdBuilder.formalErrorList.empty())
+            {
+                SdFormalError? p = sdBuilder.formalErrorList.get() as SdFormalError;
+                if (p != null)
+                    p.send(this);
+            }
+        }
+
+        setSd(new ConstPtr<Sd>(sdBuilder.sd.pointer()));
+        currentInput()!.setDocCharset(sd().docCharset(), entityManager().charset());
+
+        if (sdBuilder.sd.pointer()!.scopeInstance())
+        {
+            Syntax proSyntax = new Syntax(sd());
+            CharSwitcher switcher = new CharSwitcher();
+            setStandardSyntax(proSyntax, refSyntax, sd().internalCharset(), switcher, sdBuilder.www);
+            proSyntax.setSgmlChar(sdBuilder.syntax.pointer()!.charSet((int)Syntax.Set.sgmlChar)!);
+            ISet<WideChar> invalidSgmlChar = new ISet<WideChar>();
+            proSyntax.checkSgmlChar(sdBuilder.sd.pointer()!,
+                sdBuilder.syntax.pointer(),
+                true,  // get results in document character set
+                invalidSgmlChar);
+            sdBuilder.syntax.pointer()!.checkSgmlChar(sdBuilder.sd.pointer()!,
+                proSyntax,
+                true, // get results in document character set
+                invalidSgmlChar);
+            if (!invalidSgmlChar.isEmpty())
+                message(ParserMessages.invalidSgmlChar, new CharsetMessageArg(invalidSgmlChar));
+            setSyntaxes(new ConstPtr<Syntax>(proSyntax), new ConstPtr<Syntax>(sdBuilder.syntax.pointer()));
+        }
+        else
+            setSyntax(new ConstPtr<Syntax>(sdBuilder.syntax.pointer()));
+
+        if (syntax().multicode())
+            currentInput()!.setMarkupScanTable(syntax().markupScanTable());
+
+        return true;
+    }
+
+    // Boolean sdParseSgmlDeclRef(SdBuilder &sdBuilder, SdParam &parm, ExternalId &id);
+    protected Boolean sdParseSgmlDeclRef(SdBuilder sdBuilder, SdParam parm, ExternalId id)
+    {
+        id.setLocation(currentLocation());
+        byte rSYSTEM = (byte)(SdParam.reservedName + (byte)Sd.ReservedName.rSYSTEM);
+        byte rPUBLIC = (byte)(SdParam.reservedName + (byte)Sd.ReservedName.rPUBLIC);
+        AllowedSdParams allow = new AllowedSdParams(rSYSTEM, rPUBLIC, SdParam.mdc);
+        if (!parseSdParam(allow, parm))
+            return false;
+        if (parm.type == SdParam.mdc)
+            return true;
+        if (parm.type == rPUBLIC)
+        {
+            AllowedSdParams allowMinLit = new AllowedSdParams(SdParam.minimumLiteral);
+            if (!parseSdParam(allowMinLit, parm))
+                return false;
+            MessageType1? err;
+            MessageType1? err1;
+            PublicId.TextClass textClass;
+            if (id.setPublic(parm.literalText, sd().internalCharset(), syntax().space(), out err, out err1) != PublicId.Type.fpi)
+                sdBuilder.addFormalError(currentLocation(), err!, id.publicId()!.@string());
+            else if (id.publicId()!.getTextClass(out textClass) && textClass != PublicId.TextClass.SD)
+                sdBuilder.addFormalError(currentLocation(), ParserMessages.sdTextClass, id.publicId()!.@string());
+        }
+        AllowedSdParams allowSysIdOrMdc = new AllowedSdParams(SdParam.systemIdentifier, SdParam.mdc);
+        if (!parseSdParam(allowSysIdOrMdc, parm))
+            return false;
+        if (parm.type == SdParam.mdc)
+            return true;
+        id.setSystem(parm.literalText);
+        AllowedSdParams allowMdc = new AllowedSdParams(SdParam.mdc);
+        return parseSdParam(allowMdc, parm);
+    }
+
+    // Boolean stringToNumber(const Char *s, size_t length, unsigned long &result);
+    protected Boolean stringToNumber(Char[]? s, nuint length, out ulong result)
+    {
+        result = 0;
+        if (s == null || length == 0)
+            return false;
+        ulong n = 0;
+        if (length < 10)
+        {
+            for (nuint i = 0; i < length; i++)
+                n = 10 * n + (ulong)sd().digitWeight(s[i]);
+        }
+        else
+        {
+            for (nuint i = 0; i < length; i++)
+            {
+                int val = sd().digitWeight(s[i]);
+                if (n <= ulong.MaxValue / 10 && (n *= 10) <= ulong.MaxValue - (ulong)val)
+                    n += (ulong)val;
+                else
+                    return false;
+            }
+        }
+        result = n;
+        return true;
+    }
+
+    // Stub implementations for SD section parsers - these will be implemented incrementally
+    protected virtual Boolean sdParseDocumentCharset(SdBuilder sdBuilder, SdParam parm)
+    {
+        // TODO: Full implementation
+        throw new NotImplementedException("sdParseDocumentCharset not yet implemented");
+    }
+
+    protected virtual Boolean sdParseCapacity(SdBuilder sdBuilder, SdParam parm)
+    {
+        // TODO: Full implementation
+        throw new NotImplementedException("sdParseCapacity not yet implemented");
+    }
+
+    protected virtual Boolean sdParseScope(SdBuilder sdBuilder, SdParam parm)
+    {
+        // TODO: Full implementation
+        throw new NotImplementedException("sdParseScope not yet implemented");
+    }
+
+    protected virtual Boolean sdParseSyntax(SdBuilder sdBuilder, SdParam parm)
+    {
+        // TODO: Full implementation
+        throw new NotImplementedException("sdParseSyntax not yet implemented");
+    }
+
+    protected virtual Boolean sdParseFeatures(SdBuilder sdBuilder, SdParam parm)
+    {
+        // TODO: Full implementation
+        throw new NotImplementedException("sdParseFeatures not yet implemented");
+    }
+
+    protected virtual Boolean sdParseAppinfo(SdBuilder sdBuilder, SdParam parm)
+    {
+        // TODO: Full implementation
+        throw new NotImplementedException("sdParseAppinfo not yet implemented");
+    }
+
+    protected virtual Boolean sdParseSeealso(SdBuilder sdBuilder, SdParam parm)
+    {
+        // TODO: Full implementation
+        throw new NotImplementedException("sdParseSeealso not yet implemented");
+    }
 
     // Additional helper methods from parseInstance.cxx
 

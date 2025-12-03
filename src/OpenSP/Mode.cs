@@ -65,4 +65,10 @@ public static class ModeConstants
     public const int nModes = (int)Mode.mconnetMode + 1;
 
     public const int minShortrefMode = (int)Mode.econMode;
+
+    // Convenient aliases for SD modes
+    public const Mode sdMode = Mode.sdMode;
+    public const Mode sdcomMode = Mode.sdcomMode;
+    public const Mode sdplitMode = Mode.sdplitMode;
+    public const Mode sdplitaMode = Mode.sdplitaMode;
 }

@@ -811,4 +811,24 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 519, "SGML declaration was not implied");
     public static readonly MessageType0 badDefaultSgmlDecl = new MessageType0(
         MessageType.Severity.error, null, 520, "invalid default SGML declaration");
+
+    // SGML declaration parsing messages
+    public static readonly MessageType1 sdEntityEnd = new MessageType1(
+        MessageType.Severity.error, null, 530, "unexpected entity end in SGML declaration; expected %1");
+    public static readonly MessageType2 sdInvalidNameToken = new MessageType2(
+        MessageType.Severity.error, null, 531, "\"%1\" is not a valid SGML declaration token; expected %2");
+    public static readonly MessageType1 numberTooBig = new MessageType1(
+        MessageType.Severity.error, null, 532, "number \"%1\" is too large");
+    public static readonly MessageType2 sdParamInvalidToken = new MessageType2(
+        MessageType.Severity.error, null, 533, "%1 invalid in SGML declaration; expected %2");
+    public static readonly MessageType0 cannotGenerateSystemIdSgml = new MessageType0(
+        MessageType.Severity.error, null, 534, "cannot generate system identifier for SGML declaration");
+    public static readonly MessageType1 standardVersion = new MessageType1(
+        MessageType.Severity.warning, null, 535, "unknown SGML declaration version \"%1\"");
+    public static readonly MessageType0 sgmlDeclRefRequiresWww = new MessageType0(
+        MessageType.Severity.error, null, 536, "reference to external SGML declaration requires WWW variant");
+    public static readonly MessageType1 invalidSgmlChar = new MessageType1(
+        MessageType.Severity.error, null, 537, "characters with the following numbers in the document character set are significant in the concrete syntax but are not in SGML character set: %1");
+    public static readonly MessageType1 sdTextClass = new MessageType1(
+        MessageType.Severity.warning, null, 538, "public identifier \"%1\" has wrong text class for SGML declaration");
 }
