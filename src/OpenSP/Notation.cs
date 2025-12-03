@@ -3,12 +3,28 @@
 
 namespace OpenSP;
 
-// Forward declaration - will be implemented when parser is ported
+// Forward declaration - will be fully implemented when parser is ported
 public class ParserState
 {
     // Stub - to be implemented later
     public ParserState()
     {
+    }
+
+    // Methods needed by Undo classes - will be properly implemented later
+    public virtual OpenElement currentElement()
+    {
+        throw new NotImplementedException("ParserState.currentElement() not yet implemented");
+    }
+
+    public virtual void popElement()
+    {
+        throw new NotImplementedException("ParserState.popElement() not yet implemented");
+    }
+
+    public virtual void pushElement(OpenElement? e)
+    {
+        throw new NotImplementedException("ParserState.pushElement() not yet implemented");
     }
 }
 
