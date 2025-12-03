@@ -2638,11 +2638,57 @@ public class Parser : ParserState
         throw new NotImplementedException();
     }
 
-    // Boolean parseExternalId(...);
-    protected virtual Boolean parseExternalId(AllowedParams systemIdAllow, AllowedParams publicIdAllow,
-                                               Boolean optional, uint declInputLevel, Param parm, ExternalId id)
+    // Boolean parseExternalId(const AllowedParams &sysidAllow, const AllowedParams &endAllow,
+    //                          Boolean maybeWarnMissingSystemId, unsigned declInputLevel, Param &parm, ExternalId &id);
+    // parm contains either system or public
+    protected virtual Boolean parseExternalId(AllowedParams sysidAllow, AllowedParams endAllow,
+                                               Boolean maybeWarnMissingSystemId, uint declInputLevel,
+                                               Param parm, ExternalId id)
     {
-        throw new NotImplementedException();
+        id.setLocation(currentLocation());
+        if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rPUBLIC))
+        {
+            AllowedParams allowMinimumLiteral = new AllowedParams(Param.minimumLiteral);
+            if (!parseParam(allowMinimumLiteral, declInputLevel, parm))
+                return false;
+            MessageType1? fpierr;
+            MessageType1? urnerr;
+            switch (id.setPublic(parm.literalText, sd().internalCharset(),
+                                 syntax().space(), out fpierr, out urnerr))
+            {
+                case PublicId.Type.fpi:
+                    {
+                        PublicId.TextClass textClass;
+                        if (sd().formal() && id.publicId()!.getTextClass(out textClass)
+                            && textClass == PublicId.TextClass.SD)
+                            message(ParserMessages.wwwRequired);
+                        if (sd().urn() && !sd().formal())
+                            message(urnerr!, new StringMessageArg(id.publicIdString()!));
+                    }
+                    break;
+                case PublicId.Type.urn:
+                    if (sd().formal() && !sd().urn())
+                        message(fpierr!, new StringMessageArg(id.publicIdString()!));
+                    break;
+                case PublicId.Type.informal:
+                    if (sd().formal())
+                        message(fpierr!, new StringMessageArg(id.publicIdString()!));
+                    if (sd().urn())
+                        message(urnerr!, new StringMessageArg(id.publicIdString()!));
+                    break;
+            }
+        }
+        if (!parseParam(sysidAllow, declInputLevel, parm))
+            return false;
+        if (parm.type == Param.systemIdentifier)
+        {
+            id.setSystem(parm.literalText);
+            if (!parseParam(endAllow, declInputLevel, parm))
+                return false;
+        }
+        else if (options().warnMissingSystemId && maybeWarnMissingSystemId)
+            message(ParserMessages.missingSystemId);
+        return true;
     }
 
     // Group parsing methods from parseParam.cxx

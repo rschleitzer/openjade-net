@@ -498,4 +498,8 @@ public static class ParserMessages
     // nameTokenLength already defined above
     public static readonly MessageType1 noSuchSourceElement = new MessageType1(
         MessageType.Severity.error, null, 476, "no such source element '%1'");
+    public static readonly MessageType0 wwwRequired = new MessageType0(
+        MessageType.Severity.error, null, 355, "Web SGML adaptations were used but minimum literal was not \"ISO 8879:1986 (WWW)\"");
+    public static readonly MessageType0 missingSystemId = new MessageType0(
+        MessageType.Severity.warning, null, 381, "no system id specified");
 }
