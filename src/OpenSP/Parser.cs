@@ -6550,9 +6550,235 @@ public class Parser : ParserState
         return true;
     }
 
+    // Boolean parseAttributeValueSpec(Mode mode, const StringC &name, AttributeList &atts,
+    //                                  unsigned &specLength, Ptr<AttributeDefinitionList> &newAttDef);
+    protected Boolean parseAttributeValueSpec(Mode mode, StringC name, AttributeList atts,
+                                              ref uint specLength, Ptr<AttributeDefinitionList> newAttDef)
+    {
+        Markup? markup = currentMarkup();
+        Token token = getToken(mode);
+        if (token == Tokens.tokenS)
+        {
+            if (markup != null)
+            {
+                do
+                {
+                    markup.addS(currentChar());
+                    token = getToken(mode);
+                } while (token == Tokens.tokenS);
+            }
+            else
+            {
+                do
+                {
+                    token = getToken(mode);
+                } while (token == Tokens.tokenS);
+            }
+        }
+        uint index = 0;
+        if (!atts.attributeIndex(name, out index))
+        {
+            if (newAttDef.isNull())
+                newAttDef.operatorAssign(new AttributeDefinitionList(atts.def()));
+            AttributeDefinition? newDef = null;
+            if (!inInstance())
+            {
+                // We are parsing a data attribute specification
+                Ptr<Notation>? notation = null;
+                NamedResourceTableIter<Notation> notationIter = currentDtdNonConst().notationIter();
+                for (;;)
+                {
+                    notation = notationIter.next();
+                    if (notation == null || notation.isNull()
+                        || atts.def().pointer() == notation.pointer()?.attributeDef().pointer())
+                        break;
+                }
+                if (notation != null && !notation.isNull() && !notation.pointer()!.defined())
+                {
+                    Notation? nt = lookupCreateNotation(syntax().rniReservedName(Syntax.ReservedName.rIMPLICIT)).pointer();
+                    ConstPtr<AttributeDefinitionList>? common = nt?.attributeDef();
+                    uint tempIndex = 0;
+                    if (common != null && !common.isNull() && common.pointer()!.attributeIndex(name, out tempIndex))
+                    {
+                        newDef = common.pointer()!.def(tempIndex)?.copy();
+                        newDef?.setSpecified(true);
+                    }
+                }
+                if (newDef == null)
+                {
+                    Notation? nt = lookupCreateNotation(syntax().rniReservedName(Syntax.ReservedName.rALL)).pointer();
+                    ConstPtr<AttributeDefinitionList>? common = nt?.attributeDef();
+                    uint tempIndex = 0;
+                    if (common != null && !common.isNull() && common.pointer()!.attributeIndex(name, out tempIndex))
+                    {
+                        newDef = common.pointer()!.def(tempIndex)?.copy();
+                        newDef?.setSpecified(false);
+                    }
+                }
+            }
+            if (newDef == null)
+            {
+                if (!implydefAttlist())
+                    message(ParserMessages.noSuchAttribute, new StringMessageArg(name));
+                newDef = new ImpliedAttributeDefinition(name, new CdataDeclaredValue());
+            }
+            newAttDef.pointer()!.append(newDef);
+            atts.changeDef(new ConstPtr<AttributeDefinitionList>(newAttDef.pointer()));
+            index = (uint)(atts.size() - 1);
+        }
+        atts.setSpec(index, this);
+        Text text = new Text();
+        switch (token)
+        {
+            case Tokens.tokenUnrecognized:
+                if (reportNonSgmlCharacter())
+                    return false;
+                goto case Tokens.tokenNestc; // fall through
+            case Tokens.tokenEtago:
+            case Tokens.tokenStago:
+            case Tokens.tokenNestc:
+                message(ParserMessages.unquotedAttributeValue);
+                extendUnquotedAttributeValue();
+                if (markup != null)
+                    markup.addAttributeValue(currentInput()!);
+                text.addChars(currentInput()!.currentTokenStart(),
+                              currentInput()!.currentTokenLength(),
+                              currentLocation());
+                break;
+            case Tokens.tokenEe:
+                if (mode != Mode.piPasMode)
+                {
+                    message(ParserMessages.attributeSpecEntityEnd);
+                    return false;
+                }
+                goto case Tokens.tokenVi; // fall through to attributeValueExpected
+            case Tokens.tokenTagc:
+            case Tokens.tokenDsc:
+            case Tokens.tokenVi:
+                message(ParserMessages.attributeValueExpected);
+                return false;
+            case Tokens.tokenNameStart:
+            case Tokens.tokenDigit:
+            case Tokens.tokenLcUcNmchar:
+                if (!sd().attributeValueNotLiteral())
+                    message(ParserMessages.attributeValueShorttag);
+                else if (options().warnAttributeValueNotLiteral)
+                    message(ParserMessages.attributeValueNotLiteral);
+                extendNameToken(syntax().litlen() >= syntax().normsep()
+                                ? syntax().litlen() - syntax().normsep()
+                                : 0,
+                                ParserMessages.attributeValueLength);
+                if (markup != null)
+                    markup.addAttributeValue(currentInput()!);
+                text.addChars(currentInput()!.currentTokenStart(),
+                              currentInput()!.currentTokenLength(),
+                              currentLocation());
+                break;
+            case Tokens.tokenLit:
+            case Tokens.tokenLita:
+                Boolean lita;
+                lita = (token == Tokens.tokenLita);
+                if (!(atts.tokenized(index)
+                      ? parseTokenizedAttributeValueLiteral(lita, text)
+                      : parseAttributeValueLiteral(lita, text)))
+                    return false;
+                if (markup != null)
+                    markup.addLiteral(text);
+                break;
+            default:
+                // CANNOT_HAPPEN();
+                break;
+        }
+        return atts.setValue(index, text, this, ref specLength);
+    }
+
+    // Boolean parseAttributeSpec(Mode mode, AttributeList &atts, Boolean &netEnabling,
+    //                             Ptr<AttributeDefinitionList> &newAttDef);
     protected virtual Boolean parseAttributeSpec(Mode mode, AttributeList atts, out Boolean netEnabling,
                                                   Ptr<AttributeDefinitionList> newAttDefList)
-    { throw new NotImplementedException(); }
+    {
+        netEnabling = false;
+        uint specLength = 0;
+        AttributeParameterType curParm;
+
+        if (!parseAttributeParameter(mode, false, out curParm, out netEnabling))
+            return false;
+        while (curParm != AttributeParameterType.end)
+        {
+            switch (curParm)
+            {
+                case AttributeParameterType.name:
+                    {
+                        Text text = new Text();
+                        text.addChars(currentInput()!.currentTokenStart(),
+                                      currentInput()!.currentTokenLength(),
+                                      currentLocation());
+                        nuint nameMarkupIndex = 0;
+                        if (currentMarkup() != null)
+                            nameMarkupIndex = currentMarkup()!.size() - 1;
+                        text.subst(syntax().generalSubstTable()!, syntax().space());
+                        Boolean tempNetEnabling;
+                        if (!parseAttributeParameter(mode == Mode.piPasMode ? Mode.asMode : mode, true, out curParm, out tempNetEnabling))
+                            return false;
+                        if (curParm == AttributeParameterType.vi)
+                        {
+                            specLength += (uint)text.size() + (uint)syntax().normsep();
+                            if (!parseAttributeValueSpec(mode == Mode.piPasMode ? Mode.asMode : mode, text.@string(), atts,
+                                                         ref specLength, newAttDefList))
+                                return false;
+                            // setup for next attribute
+                            if (!parseAttributeParameter(mode, false, out curParm, out netEnabling))
+                                return false;
+                        }
+                        else
+                        {
+                            if (currentMarkup() != null)
+                                currentMarkup()!.changeToAttributeValue(nameMarkupIndex);
+                            if (!handleAttributeNameToken(text, atts, ref specLength))
+                                return false;
+                        }
+                    }
+                    break;
+                case AttributeParameterType.nameToken:
+                    {
+                        Text text = new Text();
+                        text.addChars(currentInput()!.currentTokenStart(),
+                                      currentInput()!.currentTokenLength(),
+                                      currentLocation());
+                        text.subst(syntax().generalSubstTable()!, syntax().space());
+                        if (!handleAttributeNameToken(text, atts, ref specLength))
+                            return false;
+                        if (!parseAttributeParameter(mode, false, out curParm, out netEnabling))
+                            return false;
+                    }
+                    break;
+                case AttributeParameterType.recoverUnquoted:
+                    {
+                        if (!atts.recoverUnquoted(currentToken(), currentLocation(), this))
+                        {
+                            // Don't treat it as an unquoted attribute value.
+                            currentInput()!.endToken(1);
+                            if (!atts.handleAsUnterminated(this))
+                                message(ParserMessages.attributeSpecCharacter,
+                                        new StringMessageArg(currentToken()));
+                            return false;
+                        }
+                        if (!parseAttributeParameter(mode, false, out curParm, out netEnabling))
+                            return false;
+                    }
+                    break;
+                default:
+                    // CANNOT_HAPPEN();
+                    break;
+            }
+        }
+        atts.finish(this);
+        if (specLength > syntax().attsplen())
+            message(ParserMessages.attsplen,
+                    new NumberMessageArg(syntax().attsplen()),
+                    new NumberMessageArg(specLength));
+        return true;
+    }
     protected virtual Boolean handleAttributeNameToken(Text text, AttributeList atts, ref uint specLength)
     {
         uint index = 0;

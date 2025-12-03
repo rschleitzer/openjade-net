@@ -132,6 +132,16 @@ public static class ParserMessages
         MessageType.Severity.error, null, 138, "NET-enabling start-tag requires SHORTTAG YES");
     public static readonly MessageType0 nestcWithoutNet = new MessageType0(
         MessageType.Severity.error, null, 139, "NET-enabling start-tag not immediately followed by null end-tag");
+    public static readonly MessageType1 noSuchAttribute = new MessageType1(
+        MessageType.Severity.error, null, 140, "there is no attribute %1");
+    public static readonly MessageType0 attributeValueExpected = new MessageType0(
+        MessageType.Severity.error, null, 141, "an attribute value specification must start with a literal or a name character");
+    public static readonly MessageType0 attributeValueShorttag = new MessageType0(
+        MessageType.Severity.error, null, 142, "an attribute value specification must be an attribute value literal unless SHORTTAG YES is specified");
+    public static readonly MessageType1 attributeSpecCharacter = new MessageType1(
+        MessageType.Severity.error, null, 143, "character %1 not allowed in attribute specification list");
+    public static readonly MessageType2 attsplen = new MessageType2(
+        MessageType.Severity.quantityError, null, 144, "normalized length of attribute specification list must not exceed ATTSPLEN (%1); length was %2");
 
     // Parser state related messages
     public static readonly MessageType0 pass2Ee = new MessageType0(
