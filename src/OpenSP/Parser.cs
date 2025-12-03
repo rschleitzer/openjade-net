@@ -431,8 +431,72 @@ public class Parser : ParserState
     protected virtual Boolean parseDoctypeDeclEnd(Boolean fake = false) { return false; }
     protected virtual Boolean parseMarkedSectionDeclStart() { return false; }
     protected virtual void handleMarkedSectionEnd() { /* TODO */ }
-    protected virtual Boolean parseCommentDecl() { return false; }
-    protected virtual void emptyCommentDecl() { /* TODO */ }
+    // Boolean parseCommentDecl();
+    protected Boolean parseCommentDecl()
+    {
+        if (startMarkup(inInstance()
+                        ? eventsWanted().wantCommentDecls()
+                        : eventsWanted().wantPrologMarkup(),
+                        currentLocation()) != null)
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDO);
+        if (!parseComment(Mode.comMode))
+            return false;
+        for (;;)
+        {
+            Token token = getToken(Mode.mdMode);
+            switch (token)
+            {
+                case Tokens.tokenS:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addS(currentChar());
+                    if (options().warnCommentDeclS)
+                        message(ParserMessages.commentDeclS);
+                    break;
+                case Tokens.tokenCom:
+                    if (!parseComment(Mode.comMode))
+                        return false;
+                    if (options().warnCommentDeclMultiple)
+                        message(ParserMessages.commentDeclMultiple);
+                    break;
+                case Tokens.tokenMdc:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDC);
+                    goto done;
+                case Tokens.tokenEe:
+                    message(ParserMessages.declarationLevel);
+                    return false;
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    message(ParserMessages.commentDeclarationCharacter,
+                            new StringMessageArg(currentToken()),
+                            markupLocation());
+                    return false;
+                default:
+                    message(ParserMessages.commentDeclInvalidToken,
+                            new TokenMessageArg(token, Mode.mdMode, syntaxPointer(), sdPointer()),
+                            markupLocation());
+                    return false;
+            }
+        }
+    done:
+        if (currentMarkup() != null)
+            eventHandler().commentDecl(new CommentDeclEvent(markupLocation(), currentMarkup()));
+        return true;
+    }
+
+    // void emptyCommentDecl();
+    protected void emptyCommentDecl()
+    {
+        if (startMarkup(eventsWanted().wantCommentDecls(), currentLocation()) != null)
+        {
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDO);
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDC);
+            eventHandler().commentDecl(new CommentDeclEvent(markupLocation(), currentMarkup()));
+        }
+        if (options().warnEmptyCommentDecl)
+            message(ParserMessages.emptyCommentDecl);
+    }
     protected virtual Boolean parseLinktypeDeclStart() { return false; }
     protected virtual Boolean parseLinktypeDeclEnd() { return false; }
     protected virtual Boolean parseLinkDecl() { return false; }

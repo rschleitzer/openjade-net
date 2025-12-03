@@ -214,4 +214,18 @@ public static class ParserMessages
     // parseMode messages
     public static readonly MessageType2 lexicalAmbiguity = new MessageType2(
         MessageType.Severity.warning, null, 246, "lexical ambiguity between '%1' and '%2'");
+
+    // parseDecl messages
+    public static readonly MessageType0 emptyCommentDecl = new MessageType0(
+        MessageType.Severity.warning, null, 386, "empty comment declaration");
+    public static readonly MessageType0 commentDeclS = new MessageType0(
+        MessageType.Severity.warning, null, 387, "S separator in comment declaration");
+    public static readonly MessageType0 commentDeclMultiple = new MessageType0(
+        MessageType.Severity.warning, null, 388, "multiple comments in comment declaration");
+    public static readonly MessageType0 declarationLevel = new MessageType0(
+        MessageType.Severity.error, null, 248, "entity ended within declaration");
+    public static readonly MessageType1L commentDeclarationCharacter = new MessageType1L(
+        MessageType.Severity.error, null, 137, "invalid comment declaration: found character %1 outside comment but inside comment declaration");
+    public static readonly MessageType1L commentDeclInvalidToken = new MessageType1L(
+        MessageType.Severity.error, null, 53, "invalid comment declaration: found %1 outside comment but inside comment declaration");
 }
