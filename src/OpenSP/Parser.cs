@@ -917,8 +917,169 @@ public class Parser : ParserState
         return r;
     }
 
-    // From parseCommon.cxx
-    protected virtual void doInit() { throw new NotImplementedException(); }
+    // From parseSd.cxx
+    // void findMissingMinimum(const CharsetInfo &charset, ISet<WideChar> &missing);
+    protected void findMissingMinimum(CharsetInfo charset, ISet<WideChar> missing)
+    {
+        Char to;
+        // Check for letters A-Z and a-z
+        for (uint i = 0; i < 26; i++)
+        {
+            if (!univToDescCheck(charset, UnivCharsetDesc.A + i, out to))
+                missing.add(UnivCharsetDesc.A + i);
+            if (!univToDescCheck(charset, UnivCharsetDesc.a + i, out to))
+                missing.add(UnivCharsetDesc.a + i);
+        }
+        // Check for digits 0-9
+        for (uint i = 0; i < 10; i++)
+        {
+            if (!univToDescCheck(charset, UnivCharsetDesc.zero + i, out to))
+                missing.add(UnivCharsetDesc.zero + i);
+        }
+        // Check for special characters: ' ( ) + , - . / : = ?
+        UnivChar[] special = new UnivChar[] { 39, 40, 41, 43, 44, 45, 46, 47, 58, 61, 63 };
+        for (int i = 0; i < special.Length; i++)
+        {
+            if (!univToDescCheck(charset, special[i], out to))
+                missing.add(special[i]);
+        }
+    }
+
+    // void doInit();
+    protected virtual void doInit()
+    {
+        if (cancelled())
+        {
+            allDone();
+            return;
+        }
+        // When document entity doesn't exist, don't give any errors
+        // other than the cannot open error.
+        InputSource? inSrc = currentInput();
+        if (inSrc == null)
+        {
+            allDone();
+            return;
+        }
+        if (inSrc.get(messenger()) == InputSource.eE)
+        {
+            if (inSrc.accessError())
+            {
+                allDone();
+                return;
+            }
+        }
+        else
+            inSrc.ungetToken();
+        CharsetInfo initCharset = sd().internalCharset();
+        ISet<WideChar> missing = new ISet<WideChar>();
+        findMissingMinimum(initCharset, missing);
+        if (!missing.isEmpty())
+        {
+            message(ParserMessages.sdMissingCharacters, new CharsetMessageArg(missing));
+            giveUp();
+            return;
+        }
+        Boolean found = false;
+        StringC systemId = new StringC();
+        if (scanForSgmlDecl(initCharset))
+        {
+            if (options().warnExplicitSgmlDecl)
+                message(ParserMessages.explicitSgmlDecl);
+            found = true;
+        }
+        else
+        {
+            inSrc.ungetToken();
+            if (subdocLevel() > 0)
+                return; // will use parent Sd
+            if (entityCatalog().sgmlDecl(initCharset, messenger(), sysid_, systemId))
+            {
+                InputSource? catalogIn = entityManager().open(systemId,
+                    sd().docCharset(),
+                    InputSourceOrigin.make(),
+                    0, // flags
+                    messenger());
+                if (catalogIn != null)
+                {
+                    pushInput(catalogIn);
+                    if (scanForSgmlDecl(initCharset))
+                        found = true;
+                    else
+                    {
+                        message(ParserMessages.badDefaultSgmlDecl);
+                        popInputStack();
+                    }
+                }
+            }
+        }
+        if (found)
+        {
+            Markup? markup = startMarkup(eventsWanted().wantPrologMarkup(), currentLocation());
+            if (markup != null)
+            {
+                nuint nS = currentInput()!.currentTokenLength() - 6;
+                for (nuint i = 0; i < nS; i++)
+                    markup.addS(currentInput()!.currentTokenStart()![i]);
+                markup.addDelim(Syntax.DelimGeneral.dMDO);
+                // Extract just the "SGML" portion of the token
+                Char[]? tokenStart = currentInput()!.currentTokenStart();
+                nuint tokenLen = currentInput()!.currentTokenLength();
+                Char[] sgmlChars = new Char[4];
+                for (nuint i = 0; i < 4 && (nS + 2 + i) < tokenLen; i++)
+                    sgmlChars[i] = tokenStart![nS + 2 + i];
+                markup.addSdReservedName(Sd.ReservedName.rSGML, sgmlChars, 4);
+            }
+            Syntax syntaxp = new Syntax(sd());
+            CharSwitcher switcher = new CharSwitcher();
+            if (!setStandardSyntax(syntaxp, refSyntax, sd().internalCharset(), switcher, true))
+            {
+                giveUp();
+                return;
+            }
+            syntaxp.implySgmlChar(sd());
+            setSyntax(new ConstPtr<Syntax>(syntaxp));
+            compileSdModes();
+            ConstPtr<Sd> refSdPtr = new ConstPtr<Sd>(sdPointer().pointer());
+            ConstPtr<Syntax> refSyntaxPtr = new ConstPtr<Syntax>(syntaxPointer().pointer());
+            if (!parseSgmlDecl())
+            {
+                giveUp();
+                return;
+            }
+            // queue an SGML declaration event
+            eventHandler().sgmlDecl(new SgmlDeclEvent(
+                sdPointer(),
+                syntaxPointer(),
+                instanceSyntaxPointer(),
+                refSdPtr,
+                refSyntaxPtr,
+                currentInput()!.nextIndex(),
+                systemId,
+                markupLocation(),
+                currentMarkup()));
+            if (inputLevel() == 2)
+            {
+                // FIXME perhaps check for junk after SGML declaration
+                popInputStack();
+            }
+        }
+        else
+        {
+            if (!implySgmlDecl())
+            {
+                giveUp();
+                return;
+            }
+            currentInput()!.willNotSetDocCharset();
+            // queue an SGML declaration event
+            eventHandler().sgmlDecl(new SgmlDeclEvent(sdPointer(), syntaxPointer()));
+        }
+
+        // Now we have sd and syntax set up, prepare to parse the prolog.
+        compilePrologModes();
+        setPhase(Phase.prologPhase);
+    }
 
     // void doProlog();
     protected void doProlog()

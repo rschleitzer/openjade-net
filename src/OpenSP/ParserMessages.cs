@@ -805,4 +805,10 @@ public static class ParserMessages
         MessageType.Severity.error, null, 516, "%1 cannot be the replacement for a reference reserved name because it is another reference reserved name");
     public static readonly MessageType1 duplicateDelimShortref = new MessageType1(
         MessageType.Severity.error, null, 517, "short reference delimiter %1 already specified");
+    public static readonly MessageType1 sdMissingCharacters = new MessageType1(
+        MessageType.Severity.error, null, 518, "SGML declaration cannot be parsed because the character set does not contain characters having the following numbers in ISO 646: %1");
+    public static readonly MessageType0 explicitSgmlDecl = new MessageType0(
+        MessageType.Severity.warning, null, 519, "SGML declaration was not implied");
+    public static readonly MessageType0 badDefaultSgmlDecl = new MessageType0(
+        MessageType.Severity.error, null, 520, "invalid default SGML declaration");
 }
