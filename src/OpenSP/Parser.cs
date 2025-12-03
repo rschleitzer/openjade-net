@@ -517,6 +517,14 @@ public class Parser : ParserState
     protected virtual Boolean parseLiteral(Mode litMode, Mode liteMode, nuint maxLength,
                                             MessageType1 tooLongMessage, uint flags, Text text) { return false; }
 
+    // Character reference parsing stubs - to be implemented
+    protected virtual Boolean parseNumericCharRef(Boolean isHex, ref Char ch, ref Location loc) { return false; }
+    protected virtual Boolean translateNumericCharRef(ref Char ch, ref Boolean isSgmlChar) { isSgmlChar = true; return true; }
+    protected virtual Boolean parseNamedCharRef() { return true; }
+    protected virtual Boolean parseEntityReference(Boolean isParameter, int ignoreLevel,
+                                                   ConstPtr<Entity> entity, Ptr<EntityOrigin> origin) { return false; }
+    protected virtual Boolean parseEntityReferenceNameGroup(ref Boolean ignore) { ignore = false; return true; }
+
     // From parseInstance.cxx
     protected virtual void parsePcdata() { /* TODO */ }
     protected virtual void parseStartTag() { /* TODO */ }
