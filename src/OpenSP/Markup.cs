@@ -143,6 +143,15 @@ public class Markup
     {
     }
 
+    // Markup(const Markup &);
+    public Markup(Markup other)
+    {
+        chars_.operatorAssign(other.chars_);
+        items_.resize(other.items_.size());
+        for (nuint i = 0; i < other.items_.size(); i++)
+            items_[i] = new MarkupItem(other.items_[i]);
+    }
+
     // ~Markup();
     // C# GC handles cleanup
 

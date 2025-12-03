@@ -66,9 +66,16 @@ public class Notation : EntityDecl, IAttributed
     // void generateSystemId(ParserState &);
     public void generateSystemId(ParserState parser)
     {
-        // TODO: Implement when ParserState is fully ported
-        // This method generates system IDs using entity catalog lookup
-        // For now, this is a stub
+        StringC str = new StringC();
+        if (parser.entityCatalog().lookup(this,
+                                          new EntityCatalog.SyntaxAdapter(parser.syntax()),
+                                          parser.sd().docCharset(),
+                                          parser.messenger(),
+                                          str))
+            externalId_.setEffectiveSystem(str);
+        else if (parser.options().warnNotationSystemId)
+            parser.message(ParserMessages.cannotGenerateSystemIdNotation,
+                           new StringMessageArg(name()));
     }
 
     // const StringC *systemIdPointer() const;

@@ -909,4 +909,6 @@ public static class ParserMessages
         MessageType.Severity.error, null, 575, "length of delimiter %1 exceeds NAMELEN (%2)");
     public static readonly MessageType2 reservedNameLength = new MessageType2(
         MessageType.Severity.warning, null, 576, "length of reserved name %1 exceeds NAMELEN (%2)");
+    public static readonly MessageType1 cannotGenerateSystemIdNotation = new MessageType1(
+        MessageType.Severity.warning, null, 577, "cannot generate system identifier for notation %1");
 }

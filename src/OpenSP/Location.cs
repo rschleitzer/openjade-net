@@ -428,7 +428,7 @@ internal class EntityOriginImpl : EntityOrigin
     {
         Owner<Markup> m = new Owner<Markup>();
         if (markup_.hasValue())
-            m.operatorAssign(new Markup()); // TODO: copy markup properly
+            m.operatorAssign(new Markup(markup_.pointer()!));
         return new EntityOriginImpl(entity_, refLocation_, refLength_, m);
     }
 
