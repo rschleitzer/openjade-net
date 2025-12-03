@@ -574,11 +574,14 @@ internal class EntityManagerImpl : ExtendEntityManager
         ParsedSystemId parsedSysid = new ParsedSystemId();
         if (!parseSystemId(sysid, docCharset, (flags & (uint)isNdata) != 0, null, mgr, parsedSysid))
             return null;
-        if (catalogManager_ == null || !catalogManager_.mapCatalog(parsedSysid, this, mgr))
+        if (catalogManager_ != null && !catalogManager_.mapCatalog(parsedSysid, this, mgr))
             return null;
+
         // Create ExternalInputSource with parsedSysid
-        // This is a simplified version - full implementation would create ExternalInputSource
-        return null; // TODO: implement ExternalInputSource
+        Char replacementChar = 0xFFFD; // Unicode replacement character
+        return new ExternalInputSource(parsedSysid, charset(), docCharset,
+                                       internalCharsetIsDocCharset_, replacementChar,
+                                       origin, flags);
     }
 
     // ConstPtr<EntityCatalog> makeCatalog(...);
@@ -771,5 +774,373 @@ internal class EntityManagerImpl : ExtendEntityManager
             return docCharset;
         else
             return charset();
+    }
+}
+
+// ExternalInputSource - reads from external storage objects with character decoding
+internal class ExternalInputSource : InputSource
+{
+    private const Char RS = '\n';  // Record start (line feed in SGML)
+    private const Char RE = '\r';  // Record end (carriage return)
+    private const byte EOFCHAR = 0x1A;  // Ctrl-Z
+
+    private enum RecordType
+    {
+        unknown,
+        crUnknown,
+        crlf,
+        lf,
+        cr,
+        asis
+    }
+
+    private ExternalInfoImpl info_;
+    private Char[] buf_;
+    private nuint bufLim_;
+    private Offset bufLimOffset_;
+    private nuint bufSize_;
+    private nuint readSize_;
+    private Vector<Owner<StorageObject>> sov_ = new Vector<Owner<StorageObject>>();
+    private StorageObject? so_;
+    private nuint soIndex_;
+    private Boolean insertRS_;
+    private Decoder? decoder_;
+    private byte[] leftOver_ = Array.Empty<byte>();
+    private nuint nLeftOver_;
+    private Boolean mayRewind_;
+    private Boolean mayNotExist_;
+    private RecordType recordType_;
+    private Boolean zapEof_;
+    private Boolean internalCharsetIsDocCharset_;
+    private Char replacementChar_;
+
+    public ExternalInputSource(ParsedSystemId parsedSysid,
+                               CharsetInfo systemCharset,
+                               CharsetInfo docCharset,
+                               Boolean internalCharsetIsDocCharset,
+                               Char replacementChar,
+                               InputSourceOrigin? origin,
+                               uint flags)
+        : base(origin, null, 0, null, 0)
+    {
+        mayRewind_ = (flags & (uint)EntityManager.mayRewind) != 0;
+        mayNotExist_ = (flags & (uint)ExtendEntityManager.mayNotExist) != 0;
+        internalCharsetIsDocCharset_ = internalCharsetIsDocCharset;
+        replacementChar_ = replacementChar;
+
+        sov_.resize(parsedSysid.size());
+        for (nuint i = 0; i < sov_.size(); i++)
+            sov_[i] = new Owner<StorageObject>();
+
+        init();
+        info_ = new ExternalInfoImpl(parsedSysid);
+        if (origin != null)
+            origin.setExternalInfo(info_);
+
+        buf_ = Array.Empty<Char>();
+        bufSize_ = 0;
+    }
+
+    private void init()
+    {
+        so_ = null;
+        bufLim_ = 0;
+        bufLimOffset_ = 0;
+        insertRS_ = true;
+        soIndex_ = 0;
+        nLeftOver_ = 0;
+    }
+
+    public override void pushCharRef(Char ch, NamedCharRef charRef)
+    {
+        // For external input sources, character references are handled during parsing
+        noteCharRef(nextIndex(), charRef);
+    }
+
+    public override Boolean rewind(Messenger mgr)
+    {
+        reset(null, 0, null, 0);
+
+        // Rewind all storage objects
+        for (nuint i = 0; i < soIndex_; i++)
+        {
+            if (sov_[i].pointer() != null && !sov_[i].pointer()!.rewind(mgr))
+                return false;
+        }
+
+        init();
+        return true;
+    }
+
+    public override void willNotRewind()
+    {
+        for (nuint i = 0; i < sov_.size(); i++)
+        {
+            if (sov_[i].pointer() != null)
+                sov_[i].pointer()!.willNotRewind();
+        }
+        mayRewind_ = false;
+    }
+
+    protected override Xchar fill(Messenger mgr)
+    {
+        while (endIdx() >= bufLim_)
+        {
+            // Need more data - open next storage object if needed
+            while (so_ == null)
+            {
+                if (soIndex_ >= sov_.size())
+                    return eE;
+
+                if (soIndex_ > 0)
+                    info_.noteStorageObjectEnd((Offset)(bufLimOffset_ - (bufLim_ - endIdx())));
+
+                StorageObjectSpec spec = info_.spec(soIndex_);
+
+                if (sov_[soIndex_].pointer() == null)
+                {
+                    StringC id = new StringC();
+                    StorageObject? storageObj;
+
+                    if (mayNotExist_)
+                    {
+                        NullMessenger nullMgr = new NullMessenger();
+                        storageObj = spec.storageManager?.makeStorageObject(
+                            spec.specId, spec.baseId, spec.search, mayRewind_, nullMgr, id);
+                    }
+                    else
+                    {
+                        storageObj = spec.storageManager?.makeStorageObject(
+                            spec.specId, spec.baseId, spec.search, mayRewind_, mgr, id);
+                    }
+
+                    sov_[soIndex_] = new Owner<StorageObject>(storageObj);
+                    info_.setId(soIndex_, id);
+                }
+
+                so_ = sov_[soIndex_].pointer();
+
+                if (so_ != null)
+                {
+                    decoder_ = spec.codingSystem?.makeDecoder();
+                    info_.setDecoder(soIndex_, decoder_);
+                    zapEof_ = spec.zapEof;
+
+                    switch (spec.records)
+                    {
+                        case StorageObjectSpec.Records.asis:
+                            recordType_ = RecordType.asis;
+                            insertRS_ = false;
+                            break;
+                        case StorageObjectSpec.Records.cr:
+                            recordType_ = RecordType.cr;
+                            break;
+                        case StorageObjectSpec.Records.lf:
+                            recordType_ = RecordType.lf;
+                            break;
+                        case StorageObjectSpec.Records.crlf:
+                            recordType_ = RecordType.crlf;
+                            break;
+                        case StorageObjectSpec.Records.find:
+                        default:
+                            recordType_ = RecordType.unknown;
+                            break;
+                    }
+
+                    soIndex_++;
+                    readSize_ = so_.getBlockSize();
+                    nLeftOver_ = 0;
+                    break;
+                }
+                else
+                {
+                    setAccessError();
+                }
+
+                soIndex_++;
+            }
+
+            // Read and decode data
+            if (!readAndDecode(mgr))
+            {
+                so_ = null;
+                continue;
+            }
+
+            break;
+        }
+
+        if (endIdx() >= bufLim_)
+            return eE;
+
+        // Handle record type conversion
+        return processRecords(mgr);
+    }
+
+    private Boolean readAndDecode(Messenger mgr)
+    {
+        // Ensure buffer is large enough
+        nuint neededSize = (nuint)(readSize_ + 1024);
+        if (bufSize_ < neededSize)
+        {
+            Char[] newBuf = new Char[neededSize];
+            if (buf_.Length > 0)
+                Array.Copy(buf_, newBuf, Math.Min(buf_.Length, (int)bufLim_));
+            buf_ = newBuf;
+            bufSize_ = neededSize;
+        }
+
+        // Read raw bytes
+        byte[] rawBuf = new byte[readSize_];
+        nuint nread;
+        if (!so_!.read(rawBuf, readSize_, mgr, out nread))
+            return false;
+
+        if (nread == 0)
+            return false;
+
+        // Handle Ctrl-Z at end of file
+        if (zapEof_ && nread > 0 && rawBuf[(int)nread - 1] == EOFCHAR)
+            nread--;
+
+        // Decode bytes to characters
+        if (decoder_ != null)
+        {
+            // Decode into a temporary buffer
+            Char[] decodeBuf = new Char[nread];
+            nuint inputUsed;
+            nuint charsDecoded = decoder_.decode(decodeBuf, rawBuf, nread, out inputUsed);
+
+            if (charsDecoded > 0)
+            {
+                if (insertRS_)
+                {
+                    noteRS();
+                    // Insert RS at current position
+                    if (bufLim_ < bufSize_)
+                    {
+                        buf_[bufLim_++] = RS;
+                        bufLimOffset_++;
+                    }
+                    insertRS_ = false;
+                }
+
+                // Copy decoded chars to buffer
+                for (nuint i = 0; i < charsDecoded && bufLim_ < bufSize_; i++)
+                {
+                    buf_[bufLim_++] = decodeBuf[i];
+                    bufLimOffset_++;
+                }
+
+                advanceEnd(bufLim_);
+                return true;
+            }
+        }
+        else
+        {
+            // No decoder - treat bytes as characters directly
+            if (insertRS_)
+            {
+                noteRS();
+                buf_[bufLim_++] = RS;
+                bufLimOffset_++;
+                insertRS_ = false;
+            }
+
+            for (nuint i = 0; i < nread && bufLim_ < bufSize_; i++)
+            {
+                buf_[bufLim_++] = (Char)rawBuf[i];
+                bufLimOffset_++;
+            }
+
+            advanceEnd(bufLim_);
+            return true;
+        }
+
+        return false;
+    }
+
+    private Xchar processRecords(Messenger mgr)
+    {
+        if (insertRS_)
+        {
+            noteRS();
+            insertRS_ = false;
+            return (Xchar)RS;
+        }
+
+        nuint idx = endIdx();
+        if (idx >= bufLim_)
+            return fill(mgr);
+
+        Char c = buf_[(int)idx];
+        advanceEnd(idx + 1);
+
+        switch (recordType_)
+        {
+            case RecordType.unknown:
+                if (c == '\n')
+                {
+                    recordType_ = RecordType.lf;
+                    info_.noteInsertedRSs();
+                    insertRS_ = true;
+                    return (Xchar)RE;
+                }
+                else if (c == '\r')
+                {
+                    // Check if CRLF or just CR
+                    if (idx + 1 < bufLim_ && buf_[(int)(idx + 1)] == '\n')
+                    {
+                        recordType_ = RecordType.crlf;
+                        advanceEnd(idx + 2);
+                    }
+                    else
+                    {
+                        recordType_ = RecordType.cr;
+                        info_.noteInsertedRSs();
+                    }
+                    insertRS_ = true;
+                    return (Xchar)RE;
+                }
+                return (Xchar)c;
+
+            case RecordType.lf:
+                if (c == '\n')
+                {
+                    insertRS_ = true;
+                    return (Xchar)RE;
+                }
+                return (Xchar)c;
+
+            case RecordType.cr:
+                if (c == '\r')
+                {
+                    insertRS_ = true;
+                    return (Xchar)RE;
+                }
+                return (Xchar)c;
+
+            case RecordType.crlf:
+                if (c == '\r')
+                {
+                    // Skip the following LF
+                    if (idx + 1 < bufLim_ && buf_[(int)(idx + 1)] == '\n')
+                    {
+                        advanceEnd(idx + 2);
+                    }
+                    insertRS_ = true;
+                    return (Xchar)RE;
+                }
+                return (Xchar)c;
+
+            case RecordType.asis:
+            default:
+                return (Xchar)c;
+        }
+    }
+
+    private void noteRS()
+    {
+        info_.noteRS((Offset)(bufLimOffset_ - (bufLim_ - endIdx())));
     }
 }
