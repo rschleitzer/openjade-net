@@ -4666,13 +4666,47 @@ public class Parser : ParserState
     // Boolean parseAttributeValueLiteral(Boolean lita, Text &text);
     protected virtual Boolean parseAttributeValueLiteral(Boolean lita, Text text)
     {
-        throw new NotImplementedException();
+        nuint maxLength = (syntax().litlen() > syntax().normsep()
+                          ? syntax().litlen() - syntax().normsep()
+                          : 0);
+        if (parseLiteral(lita ? Mode.alitaMode : Mode.alitMode, Mode.aliteMode,
+                         maxLength,
+                         ParserMessages.attributeValueLength,
+                         literalNonSgml
+                         | (wantMarkup() ? (uint)literalDelimInfo : 0),
+                         text))
+        {
+            if (text.size() == 0
+                && syntax().normsep() > syntax().litlen())
+                message(ParserMessages.attributeValueLengthNeg,
+                        new NumberMessageArg(syntax().normsep() - syntax().litlen()));
+            return true;
+        }
+        else
+            return false;
     }
 
     // Boolean parseTokenizedAttributeValueLiteral(Boolean lita, Text &text);
     protected virtual Boolean parseTokenizedAttributeValueLiteral(Boolean lita, Text text)
     {
-        throw new NotImplementedException();
+        nuint maxLength = (syntax().litlen() > syntax().normsep()
+                          ? syntax().litlen() - syntax().normsep()
+                          : 0);
+        if (parseLiteral(lita ? Mode.talitaMode : Mode.talitMode, Mode.taliteMode,
+                         maxLength,
+                         ParserMessages.tokenizedAttributeValueLength,
+                         literalSingleSpace
+                         | (wantMarkup() ? (uint)literalDelimInfo : 0),
+                         text))
+        {
+            if (text.size() == 0
+                && syntax().normsep() > syntax().litlen())
+                message(ParserMessages.tokenizedAttributeValueLengthNeg,
+                        new NumberMessageArg(syntax().normsep() - syntax().litlen()));
+            return true;
+        }
+        else
+            return false;
     }
 
     // Boolean parseExternalId(const AllowedParams &sysidAllow, const AllowedParams &endAllow,

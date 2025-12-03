@@ -503,6 +503,12 @@ public static class ParserMessages
         MessageType.Severity.error, null, 32, "%1 is not allowed as a reserved name here");
     public static readonly MessageType1 attributeValueLength = new MessageType1(
         MessageType.Severity.error, null, 3, "length of attribute value must not exceed LITLEN less NORMSEP (%1)");
+    public static readonly MessageType1 tokenizedAttributeValueLength = new MessageType1(
+        MessageType.Severity.quantityError, null, 126, "length of tokenized attribute value must not exceed LITLEN less NORMSEP (%1)");
+    public static readonly MessageType1 attributeValueLengthNeg = new MessageType1(
+        MessageType.Severity.quantityError, null, 127, "length of attribute value must not exceed LITLEN less NORMSEP (-%1)");
+    public static readonly MessageType1 tokenizedAttributeValueLengthNeg = new MessageType1(
+        MessageType.Severity.quantityError, null, 128, "length of tokenized attribute value must not exceed LITLEN less NORMSEP (-%1)");
     // nameTokenLength already defined above
     public static readonly MessageType1 noSuchSourceElement = new MessageType1(
         MessageType.Severity.error, null, 476, "no such source element '%1'");
