@@ -680,4 +680,49 @@ public static class ParserMessages
     // parseAfdrDecl messages
     public static readonly MessageType1 afdrVersion = new MessageType1(
         MessageType.Severity.error, null, 347, "minimum data of AFDR declaration must be \"ISO/IEC 10744:1997\" not %1");
+
+    // parseLinktypeDeclStart/End messages
+    public static readonly MessageType0 lpdBeforeBaseDtd = new MessageType0(
+        MessageType.Severity.error, null, 298, "LPD not allowed before first DTD");
+    // duplicateDtdLpd already defined above
+    public static readonly MessageType1 duplicateLpd = new MessageType1(
+        MessageType.Severity.error, null, 308, "link type %1 already defined");
+    public static readonly MessageType1 noSuchDtd = new MessageType1(
+        MessageType.Severity.error, null, 274, "no DTD %1 declared");
+    public static readonly MessageType0 simpleLinkFeature = new MessageType0(
+        MessageType.Severity.error, null, 295, "simple link requires SIMPLE YES");
+    public static readonly MessageType0 implicitLinkFeature = new MessageType0(
+        MessageType.Severity.error, null, 296, "implicit link requires IMPLICIT YES");
+    public static readonly MessageType0 simpleLinkResultNotImplied = new MessageType0(
+        MessageType.Severity.error, null, 294, "result document type in simple link specification must be implied");
+    public static readonly MessageType0 explicitLinkFeature = new MessageType0(
+        MessageType.Severity.error, null, 297, "explicit link requires EXPLICIT YES");
+    public static readonly MessageType1 simpleLinkCount = new MessageType1(
+        MessageType.Severity.error, null, 312, "number of active simple link processes exceeds quantity specified for SIMPLE parameter in SGML declaration (%1)");
+    public static readonly MessageType0 oneImplicitLink = new MessageType0(
+        MessageType.Severity.error, null, 315, "only one implicit link process can be active");
+    public static readonly MessageType1 explicitNoRequiresSourceTypeBase = new MessageType1(
+        MessageType.Severity.error, null, 318, "source document type name for link type %1 must be base document type since EXPLICIT NO");
+    public static readonly MessageType1 explicit1RequiresSourceTypeBase = new MessageType1(
+        MessageType.Severity.error, null, 314, "source document type name for link type %1 must be base document type since EXPLICIT YES 1");
+    public static readonly MessageType0 duplicateExplicitChain = new MessageType0(
+        MessageType.Severity.error, null, 313, "only one chain of explicit link processes can be active");
+    public static readonly MessageType1 sorryLink = new MessageType1(
+        MessageType.Severity.warning, null, 316, "sorry, link type %1 not activated: only one implicit or explicit link process can be active (with base document type as source document type)");
+    public static readonly MessageType1 noLpdSubset = new MessageType1(
+        MessageType.Severity.warning, null, 275, "LPD %1 has neither internal nor external subset");
+    public static readonly MessageType1 noInitialLinkSet = new MessageType1(
+        MessageType.Severity.error, null, 292, "no initial link set defined for LPD %1");
+    public static readonly MessageType1 undefinedLinkSet = new MessageType1(
+        MessageType.Severity.error, null, 310, "link set %1 used in LPD but not defined");
+
+    // parseLinkDecl/parseIdlinkDecl/parseLinkSet messages
+    public static readonly MessageType0 linkDeclSimple = new MessageType0(
+        MessageType.Severity.error, null, 284, "link set declaration not allowed in simple link declaration subset");
+    public static readonly MessageType0 idlinkDeclSimple = new MessageType0(
+        MessageType.Severity.error, null, 283, "ID link set declaration not allowed in simple link declaration subset");
+    public static readonly MessageType0 duplicateIdLinkSet = new MessageType0(
+        MessageType.Severity.error, null, 291, "only one ID link set declaration allowed in an LPD subset");
+    public static readonly MessageType1 duplicateLinkSet = new MessageType1(
+        MessageType.Severity.error, null, 277, "link set %1 already defined");
 }

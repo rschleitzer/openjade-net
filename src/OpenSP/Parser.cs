@@ -3915,11 +3915,319 @@ public class Parser : ParserState
         if (options().warnEmptyCommentDecl)
             message(ParserMessages.emptyCommentDecl);
     }
-    protected virtual Boolean parseLinktypeDeclStart() { throw new NotImplementedException(); }
-    protected virtual Boolean parseLinktypeDeclEnd() { throw new NotImplementedException(); }
-    protected virtual Boolean parseLinkDecl() { throw new NotImplementedException(); }
-    protected virtual Boolean parseIdlinkDecl() { throw new NotImplementedException(); }
-    protected virtual Boolean parseLinkSet(Boolean idlink) { throw new NotImplementedException(); }
+    // Boolean parseLinktypeDeclStart();
+    protected virtual Boolean parseLinktypeDeclStart()
+    {
+        if (baseDtd().isNull())
+            message(ParserMessages.lpdBeforeBaseDtd);
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+
+        AllowedParams allowName = new AllowedParams(Param.name);
+        if (!parseParam(allowName, declInputLevel, parm))
+            return false;
+
+        StringC name = new StringC();
+        parm.token.swap(name);
+
+        if (!lookupDtd(name).isNull())
+            message(ParserMessages.duplicateDtdLpd, new StringMessageArg(name));
+        else if (!lookupLpd(name).isNull())
+            message(ParserMessages.duplicateLpd, new StringMessageArg(name));
+
+        byte indSIMPLE = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rSIMPLE);
+        AllowedParams allowSimpleName = new AllowedParams(indSIMPLE, Param.name);
+        if (!parseParam(allowSimpleName, declInputLevel, parm))
+            return false;
+
+        Boolean simple;
+        Ptr<Dtd> sourceDtd;
+        if (parm.type == indSIMPLE)
+        {
+            simple = true;
+            sourceDtd = baseDtd();
+            if (sourceDtd.isNull())
+                sourceDtd = new Ptr<Dtd>(new Dtd(new StringC(), true));
+        }
+        else
+        {
+            simple = false;
+            sourceDtd = lookupDtd(parm.token);
+            if (sourceDtd.isNull())
+            {
+                message(ParserMessages.noSuchDtd, new StringMessageArg(parm.token));
+                sourceDtd = new Ptr<Dtd>(new Dtd(parm.token, false));
+            }
+        }
+
+        byte indIMPLIED = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rIMPLIED);
+        AllowedParams allowImpliedName = new AllowedParams(indIMPLIED, Param.name);
+        if (!parseParam(allowImpliedName, declInputLevel, parm))
+            return false;
+
+        Ptr<Dtd> resultDtd = new Ptr<Dtd>();
+        Boolean implied = false;
+        if (parm.type == indIMPLIED)
+        {
+            if (simple)
+            {
+                if (sd().simpleLink() == 0)
+                    message(ParserMessages.simpleLinkFeature);
+            }
+            else
+            {
+                implied = true;
+                if (!sd().implicitLink())
+                    message(ParserMessages.implicitLinkFeature);
+            }
+        }
+        else
+        {
+            if (simple)
+                message(ParserMessages.simpleLinkResultNotImplied);
+            else
+            {
+                if (sd().explicitLink() == 0)
+                    message(ParserMessages.explicitLinkFeature);
+                resultDtd = lookupDtd(parm.token);
+                if (resultDtd.isNull())
+                    message(ParserMessages.noSuchDtd, new StringMessageArg(parm.token));
+            }
+        }
+
+        byte rPUBLIC = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rPUBLIC);
+        byte rSYSTEM = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSYSTEM);
+        AllowedParams allowPublicSystemDsoMdc = new AllowedParams(rPUBLIC, rSYSTEM, Param.dso, Param.mdc);
+        if (!parseParam(allowPublicSystemDsoMdc, declInputLevel, parm))
+            return false;
+
+        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+        if (parm.type == rPUBLIC || parm.type == rSYSTEM)
+        {
+            AllowedParams allowSystemIdentifierDsoMdc = new AllowedParams(Param.systemIdentifier, Param.dso, Param.mdc);
+            AllowedParams allowDsoMdc = new AllowedParams(Param.dso, Param.mdc);
+            ExternalId id = new ExternalId();
+            if (!parseExternalId(allowSystemIdentifierDsoMdc, allowDsoMdc,
+                                  true, declInputLevel, parm, id))
+                return false;
+            Ptr<Entity> tem = new Ptr<Entity>(
+                new ExternalTextEntity(name, Entity.DeclType.linktype, markupLocation(), id));
+            tem.pointer()!.generateSystemId(this);
+            entity = new ConstPtr<Entity>(tem.pointer());
+        }
+
+        Ptr<Lpd> lpd;
+        if (simple)
+            lpd = new Ptr<Lpd>(new SimpleLpd(name, markupLocation(), sourceDtd));
+        else
+            lpd = new Ptr<Lpd>(new ComplexLpd(name,
+                                               implied ? Lpd.Type.implicitLink : Lpd.Type.explicitLink,
+                                               markupLocation(),
+                                               syntax(),
+                                               sourceDtd,
+                                               resultDtd));
+
+        if (!baseDtd().isNull() && shouldActivateLink(name))
+        {
+            nuint nActive = nActiveLink();
+            if (simple)
+            {
+                nuint nSimple = 0;
+                for (nuint i = 0; i < nActive; i++)
+                    if (activeLpd(i).type() == Lpd.Type.simpleLink)
+                        nSimple++;
+                if (nSimple == sd().simpleLink())
+                    message(ParserMessages.simpleLinkCount,
+                            new NumberMessageArg(sd().simpleLink()));
+                lpd.pointer()!.activate();
+            }
+            else
+            {
+                Boolean haveImplicit = false;
+                Boolean haveExplicit = false;
+                nuint j;
+                for (j = 0; j < nActive; j++)
+                {
+                    if (activeLpd(j).type() == Lpd.Type.implicitLink)
+                        haveImplicit = true;
+                    else if (activeLpd(j).type() == Lpd.Type.explicitLink)
+                        haveExplicit = true;
+                }
+                Dtd? srcDtd = lpd.pointer()!.sourceDtd().pointer();
+                if (implied && haveImplicit)
+                    message(ParserMessages.oneImplicitLink);
+                else if (sd().explicitLink() <= 1 && srcDtd != baseDtd().pointer())
+                    message(sd().explicitLink() == 0
+                            ? ParserMessages.explicitNoRequiresSourceTypeBase
+                            : ParserMessages.explicit1RequiresSourceTypeBase,
+                            new StringMessageArg(lpd.pointer()!.name()));
+                else if (sd().explicitLink() == 1 && haveExplicit && !implied)
+                    message(ParserMessages.duplicateExplicitChain);
+                else if (haveExplicit || haveImplicit || srcDtd != baseDtd().pointer())
+                    message(ParserMessages.sorryLink, new StringMessageArg(lpd.pointer()!.name()));
+                else
+                    lpd.pointer()!.activate();
+            }
+        }
+
+        // Discard mdc or dso
+        if (currentMarkup() != null)
+            currentMarkup()!.resize(currentMarkup()!.size() - 1);
+
+        eventHandler().startLpd(new StartLpdEvent(lpd.pointer()!.active(),
+                                                   name,
+                                                   entity,
+                                                   parm.type == Param.dso,
+                                                   markupLocation(),
+                                                   currentMarkup()));
+        startLpd(lpd);
+
+        if (parm.type == Param.mdc)
+        {
+            // unget the mdc
+            currentInput()!.ungetToken();
+            if (entity.isNull())
+            {
+                message(ParserMessages.noLpdSubset, new StringMessageArg(name));
+                parseLinktypeDeclEnd();
+                return true;
+            }
+            // reference the entity
+            EntityOrigin origin = EntityOrigin.make(internalAllocator(), entity, currentLocation());
+            entity.pointer()!.dsReference(this, new Ptr<EntityOrigin>(origin));
+            if (inputLevel() == 1) // reference failed
+            {
+                parseLinktypeDeclEnd();
+                return true;
+            }
+        }
+        else if (!entity.isNull())
+            setDsEntity(entity);
+
+        setPhase(Phase.declSubsetPhase);
+        return true;
+    }
+
+    // Boolean parseLinktypeDeclEnd();
+    protected virtual Boolean parseLinktypeDeclEnd()
+    {
+        if (defLpd().type() != Lpd.Type.simpleLink)
+        {
+            if (!defComplexLpd().initialLinkSet()!.defined())
+                message(ParserMessages.noInitialLinkSet,
+                        new StringMessageArg(defLpd().name()));
+            ConstNamedTableIter<LinkSet> iter = defComplexLpd().linkSetIter();
+            LinkSet? linkSet;
+            while ((linkSet = iter.next()) != null)
+                if (!linkSet.defined())
+                    message(ParserMessages.undefinedLinkSet, new StringMessageArg(linkSet.name()));
+        }
+        ConstPtr<Lpd> tem = new ConstPtr<Lpd>(defLpdPointer().pointer());
+        endLpd();
+        startMarkup(eventsWanted().wantPrologMarkup(), currentLocation());
+        Param parm = new Param();
+        AllowedParams allowMdc = new AllowedParams(Param.mdc);
+        Boolean result = parseParam(allowMdc, inputLevel(), parm);
+        eventHandler().endLpd(new EndLpdEvent(tem,
+                                               markupLocation(),
+                                               currentMarkup()));
+        return result;
+    }
+
+    // Boolean parseLinkDecl();
+    protected virtual Boolean parseLinkDecl()
+    {
+        return parseLinkSet(false);
+    }
+
+    // Boolean parseIdlinkDecl();
+    protected virtual Boolean parseIdlinkDecl()
+    {
+        return parseLinkSet(true);
+    }
+
+    // Boolean parseLinkSet(Boolean idlink);
+    protected virtual Boolean parseLinkSet(Boolean idlink)
+    {
+        if (defLpd().type() == Lpd.Type.simpleLink)
+        {
+            message(idlink ? ParserMessages.idlinkDeclSimple : ParserMessages.linkDeclSimple);
+            return false;
+        }
+        if (idlink)
+        {
+            if (defComplexLpd().hadIdLinkSet())
+                message(ParserMessages.duplicateIdLinkSet);
+            else
+                defComplexLpd().setHadIdLinkSet();
+        }
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+
+        Boolean isExplicit = (defLpd().type() == Lpd.Type.explicitLink);
+        LinkSet? linkSet;
+        if (idlink)
+        {
+            AllowedParams allowName = new AllowedParams(Param.name);
+            if (!parseParam(allowName, declInputLevel, parm))
+                return false;
+            linkSet = null;
+        }
+        else
+        {
+            byte indINITIAL = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rINITIAL);
+            AllowedParams allowNameInitial = new AllowedParams(Param.name, indINITIAL);
+            if (!parseParam(allowNameInitial, declInputLevel, parm))
+                return false;
+            if (parm.type == Param.name)
+                linkSet = lookupCreateLinkSet(parm.token);
+            else
+                linkSet = defComplexLpd().initialLinkSet();
+            if (linkSet!.defined())
+                message(ParserMessages.duplicateLinkSet, new StringMessageArg(linkSet.name()));
+            // Continue parsing but with simplified handling for now
+            // Full implementation requires more complex link rule handling
+        }
+
+        // Simplified: just parse to MDC
+        AllowedParams allowMdc = new AllowedParams(Param.mdc);
+        while (parm.type != Param.mdc)
+        {
+            // Skip through to the end of the declaration
+            AllowedParams allowAny = new AllowedParams(Param.name, Param.nameGroup, Param.dso, Param.mdc);
+            if (!parseParam(allowAny, declInputLevel, parm))
+                return false;
+        }
+
+        if (linkSet != null)
+            linkSet.setDefined();
+
+        if (currentMarkup() != null)
+        {
+            if (idlink)
+                eventHandler().idLinkDecl(new IdLinkDeclEvent(new ConstPtr<ComplexLpd>(defComplexLpdPointer().pointer()),
+                                                               markupLocation(),
+                                                               currentMarkup()));
+            else
+                eventHandler().linkDecl(new LinkDeclEvent(linkSet,
+                                                           new ConstPtr<ComplexLpd>(defComplexLpdPointer().pointer()),
+                                                           markupLocation(),
+                                                           currentMarkup()));
+        }
+        return true;
+    }
+
+    // LinkSet *lookupCreateLinkSet(const StringC &name);
+    protected LinkSet lookupCreateLinkSet(StringC name)
+    {
+        LinkSet? linkSet = defComplexLpd().lookupLinkSet(name);
+        if (linkSet == null)
+        {
+            linkSet = new LinkSet(name, defComplexLpd().sourceDtd().pointer());
+            defComplexLpd().insertLinkSet(linkSet);
+        }
+        return linkSet;
+    }
     // Boolean parseAfdrDecl();
     protected virtual Boolean parseAfdrDecl()
     {
