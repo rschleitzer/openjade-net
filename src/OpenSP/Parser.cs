@@ -834,8 +834,276 @@ public class Parser : ParserState
     protected virtual void doInit() { throw new NotImplementedException(); }
     protected virtual void doProlog() { throw new NotImplementedException(); }
     protected virtual void doDeclSubset() { throw new NotImplementedException(); }
-    protected virtual void doInstanceStart() { throw new NotImplementedException(); }
-    protected virtual void doContent() { throw new NotImplementedException(); }
+    // void doInstanceStart();
+    protected virtual void doInstanceStart()
+    {
+        if (cancelled())
+        {
+            allDone();
+            return;
+        }
+        // FIXME check here that we have a valid dtd
+        compileInstanceModes();
+        setPhase(Phase.contentPhase);
+        Token token = getToken(currentMode());
+        switch (token)
+        {
+            case Tokens.tokenEe:
+            case Tokens.tokenStagoNameStart:
+            case Tokens.tokenStagoTagc:
+            case Tokens.tokenStagoGrpo:
+            case Tokens.tokenEtagoNameStart:
+            case Tokens.tokenEtagoTagc:
+            case Tokens.tokenEtagoGrpo:
+                break;
+            default:
+                if (sd().omittag())
+                {
+                    uint startImpliedCount = 0;
+                    uint attributeListIndex = 0;
+                    IList<Undo> undoList = new IList<Undo>();
+                    IList<Event> eventList = new IList<Event>();
+                    if (!tryImplyTag(currentLocation(),
+                                     ref startImpliedCount,
+                                     ref attributeListIndex,
+                                     undoList,
+                                     eventList))
+                    {
+                        // CANNOT_HAPPEN();
+                    }
+                    queueElementEvents(eventList);
+                }
+                else
+                    message(ParserMessages.instanceStartOmittag);
+                break;
+        }
+        currentInput()!.ungetToken();
+    }
+    // void doContent();
+    protected void doContent()
+    {
+        do
+        {
+            if (cancelled())
+            {
+                allDone();
+                return;
+            }
+            Token token = getToken(currentMode());
+            switch (token)
+            {
+                case Tokens.tokenEe:
+                    if (inputLevel() == 1)
+                    {
+                        endInstance();
+                        return;
+                    }
+                    if (inputLevel() == specialParseInputLevel())
+                    {
+                        // FIXME have separate messages for each type of special parse
+                        // perhaps force end of marked section or element
+                        message(ParserMessages.specialParseEntityEnd);
+                    }
+                    if (eventsWanted().wantInstanceMarkup())
+                        eventHandler().entityEnd(new EntityEndEvent(currentLocation()));
+                    if (afterDocumentElement())
+                        message(ParserMessages.afterDocumentElementEntityEnd);
+                    if (sd().integrallyStored()
+                        && tagLevel() > 0
+                        && currentElement().index() != currentInputElementIndex())
+                        message(ParserMessages.contentAsyncEntityRef);
+                    popInputStack();
+                    break;
+                case Tokens.tokenCroDigit:
+                case Tokens.tokenHcroHexDigit:
+                    {
+                        if (afterDocumentElement())
+                            message(ParserMessages.characterReferenceAfterDocumentElement);
+                        Char ch = 0;
+                        Location loc = new Location();
+                        if (parseNumericCharRef(token == Tokens.tokenHcroHexDigit, ref ch, ref loc))
+                        {
+                            acceptPcdata(loc);
+                            noteData();
+                            Boolean isSgmlChar = false;
+                            if (!translateNumericCharRef(ref ch, ref isSgmlChar))
+                                break;
+                            if (!isSgmlChar)
+                            {
+                                eventHandler().nonSgmlChar(new NonSgmlCharEvent(ch, loc));
+                                break;
+                            }
+                            Char[] charData = new Char[] { ch };
+                            eventHandler().data(new ImmediateDataEvent(Event.Type.characterData,
+                                                                       charData, 1, loc, true));
+                            break;
+                        }
+                    }
+                    break;
+                case Tokens.tokenCroNameStart:
+                    if (afterDocumentElement())
+                        message(ParserMessages.characterReferenceAfterDocumentElement);
+                    parseNamedCharRef();
+                    break;
+                case Tokens.tokenEroGrpo:
+                case Tokens.tokenEroNameStart:
+                    {
+                        if (afterDocumentElement())
+                            message(ParserMessages.entityReferenceAfterDocumentElement);
+                        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+                        Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>();
+                        if (parseEntityReference(false, token == Tokens.tokenEroGrpo ? 1 : 0, entity, origin))
+                        {
+                            if (!entity.isNull())
+                            {
+                                if (entity.pointer()!.isCharacterData())
+                                    acceptPcdata(new Location(origin.pointer(), 0));
+                                if (inputLevel() == specialParseInputLevel())
+                                    entity.pointer()!.rcdataReference(this, origin);
+                                else
+                                    entity.pointer()!.contentReference(this, origin);
+                            }
+                        }
+                    }
+                    break;
+                case Tokens.tokenEtagoNameStart:
+                    acceptEndTag(parseEndTag());
+                    break;
+                case Tokens.tokenEtagoTagc:
+                    parseEmptyEndTag();
+                    break;
+                case Tokens.tokenEtagoGrpo:
+                    parseGroupEndTag();
+                    break;
+                case Tokens.tokenMdoNameStart:
+                    if (startMarkup(eventsWanted().wantInstanceMarkup(), currentLocation()) != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDO);
+                    Syntax.ReservedName name;
+                    Boolean result;
+                    uint startLevel;
+                    startLevel = inputLevel();
+                    if (parseDeclarationName(out name))
+                    {
+                        switch (name)
+                        {
+                            case Syntax.ReservedName.rUSEMAP:
+                                if (afterDocumentElement())
+                                    message(ParserMessages.declarationAfterDocumentElement,
+                                            new StringMessageArg(syntax().reservedName(name)));
+                                result = parseUsemapDecl();
+                                break;
+                            case Syntax.ReservedName.rUSELINK:
+                                if (afterDocumentElement())
+                                    message(ParserMessages.declarationAfterDocumentElement,
+                                            new StringMessageArg(syntax().reservedName(name)));
+                                result = parseUselinkDecl();
+                                break;
+                            case Syntax.ReservedName.rDOCTYPE:
+                            case Syntax.ReservedName.rLINKTYPE:
+                            case Syntax.ReservedName.rELEMENT:
+                            case Syntax.ReservedName.rATTLIST:
+                            case Syntax.ReservedName.rENTITY:
+                            case Syntax.ReservedName.rNOTATION:
+                            case Syntax.ReservedName.rSHORTREF:
+                            case Syntax.ReservedName.rLINK:
+                            case Syntax.ReservedName.rIDLINK:
+                                message(ParserMessages.instanceDeclaration,
+                                        new StringMessageArg(syntax().reservedName(name)));
+                                result = false;
+                                break;
+                            default:
+                                message(ParserMessages.noSuchDeclarationType,
+                                        new StringMessageArg(syntax().reservedName(name)));
+                                result = false;
+                                break;
+                        }
+                    }
+                    else
+                        result = false;
+                    if (!result)
+                        skipDeclaration(startLevel);
+                    noteMarkup();
+                    break;
+                case Tokens.tokenMdoMdc:
+                    // empty comment
+                    emptyCommentDecl();
+                    noteMarkup();
+                    break;
+                case Tokens.tokenMdoCom:
+                    parseCommentDecl();
+                    noteMarkup();
+                    break;
+                case Tokens.tokenMdoDso:
+                    if (afterDocumentElement())
+                        message(ParserMessages.markedSectionAfterDocumentElement);
+                    parseMarkedSectionDeclStart();
+                    noteMarkup();
+                    break;
+                case Tokens.tokenMscMdc:
+                    handleMarkedSectionEnd();
+                    noteMarkup();
+                    break;
+                case Tokens.tokenNet:
+                    parseNullEndTag();
+                    break;
+                case Tokens.tokenPio:
+                    parseProcessingInstruction();
+                    break;
+                case Tokens.tokenStagoNameStart:
+                    parseStartTag();
+                    break;
+                case Tokens.tokenStagoTagc:
+                    parseEmptyStartTag();
+                    break;
+                case Tokens.tokenStagoGrpo:
+                    parseGroupStartTag();
+                    break;
+                case Tokens.tokenRe:
+                    acceptPcdata(currentLocation());
+                    queueRe(currentLocation());
+                    break;
+                case Tokens.tokenRs:
+                    acceptPcdata(currentLocation());
+                    noteRs();
+                    if (eventsWanted().wantInstanceMarkup())
+                        eventHandler().ignoredRs(new IgnoredRsEvent(currentChar(),
+                                                                    currentLocation()));
+                    break;
+                case Tokens.tokenS:
+                    extendContentS();
+                    if (eventsWanted().wantInstanceMarkup())
+                        eventHandler().sSep(new SSepEvent(currentInput()!.currentTokenStart(),
+                                                          currentInput()!.currentTokenLength(),
+                                                          currentLocation(),
+                                                          false));
+                    break;
+                case Tokens.tokenIgnoredChar:
+                    extendData();
+                    if (eventsWanted().wantMarkedSections())
+                        eventHandler().ignoredChars(new IgnoredCharsEvent(currentInput()!.currentTokenStart(),
+                                                                          currentInput()!.currentTokenLength(),
+                                                                          currentLocation(),
+                                                                          false));
+                    break;
+                case Tokens.tokenUnrecognized:
+                    reportNonSgmlCharacter();
+                    parsePcdata();
+                    break;
+                case Tokens.tokenCharDelim:
+                    message(ParserMessages.dataCharDelim,
+                            new StringMessageArg(new StringC(currentInput()!.currentTokenStart(),
+                                                             currentInput()!.currentTokenLength())));
+                    goto case Tokens.tokenChar;
+                case Tokens.tokenChar:
+                    parsePcdata();
+                    break;
+                default:
+                    if (token >= Tokens.tokenFirstShortref)
+                        handleShortref((int)(token - Tokens.tokenFirstShortref));
+                    break;
+            }
+        } while (eventQueueEmpty());
+    }
 
     // void extendNameToken(size_t maxLength, const MessageType1 &tooLongMessage);
     protected void extendNameToken(nuint maxLength, MessageType1 tooLongMessage)
@@ -877,7 +1145,18 @@ public class Parser : ParserState
         ins.endToken(length);
     }
 
-    protected virtual void extendData() { throw new NotImplementedException(); }
+    // void extendData();
+    protected void extendData()
+    {
+        XcharMap<PackedBoolean> isNormal = normalMap();
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        nuint length = ins.currentTokenLength();
+        // This is one of the parser's inner loops, so it needs to be fast.
+        while (isNormal[ins.tokenCharInBuffer(messenger())])
+            length++;
+        ins.endToken(length);
+    }
 
     // void extendS();
     protected void extendS()
@@ -890,7 +1169,22 @@ public class Parser : ParserState
         ins.endToken(length);
     }
 
-    protected virtual void extendContentS() { throw new NotImplementedException(); }
+    // void extendContentS();
+    protected void extendContentS()
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        nuint length = ins.currentTokenLength();
+        XcharMap<PackedBoolean> isNormal = normalMap();
+        for (;;)
+        {
+            Xchar ch = ins.tokenChar(messenger());
+            if (!syntax().isS(ch) || !isNormal[ch])
+                break;
+            length++;
+        }
+        ins.endToken(length);
+    }
 
     // Boolean reportNonSgmlCharacter();
     protected Boolean reportNonSgmlCharacter()
@@ -939,13 +1233,47 @@ public class Parser : ParserState
     // From parseDecl.cxx
     protected virtual void declSubsetRecover(uint startLevel) { throw new NotImplementedException(); }
     protected virtual void prologRecover() { throw new NotImplementedException(); }
-    protected virtual void skipDeclaration(uint startLevel) { throw new NotImplementedException(); }
+    // void skipDeclaration(unsigned startLevel);
+    protected void skipDeclaration(uint startLevel)
+    {
+        const uint skipMax = 250;
+        uint skipCount = 0;
+        for (;;)
+        {
+            Token token = getToken(Mode.mdMode);
+            if (inputLevel() == startLevel)
+                skipCount++;
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    getChar();
+                    break;
+                case Tokens.tokenEe:
+                    if (inputLevel() <= startLevel)
+                        return;
+                    popInputStack();
+                    return;
+                case Tokens.tokenMdc:
+                    if (inputLevel() == startLevel)
+                        return;
+                    break;
+                case Tokens.tokenS:
+                    if (inputLevel() == startLevel && skipCount >= skipMax
+                        && currentChar() == syntax().standardFunction((int)Syntax.StandardFunction.fRE))
+                        return;
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
     protected virtual Boolean parseElementDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseAttlistDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseNotationDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseEntityDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseShortrefDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseUsemapDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseDeclarationName(out Syntax.ReservedName name) { name = default; throw new NotImplementedException(); }
     protected virtual Boolean parseUselinkDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseDoctypeDeclStart() { throw new NotImplementedException(); }
     protected virtual Boolean parseDoctypeDeclEnd(Boolean fake = false) { throw new NotImplementedException(); }
@@ -1558,14 +1886,290 @@ public class Parser : ParserState
     protected virtual Boolean parseEntityReferenceNameGroup(ref Boolean ignore) { throw new NotImplementedException(); }
 
     // From parseInstance.cxx
-    protected virtual void parsePcdata() { throw new NotImplementedException(); }
-    protected virtual void parseStartTag() { throw new NotImplementedException(); }
-    protected virtual void parseEmptyStartTag() { throw new NotImplementedException(); }
-    protected virtual EndElementEvent? parseEndTag() { throw new NotImplementedException(); }
-    protected virtual void parseEndTagClose() { throw new NotImplementedException(); }
-    protected virtual void parseEmptyEndTag() { throw new NotImplementedException(); }
-    protected virtual void parseNullEndTag() { throw new NotImplementedException(); }
-    protected virtual void endAllElements() { throw new NotImplementedException(); }
+    // void parsePcdata();
+    protected void parsePcdata()
+    {
+        extendData();
+        acceptPcdata(currentLocation());
+        noteData();
+        eventHandler().data(new ImmediateDataEvent(Event.Type.characterData,
+                                                   currentInput()!.currentTokenStart(),
+                                                   currentInput()!.currentTokenLength(),
+                                                   currentLocation(),
+                                                   false));
+    }
+    // void parseStartTag();
+    protected void parseStartTag()
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
+                                     ins.currentLocation());
+        if (markup != null)
+            markup.addDelim(Syntax.DelimGeneral.dSTAGO);
+        Boolean netEnabling = false;
+        StartElementEvent? @event = doParseStartTag(ref netEnabling);
+        if (@event != null)
+            acceptStartTag(@event.elementType(), @event, netEnabling);
+    }
+
+    // StartElementEvent *doParseStartTag(Boolean &netEnabling);
+    protected StartElementEvent? doParseStartTag(ref Boolean netEnabling)
+    {
+        Markup? markup = currentMarkup();
+        InputSource? ins = currentInput();
+        if (ins == null) return null;
+        ins.discardInitial();
+        extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        if (markup != null)
+            markup.addName(ins);
+        StringC name = nameBuffer();
+        getCurrentToken(syntax().generalSubstTable(), name);
+        ElementType? e = currentDtdNonConst().lookupElementType(name);
+        if (sd().rank())
+        {
+            if (e == null)
+                e = completeRankStem(name);
+            else if (e.isRankedElement())
+                handleRankedElement(e);
+        }
+        if (e == null)
+            e = lookupCreateUndefinedElement(name, currentLocation(), currentDtdNonConst(), implydefElement() != Sd.ImplydefElement.implydefElementAnyother);
+        AttributeList? attributes = allocAttributeList(e?.attributeDef(), 0);
+        Token closeToken = getToken(Mode.tagMode);
+        if (closeToken == Tokens.tokenTagc)
+        {
+            if (name.size() > syntax().taglen())
+                checkTaglen(markupLocation().index());
+            attributes?.finish(this);
+            netEnabling = false;
+            if (markup != null)
+                markup.addDelim(Syntax.DelimGeneral.dTAGC);
+        }
+        else
+        {
+            ins.ungetToken();
+            Ptr<AttributeDefinitionList> newAttDef = new Ptr<AttributeDefinitionList>();
+            if (parseAttributeSpec(Mode.tagMode, attributes!, out netEnabling, newAttDef))
+            {
+                // The difference between the indices will be the difference
+                // in offsets plus 1 for each named character reference.
+                if (ins.currentLocation().index() - markupLocation().index()
+                    > syntax().taglen())
+                    checkTaglen(markupLocation().index());
+            }
+            else
+                netEnabling = false;
+            if (!newAttDef.isNull() && e != null)
+            {
+                newAttDef.pointer()!.setIndex(currentDtdNonConst().allocAttributeDefinitionListIndex());
+                e.setAttributeDef(newAttDef);
+            }
+        }
+        return new StartElementEvent(e,
+                                     currentDtdPointer(),
+                                     attributes,
+                                     markupLocation(),
+                                     markup);
+    }
+
+    // void handleRankedElement(const ElementType *e);
+    protected void handleRankedElement(ElementType e)
+    {
+        StringC rankSuffix = new StringC(e.definition()!.rankSuffix());
+        RankStem? rankStem = e.rankedElementRankStem();
+        if (rankStem == null) return;
+        for (nuint i = 0; i < rankStem.nDefinitions(); i++)
+        {
+            ElementDefinition? def = rankStem.definition(i);
+            if (def == null) continue;
+            for (nuint j = 0; j < def.nRankStems(); j++)
+                setCurrentRank(def.rankStem(j), rankSuffix);
+        }
+    }
+
+    // void parseEmptyStartTag();
+    protected void parseEmptyStartTag()
+    {
+        if (options().warnEmptyTag)
+            message(ParserMessages.emptyStartTag);
+        if (!currentDtd().isBase())
+            message(ParserMessages.emptyStartTagBaseDtd);
+        ElementType? e = null;
+        if (!sd().omittag())
+            e = lastEndedElementType();
+        else if (tagLevel() > 0)
+            e = currentElement().type();
+        if (e == null)
+            e = currentDtd().documentElementType();
+        AttributeList? attributes = allocAttributeList(e?.attributeDef(), 0);
+        attributes?.finish(this);
+        Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
+                                     currentLocation());
+        if (markup != null)
+        {
+            markup.addDelim(Syntax.DelimGeneral.dSTAGO);
+            markup.addDelim(Syntax.DelimGeneral.dTAGC);
+        }
+        acceptStartTag(e,
+                       new StartElementEvent(e,
+                                             currentDtdPointer(),
+                                             attributes,
+                                             markupLocation(),
+                                             markup),
+                       false);
+    }
+
+    // void parseGroupStartTag();
+    protected void parseGroupStartTag()
+    {
+        // Stub implementation - full implementation requires parseTagNameGroup
+        throw new NotImplementedException();
+    }
+
+    // void parseGroupEndTag();
+    protected void parseGroupEndTag()
+    {
+        // Stub implementation - full implementation requires parseTagNameGroup
+        throw new NotImplementedException();
+    }
+    // EndElementEvent *parseEndTag();
+    protected EndElementEvent? parseEndTag()
+    {
+        Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
+                                     currentLocation());
+        if (markup != null)
+            markup.addDelim(Syntax.DelimGeneral.dETAGO);
+        return doParseEndTag();
+    }
+
+    // EndElementEvent *doParseEndTag();
+    protected EndElementEvent doParseEndTag()
+    {
+        Markup? markup = currentMarkup();
+        currentInput()!.discardInitial();
+        extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        if (markup != null)
+            markup.addName(currentInput()!);
+        StringC name = nameBuffer();
+        getCurrentToken(syntax().generalSubstTable(), name);
+        ElementType? e = currentDtd().lookupElementType(name);
+        if (sd().rank())
+        {
+            if (e == null)
+                e = completeRankStem(name);
+        }
+        if (e == null)
+            e = lookupCreateUndefinedElement(name, currentLocation(), currentDtdNonConst(), implydefElement() != Sd.ImplydefElement.implydefElementAnyother);
+        parseEndTagClose();
+        return new EndElementEvent(e,
+                                   currentDtdPointer(),
+                                   markupLocation(),
+                                   markup);
+    }
+
+    // void parseEndTagClose();
+    protected void parseEndTagClose()
+    {
+        for (;;)
+        {
+            Token token = getToken(Mode.tagMode);
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    if (!reportNonSgmlCharacter())
+                        message(ParserMessages.endTagCharacter, new StringMessageArg(currentToken()));
+                    return;
+                case Tokens.tokenEe:
+                    message(ParserMessages.endTagEntityEnd);
+                    return;
+                case Tokens.tokenEtago:
+                case Tokens.tokenStago:
+                    if (!sd().endTagUnclosed())
+                        message(ParserMessages.unclosedEndTagShorttag);
+                    currentInput()!.ungetToken();
+                    return;
+                case Tokens.tokenTagc:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addDelim(Syntax.DelimGeneral.dTAGC);
+                    return;
+                case Tokens.tokenS:
+                    if (currentMarkup() != null)
+                        currentMarkup()!.addS(currentChar());
+                    break;
+                default:
+                    message(ParserMessages.endTagInvalidToken,
+                            new TokenMessageArg(token, Mode.tagMode, syntaxPointer(), sdPointer()));
+                    return;
+            }
+        }
+    }
+
+    // void parseEmptyEndTag();
+    protected void parseEmptyEndTag()
+    {
+        if (options().warnEmptyTag)
+            message(ParserMessages.emptyEndTag);
+        if (!currentDtd().isBase())
+            message(ParserMessages.emptyEndTagBaseDtd);
+        if (tagLevel() == 0)
+            message(ParserMessages.emptyEndTagNoOpenElements);
+        else
+        {
+            Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
+                                         currentLocation());
+            if (markup != null)
+            {
+                markup.addDelim(Syntax.DelimGeneral.dETAGO);
+                markup.addDelim(Syntax.DelimGeneral.dTAGC);
+            }
+            acceptEndTag(new EndElementEvent(currentElement().type(),
+                                             currentDtdPointer(),
+                                             currentLocation(),
+                                             markup));
+        }
+    }
+
+    // void parseNullEndTag();
+    protected void parseNullEndTag()
+    {
+        // If a null end tag was recognized, then there must be a net enabling
+        // element on the stack.
+        for (;;)
+        {
+            if (tagLevel() <= 0) break; // ASSERT(tagLevel() > 0);
+            if (currentElement().netEnabling())
+                break;
+            if (!currentElement().isFinished() && validate())
+                message(ParserMessages.elementNotFinished,
+                        new StringMessageArg(currentElement().type()!.name()));
+            implyCurrentElementEnd(currentLocation());
+        }
+        if (!currentElement().isFinished() && validate())
+            message(ParserMessages.elementEndTagNotFinished,
+                    new StringMessageArg(currentElement().type()!.name()));
+        Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
+                                     currentLocation());
+        if (markup != null)
+            markup.addDelim(Syntax.DelimGeneral.dNET);
+        acceptEndTag(new EndElementEvent(currentElement().type(),
+                                         currentDtdPointer(),
+                                         currentLocation(),
+                                         markup));
+    }
+    // void endAllElements();
+    protected void endAllElements()
+    {
+        while (tagLevel() > 0)
+        {
+            if (!currentElement().isFinished())
+                message(ParserMessages.elementNotFinishedDocumentEnd,
+                        new StringMessageArg(currentElement().type()!.name()));
+            implyCurrentElementEnd(currentLocation());
+        }
+        if (!currentElement().isFinished() && validate())
+            message(ParserMessages.noDocumentElement);
+    }
 
     // Boolean parseProcessingInstruction();
     protected Boolean parseProcessingInstruction()
@@ -1622,10 +2226,121 @@ public class Parser : ParserState
         return true;
     }
 
-    protected virtual void handleShortref(int index) { throw new NotImplementedException(); }
-    protected virtual void endInstance() { throw new NotImplementedException(); }
-    protected virtual void checkIdrefs() { throw new NotImplementedException(); }
-    protected virtual void checkTaglen(Index tagStartIndex) { throw new NotImplementedException(); }
+    // void handleShortref(int index);
+    protected void handleShortref(int index)
+    {
+        ConstPtr<Entity> entity = currentElement().map()!.entity((nuint)index);
+        if (!entity.isNull())
+        {
+            Owner<Markup> markupPtr = new Owner<Markup>();
+            if (eventsWanted().wantInstanceMarkup())
+            {
+                markupPtr = new Owner<Markup>(new Markup());
+                markupPtr.pointer()!.addShortref(currentInput()!);
+            }
+            EntityOrigin originEntity = EntityOrigin.make(internalAllocator(),
+                                                          entity,
+                                                          currentLocation(),
+                                                          (uint)currentInput()!.currentTokenLength(),
+                                                          markupPtr);
+            Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>(originEntity);
+            entity.pointer()!.contentReference(this, origin);
+            return;
+        }
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        nuint length = ins.currentTokenLength();
+        Char[]? s = ins.currentTokenStart();
+        nuint i = 0;
+        if (currentMode() == Mode.econMode || currentMode() == Mode.econnetMode)
+        {
+            // FIXME do this in advance (what about B sequence?)
+            for (i = 0; i < length && s != null && syntax().isS((Xchar)s[i]); i++)
+                ;
+            if (i > 0 && eventsWanted().wantInstanceMarkup())
+                eventHandler().sSep(new SSepEvent(s, i, currentLocation(), false));
+        }
+        if (i < length)
+        {
+            Location location = new Location(currentLocation());
+            location.operatorPlusAssign((Index)i);
+            acceptPcdata(location);
+            if (sd().keeprsre())
+            {
+                noteData();
+                if (s != null)
+                {
+                    Char[] subArray = new Char[length - i];
+                    Array.Copy(s, (int)i, subArray, 0, (int)(length - i));
+                    eventHandler().data(new ImmediateDataEvent(Event.Type.characterData, subArray, length - i,
+                                                               location, false));
+                }
+                return;
+            }
+            // FIXME speed this up
+            for (; length > 0 && s != null; location.operatorPlusAssign(1), length--, i++)
+            {
+                if (s[i] == syntax().standardFunction((int)Syntax.StandardFunction.fRS))
+                {
+                    noteRs();
+                    if (eventsWanted().wantInstanceMarkup())
+                        eventHandler().ignoredRs(new IgnoredRsEvent(s[i], location));
+                }
+                else if (s[i] == syntax().standardFunction((int)Syntax.StandardFunction.fRE))
+                    queueRe(location);
+                else
+                {
+                    noteData();
+                    Char[] singleChar = new Char[] { s[i] };
+                    eventHandler().data(new ImmediateDataEvent(Event.Type.characterData, singleChar, 1,
+                                                               location, false));
+                }
+            }
+        }
+    }
+    // void endInstance();
+    protected void endInstance()
+    {
+        // Do checking before popping entity stack so that there's a
+        // current location for error messages.
+        endAllElements();
+        while (markedSectionLevel() > 0)
+        {
+            // TODO: auxiliary location support - currentMarkedSectionStartLocation()
+            message(ParserMessages.unclosedMarkedSection,
+                    new StringMessageArg(new StringC()));
+            endMarkedSection();
+        }
+        checkIdrefs();
+        popInputStack();
+        allDone();
+    }
+
+    // void checkIdrefs();
+    protected void checkIdrefs()
+    {
+        NamedTableIter<Id> iter = idTableIter();
+        Id? id;
+        while ((id = iter.next()) != null)
+        {
+            for (nuint i = 0; i < id.pendingRefs().size(); i++)
+            {
+                setNextLocation(id.pendingRefs()[(int)i]);
+                message(ParserMessages.missingId, new StringMessageArg(id.name()));
+            }
+        }
+    }
+    // void checkTaglen(Index tagStartIndex);
+    protected void checkTaglen(Index tagStartIndex)
+    {
+        InputSourceOrigin? origin = currentLocation().origin().pointer()?.asInputSourceOrigin();
+        if (origin == null) return;
+        if (origin.startOffset(currentLocation().index())
+            - origin.startOffset(tagStartIndex
+                                 + (Index)syntax().delimGeneral((int)Syntax.DelimGeneral.dSTAGO).size())
+            > syntax().taglen())
+            message(ParserMessages.taglen, new NumberMessageArg(syntax().taglen()));
+    }
     protected virtual void endProlog() { throw new NotImplementedException(); }
 
     // From parseAttribute.cxx
@@ -1638,4 +2353,646 @@ public class Parser : ParserState
     protected virtual Boolean implySgmlDecl() { throw new NotImplementedException(); }
     protected virtual Boolean scanForSgmlDecl(CharsetInfo initCharset) { throw new NotImplementedException(); }
     protected virtual Boolean parseSgmlDecl() { throw new NotImplementedException(); }
+
+    // Additional helper methods from parseInstance.cxx
+
+    // void acceptEndTag(EndElementEvent *event);
+    protected void acceptEndTag(EndElementEvent? @event)
+    {
+        if (@event == null) return;
+        ElementType? e = @event.elementType();
+        if (e == null || !elementIsOpen(e))
+        {
+            message(ParserMessages.elementNotOpen, new StringMessageArg(e?.name() ?? new StringC()));
+            return;
+        }
+        for (;;)
+        {
+            if (currentElement().type() == e)
+                break;
+            if (!currentElement().isFinished() && validate())
+                message(ParserMessages.elementNotFinished,
+                        new StringMessageArg(currentElement().type()!.name()));
+            implyCurrentElementEnd(@event.location());
+        }
+        if (!currentElement().isFinished() && validate())
+            message(ParserMessages.elementEndTagNotFinished,
+                    new StringMessageArg(currentElement().type()!.name()));
+        if (currentElement().included())
+            @event.setIncluded();
+        noteEndElement(@event.included());
+        eventHandler().endElement(@event);
+        popElement();
+    }
+
+    // void implyCurrentElementEnd(const Location &loc);
+    protected void implyCurrentElementEnd(Location loc)
+    {
+        if (!sd().omittag())
+            message(ParserMessages.omitEndTagOmittag,
+                    new StringMessageArg(currentElement().type()!.name()),
+                    new LocationMessageArg(currentElement().startLocation()));
+        else
+        {
+            ElementDefinition? def = currentElement().type()?.definition();
+            if (def != null && !def.canOmitEndTag())
+                message(ParserMessages.omitEndTagDeclare,
+                        new StringMessageArg(currentElement().type()!.name()),
+                        new LocationMessageArg(currentElement().startLocation()));
+        }
+        EndElementEvent @event = new EndElementEvent(currentElement().type(),
+                                                     currentDtdPointer(),
+                                                     loc,
+                                                     null);
+        if (currentElement().included())
+            @event.setIncluded();
+        noteEndElement(@event.included());
+        eventHandler().endElement(@event);
+        popElement();
+    }
+
+    // void acceptPcdata(const Location &startLocation);
+    protected void acceptPcdata(Location startLocation)
+    {
+        if (currentElement().tryTransitionPcdata())
+            return;
+        // Need to test here since implying tags may turn off pcdataRecovering.
+        if (pcdataRecovering())
+            return;
+        IList<Undo> undoList = new IList<Undo>();
+        IList<Event> eventList = new IList<Event>();
+        uint startImpliedCount = 0;
+        uint attributeListIndex = 0;
+        keepMessages();
+        while (tryImplyTag(startLocation, ref startImpliedCount, ref attributeListIndex,
+                           undoList, eventList))
+            if (currentElement().tryTransitionPcdata())
+            {
+                queueElementEvents(eventList);
+                return;
+            }
+        discardKeptMessages();
+        undo(undoList);
+        if (validate() || afterDocumentElement())
+            message(ParserMessages.pcdataNotAllowed);
+        pcdataRecover();
+    }
+
+    // void undo(IList<Undo> &undoList);
+    protected void undo(IList<Undo> undoList)
+    {
+        while (!undoList.empty())
+        {
+            Undo? p = undoList.get();
+            if (p != null)
+                p.undo(this);
+        }
+    }
+
+    // void queueElementEvents(IList<Event> &events);
+    protected void queueElementEvents(IList<Event> events)
+    {
+        releaseKeptMessages();
+        // FIXME provide IList<T>::reverse function
+        // reverse it
+        IList<Event> tem = new IList<Event>();
+        while (!events.empty())
+            tem.insert(events.get());
+        while (!tem.empty())
+        {
+            Event? e = tem.get();
+            if (e == null) continue;
+            if (e.type() == Event.Type.startElement)
+            {
+                StartElementEvent? se = e as StartElementEvent;
+                if (se != null)
+                {
+                    noteStartElement(se.included());
+                    eventHandler().startElement(se);
+                }
+            }
+            else
+            {
+                EndElementEvent? ee = e as EndElementEvent;
+                if (ee != null)
+                {
+                    noteEndElement(ee.included());
+                    eventHandler().endElement(ee);
+                }
+            }
+        }
+    }
+
+    // Boolean tryImplyTag(const Location &loc, unsigned &startImpliedCount,
+    //                     unsigned &attributeListIndex, IList<Undo> &undo, IList<Event> &eventList);
+    protected Boolean tryImplyTag(Location loc,
+                                  ref uint startImpliedCount,
+                                  ref uint attributeListIndex,
+                                  IList<Undo> undoList,
+                                  IList<Event> eventList)
+    {
+        if (!sd().omittag())
+            return false;
+        if (currentElement().isFinished())
+        {
+            if (tagLevel() == 0)
+                return false;
+            ElementDefinition? def = currentElement().type()?.definition();
+            if (def != null && !def.canOmitEndTag())
+                return false;
+            // imply an end tag
+            if (startImpliedCount > 0)
+            {
+                message(ParserMessages.startTagEmptyElement,
+                        new StringMessageArg(currentElement().type()!.name()));
+                startImpliedCount--;
+            }
+            EndElementEvent @event = new EndElementEvent(currentElement().type(),
+                                                         currentDtdPointer(),
+                                                         loc,
+                                                         null);
+            eventList.insert(@event);
+            undoList.insert(new UndoEndTag(popSaveElement()));
+            return true;
+        }
+        LeafContentToken? token = currentElement().impliedStartTag();
+        if (token == null)
+            return false;
+        ElementType? e = token.elementType();
+        if (e == null) return false;
+        if (elementIsExcluded(e))
+            message(ParserMessages.requiredElementExcluded,
+                    new OrdinalMessageArg(token.typeIndex() + 1),
+                    new StringMessageArg(e.name()),
+                    new StringMessageArg(currentElement().type()!.name()));
+        if (tagLevel() != 0)
+            undoList.insert(new UndoTransition(currentElement().matchState()));
+        currentElement().doRequiredTransition();
+        ElementDefinition? eDef = e.definition();
+        if (eDef == null) return false;
+        if (eDef.declaredContent() != ElementDefinition.DeclaredContent.modelGroup
+            && eDef.declaredContent() != ElementDefinition.DeclaredContent.any)
+            message(ParserMessages.omitStartTagDeclaredContent,
+                    new StringMessageArg(e.name()));
+        if (eDef.undefined())
+            message(ParserMessages.undefinedElement, new StringMessageArg(e.name()));
+        else if (!eDef.canOmitStartTag())
+            message(ParserMessages.omitStartTagDeclare, new StringMessageArg(e.name()));
+        AttributeList? attributes = allocAttributeList(e.attributeDef(),
+                                                       attributeListIndex++);
+        // this will give an error if the element has a required attribute
+        attributes?.finish(this);
+        startImpliedCount++;
+        StartElementEvent startEvent = new StartElementEvent(e,
+                                                             currentDtdPointer(),
+                                                             attributes,
+                                                             loc,
+                                                             null);
+        pushElementCheck(e, startEvent, undoList, eventList);
+        const int implyCheckLimit = 30; // this is fairly arbitrary
+        if (startImpliedCount > implyCheckLimit
+            && !checkImplyLoop(startImpliedCount))
+            return false;
+        return true;
+    }
+
+    // void pushElementCheck(const ElementType *e, StartElementEvent *event, Boolean netEnabling);
+    protected void pushElementCheck(ElementType? e, StartElementEvent? @event, Boolean netEnabling)
+    {
+        if (e == null || @event == null) return;
+        if (tagLevel() == syntax().taglvl())
+            message(ParserMessages.taglvlOpenElements, new NumberMessageArg(syntax().taglvl()));
+        noteStartElement(@event.included());
+        if (@event.mustOmitEnd())
+        {
+            if (sd().emptyElementNormal())
+            {
+                Boolean included = @event.included();
+                Location loc = new Location(@event.location());
+                eventHandler().startElement(@event);
+                endTagEmptyElement(e, netEnabling, included, loc);
+            }
+            else
+            {
+                EndElementEvent end = new EndElementEvent(e,
+                                                          currentDtdPointer(),
+                                                          @event.location(),
+                                                          null);
+                if (@event.included())
+                {
+                    end.setIncluded();
+                    noteEndElement(true);
+                }
+                else
+                    noteEndElement(false);
+                eventHandler().startElement(@event);
+                eventHandler().endElement(end);
+            }
+        }
+        else
+        {
+            ShortReferenceMap? map = e.map();
+            if (map == null)
+                map = currentElement().map();
+            if (options().warnImmediateRecursion
+                && e == currentElement().type())
+                message(ParserMessages.immediateRecursion);
+            pushElement(new OpenElement(e,
+                                        netEnabling,
+                                        @event.included(),
+                                        map,
+                                        @event.location()));
+            // Can't access event after it's passed to the event handler.
+            eventHandler().startElement(@event);
+        }
+    }
+
+    // void pushElementCheck(const ElementType *e, StartElementEvent *event,
+    //                       IList<Undo> &undoList, IList<Event> &eventList);
+    protected void pushElementCheck(ElementType? e, StartElementEvent? @event,
+                                    IList<Undo> undoList, IList<Event> eventList)
+    {
+        if (e == null || @event == null) return;
+        if (tagLevel() == syntax().taglvl())
+            message(ParserMessages.taglvlOpenElements, new NumberMessageArg(syntax().taglvl()));
+        eventList.insert(@event);
+        if (@event.mustOmitEnd())
+        {
+            EndElementEvent end = new EndElementEvent(e,
+                                                      currentDtdPointer(),
+                                                      @event.location(),
+                                                      null);
+            if (@event.included())
+                end.setIncluded();
+            eventList.insert(end);
+        }
+        else
+        {
+            undoList.insert(new UndoStartTag());
+            ShortReferenceMap? map = e.map();
+            if (map == null)
+                map = currentElement().map();
+            pushElement(new OpenElement(e,
+                                        false,
+                                        @event.included(),
+                                        map,
+                                        @event.location()));
+        }
+    }
+
+    // void endTagEmptyElement(const ElementType *e, Boolean netEnabling,
+    //                         Boolean included, const Location &startLoc);
+    protected void endTagEmptyElement(ElementType e, Boolean netEnabling,
+                                      Boolean included, Location startLoc)
+    {
+        Token token = getToken(netEnabling ? Mode.econnetMode : Mode.econMode);
+        switch (token)
+        {
+            case Tokens.tokenNet:
+                if (netEnabling)
+                {
+                    Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
+                                                 currentLocation());
+                    if (markup != null)
+                        markup.addDelim(Syntax.DelimGeneral.dNET);
+                    EndElementEvent end = new EndElementEvent(e,
+                                                              currentDtdPointer(),
+                                                              currentLocation(),
+                                                              markup);
+                    if (included)
+                        end.setIncluded();
+                    eventHandler().endElement(end);
+                    noteEndElement(included);
+                    return;
+                }
+                break;
+            case Tokens.tokenEtagoTagc:
+                {
+                    if (options().warnEmptyTag)
+                        message(ParserMessages.emptyEndTag);
+                    Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
+                                                 currentLocation());
+                    if (markup != null)
+                    {
+                        markup.addDelim(Syntax.DelimGeneral.dETAGO);
+                        markup.addDelim(Syntax.DelimGeneral.dTAGC);
+                    }
+                    EndElementEvent end = new EndElementEvent(e,
+                                                              currentDtdPointer(),
+                                                              currentLocation(),
+                                                              markup);
+                    if (included)
+                        end.setIncluded();
+                    eventHandler().endElement(end);
+                    noteEndElement(included);
+                    return;
+                }
+            case Tokens.tokenEtagoNameStart:
+                {
+                    EndElementEvent? end = parseEndTag();
+                    if (end != null && end.elementType() == e)
+                    {
+                        if (included)
+                            end.setIncluded();
+                        eventHandler().endElement(end);
+                        noteEndElement(included);
+                        return;
+                    }
+                    if (end != null && !elementIsOpen(end.elementType()))
+                    {
+                        message(ParserMessages.elementNotOpen,
+                                new StringMessageArg(end.elementType()?.name() ?? new StringC()));
+                        break;
+                    }
+                    implyEmptyElementEnd(e, included, startLoc);
+                    acceptEndTag(end);
+                    return;
+                }
+            default:
+                break;
+        }
+        implyEmptyElementEnd(e, included, startLoc);
+        currentInput()?.ungetToken();
+    }
+
+    // void implyEmptyElementEnd(const ElementType *e, Boolean included, const Location &startLoc);
+    protected void implyEmptyElementEnd(ElementType e, Boolean included, Location startLoc)
+    {
+        if (!sd().omittag())
+            message(ParserMessages.omitEndTagOmittag,
+                    new StringMessageArg(e.name()),
+                    new LocationMessageArg(startLoc));
+        else
+        {
+            ElementDefinition? def = e.definition();
+            if (def != null && !def.canOmitEndTag())
+                message(ParserMessages.omitEndTagDeclare,
+                        new StringMessageArg(e.name()),
+                        new LocationMessageArg(startLoc));
+        }
+        EndElementEvent end = new EndElementEvent(e,
+                                                  currentDtdPointer(),
+                                                  currentLocation(),
+                                                  null);
+        if (included)
+            end.setIncluded();
+        noteEndElement(included);
+        eventHandler().endElement(end);
+    }
+
+    // void acceptStartTag(const ElementType *e, StartElementEvent *event, Boolean netEnabling);
+    protected void acceptStartTag(ElementType? e, StartElementEvent? @event, Boolean netEnabling)
+    {
+        if (e == null || @event == null) return;
+        if (e.definition()!.undefined() && implydefElement() == Sd.ImplydefElement.implydefElementNo)
+            message(ParserMessages.undefinedElement, new StringMessageArg(e.name()));
+        if (elementIsExcluded(e))
+        {
+            keepMessages();
+            if (validate())
+                checkExclusion(e);
+        }
+        else
+        {
+            if (currentElement().tryTransition(e))
+            {
+                pushElementCheck(e, @event, netEnabling);
+                return;
+            }
+            if (elementIsIncluded(e))
+            {
+                @event.setIncluded();
+                pushElementCheck(e, @event, netEnabling);
+                return;
+            }
+            keepMessages();
+        }
+        IList<Undo> undoList = new IList<Undo>();
+        IList<Event> eventList = new IList<Event>();
+        uint startImpliedCount = 0;
+        uint attributeListIndex = 1;
+        while (tryImplyTag(@event.location(), ref startImpliedCount,
+                           ref attributeListIndex, undoList, eventList))
+            if (tryStartTag(e, @event, netEnabling, eventList))
+                return;
+        discardKeptMessages();
+        undo(undoList);
+        if (validate() && !e.definition()!.undefined())
+            handleBadStartTag(e, @event, netEnabling);
+        else
+        {
+            if (validate() ? (implydefElement() != Sd.ImplydefElement.implydefElementNo) : afterDocumentElement())
+                message(ParserMessages.elementNotAllowed, new StringMessageArg(e.name()));
+            // If element couldn't occur because it was excluded, then
+            // do the transition here.
+            currentElement().tryTransition(e);
+            pushElementCheck(e, @event, netEnabling);
+        }
+    }
+
+    // Boolean tryStartTag(const ElementType *e, StartElementEvent *event,
+    //                     Boolean netEnabling, IList<Event> &impliedEvents);
+    protected Boolean tryStartTag(ElementType? e, StartElementEvent? @event,
+                                  Boolean netEnabling, IList<Event> impliedEvents)
+    {
+        if (e == null || @event == null) return false;
+        if (elementIsExcluded(e))
+        {
+            checkExclusion(e);
+            return false;
+        }
+        if (currentElement().tryTransition(e))
+        {
+            queueElementEvents(impliedEvents);
+            pushElementCheck(e, @event, netEnabling);
+            return true;
+        }
+        if (elementIsIncluded(e))
+        {
+            queueElementEvents(impliedEvents);
+            @event.setIncluded();
+            pushElementCheck(e, @event, netEnabling);
+            return true;
+        }
+        return false;
+    }
+
+    // void checkExclusion(const ElementType *e);
+    protected void checkExclusion(ElementType? e)
+    {
+        LeafContentToken? token = currentElement().invalidExclusion(e);
+        if (token != null)
+            message(ParserMessages.invalidExclusion,
+                    new OrdinalMessageArg(token.typeIndex() + 1),
+                    new StringMessageArg(token.elementType()!.name()),
+                    new StringMessageArg(currentElement().type()!.name()));
+    }
+
+    // void handleBadStartTag(const ElementType *e, StartElementEvent *event, Boolean netEnabling);
+    protected void handleBadStartTag(ElementType e, StartElementEvent @event, Boolean netEnabling)
+    {
+        IList<Undo> undoList = new IList<Undo>();
+        IList<Event> eventList = new IList<Event>();
+        keepMessages();
+        for (;;)
+        {
+            Vector<ElementType?> missing = new Vector<ElementType?>();
+            findMissingTag(e, missing);
+            if (missing.size() == 1)
+            {
+                queueElementEvents(eventList);
+                ElementType? m = missing[0];
+                if (m != null)
+                {
+                    message(ParserMessages.missingElementInferred,
+                            new StringMessageArg(e.name()),
+                            new StringMessageArg(m.name()));
+                    AttributeList? attributes = allocAttributeList(m.attributeDef(), 1);
+                    // this will give an error if the element has a required attribute
+                    attributes?.finish(this);
+                    StartElementEvent inferEvent = new StartElementEvent(m,
+                                                                         currentDtdPointer(),
+                                                                         attributes,
+                                                                         @event.location(),
+                                                                         null);
+                    if (!currentElement().tryTransition(m))
+                        inferEvent.setIncluded();
+                    pushElementCheck(m, inferEvent, false);
+                    if (!currentElement().tryTransition(e))
+                        @event.setIncluded();
+                    pushElementCheck(e, @event, netEnabling);
+                }
+                return;
+            }
+            if (missing.size() > 0)
+            {
+                queueElementEvents(eventList);
+                Vector<StringC> missingNames = new Vector<StringC>();
+                for (nuint i = 0; i < missing.size(); i++)
+                    if (missing[i] != null)
+                        missingNames.push_back(missing[i]!.name());
+                message(ParserMessages.missingElementMultiple,
+                        new StringMessageArg(e.name()),
+                        new StringVectorMessageArg(missingNames));
+                pushElementCheck(e, @event, netEnabling);
+                return;
+            }
+            if (!sd().omittag()
+                || !currentElement().isFinished()
+                || tagLevel() == 0
+                || !currentElement().type()!.definition()!.canOmitEndTag())
+                break;
+            EndElementEvent endEvent = new EndElementEvent(currentElement().type(),
+                                                           currentDtdPointer(),
+                                                           @event.location(),
+                                                           null);
+            eventList.insert(endEvent);
+            undoList.insert(new UndoEndTag(popSaveElement()));
+        }
+        discardKeptMessages();
+        undo(undoList);
+        message(ParserMessages.elementNotAllowed, new StringMessageArg(e.name()));
+        // If element couldn't occur because it was excluded, then
+        // do the transition here.
+        currentElement().tryTransition(e);
+        pushElementCheck(e, @event, netEnabling);
+    }
+
+    // void findMissingTag(const ElementType *e, Vector<const ElementType *> &v);
+    protected void findMissingTag(ElementType? e, Vector<ElementType?> v)
+    {
+        if (currentElement().currentPosition() == null)
+        {
+            if (e == null)
+                v.push_back(null);
+            return;
+        }
+        if (elementIsExcluded(e))
+            return;
+        nuint newSize = 0;
+        currentElement().matchState().possibleTransitions(v);
+        // FIXME also get currentInclusions
+        for (nuint i = 0; i < v.size(); i++)
+        {
+            if (v[i] != null && !elementIsExcluded(v[i]))
+            {
+                Boolean success = false;
+                ElementDefinition? def = v[i]!.definition();
+                if (def == null) continue;
+                switch (def.declaredContent())
+                {
+                    case ElementDefinition.DeclaredContent.modelGroup:
+                        {
+                            CompiledModelGroup? grp = def.compiledModelGroup();
+                            if (grp == null) continue;
+                            MatchState state = new MatchState(grp);
+                            if (e == null)
+                            {
+                                if (state.tryTransitionPcdata())
+                                    success = true;
+                            }
+                            else
+                            {
+                                if (state.tryTransition(e))
+                                    success = true;
+                                if (!success)
+                                {
+                                    for (nuint j = 0; j < def.nInclusions(); j++)
+                                        if (def.inclusion(j) == e)
+                                        {
+                                            success = true;
+                                            break;
+                                        }
+                                }
+                                if (success)
+                                {
+                                    for (nuint j = 0; j < def.nExclusions(); j++)
+                                        if (def.exclusion(j) == e)
+                                        {
+                                            success = false;
+                                            break;
+                                        }
+                                }
+                            }
+                        }
+                        break;
+                    case ElementDefinition.DeclaredContent.cdata:
+                    case ElementDefinition.DeclaredContent.rcdata:
+                        if (e == null)
+                            success = true;
+                        break;
+                    default:
+                        break;
+                }
+                if (success)
+                    v[newSize++] = v[i];
+            }
+        }
+        v.resize(newSize);
+        // Sort them according to the order of their occurrence in the DTD.
+        // Do an insertion sort.
+        for (nuint i = 1; i < v.size(); i++)
+        {
+            ElementType? tem = v[i];
+            nuint j;
+            for (j = i; j > 0 && v[j - 1] != null && tem != null && v[j - 1]!.index() > tem.index(); j--)
+                v[j] = v[j - 1];
+            v[j] = tem;
+        }
+    }
+
+    // ElementType *completeRankStem(const StringC &name);
+    protected ElementType? completeRankStem(StringC name)
+    {
+        RankStem? rankStem = currentDtd().lookupRankStem(name);
+        if (rankStem != null)
+        {
+            StringC fullName = new StringC(rankStem.name());
+            if (!appendCurrentRank(fullName, rankStem))
+                message(ParserMessages.noCurrentRank, new StringMessageArg(fullName));
+            else
+                return currentDtdNonConst().lookupElementType(fullName);
+        }
+        return null;
+    }
 }

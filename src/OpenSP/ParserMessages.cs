@@ -228,4 +228,90 @@ public static class ParserMessages
         MessageType.Severity.error, null, 137, "invalid comment declaration: found character %1 outside comment but inside comment declaration");
     public static readonly MessageType1L commentDeclInvalidToken = new MessageType1L(
         MessageType.Severity.error, null, 53, "invalid comment declaration: found %1 outside comment but inside comment declaration");
+
+    // parseInstance messages
+    public static readonly MessageType0 instanceStartOmittag = new MessageType0(
+        MessageType.Severity.error, null, 300, "start of instance requires element; OMITTAG NO prevents implicit document element");
+    public static readonly MessageType0 specialParseEntityEnd = new MessageType0(
+        MessageType.Severity.error, null, 301, "entity ended in special parse");
+    public static readonly MessageType0 afterDocumentElementEntityEnd = new MessageType0(
+        MessageType.Severity.warning, null, 302, "entity reference after document element");
+    public static readonly MessageType0 contentAsyncEntityRef = new MessageType0(
+        MessageType.Severity.error, null, 303, "entity referenced in content asynchronously");
+    public static readonly MessageType0 characterReferenceAfterDocumentElement = new MessageType0(
+        MessageType.Severity.warning, null, 304, "character reference after document element");
+    public static readonly MessageType0 entityReferenceAfterDocumentElement = new MessageType0(
+        MessageType.Severity.warning, null, 305, "entity reference after document element");
+    public static readonly MessageType1 declarationAfterDocumentElement = new MessageType1(
+        MessageType.Severity.warning, null, 306, "%1 declaration after document element");
+    public static readonly MessageType1 instanceDeclaration = new MessageType1(
+        MessageType.Severity.error, null, 307, "%1 declaration not allowed in document instance");
+    public static readonly MessageType1 noSuchDeclarationType = new MessageType1(
+        MessageType.Severity.error, null, 308, "unknown declaration type %1");
+    public static readonly MessageType0 markedSectionAfterDocumentElement = new MessageType0(
+        MessageType.Severity.warning, null, 309, "marked section after document element");
+    public static readonly MessageType0 emptyStartTag = new MessageType0(
+        MessageType.Severity.warning, null, 310, "empty start tag");
+    public static readonly MessageType0 emptyStartTagBaseDtd = new MessageType0(
+        MessageType.Severity.error, null, 311, "empty start tag not allowed except in base document type");
+    public static readonly MessageType1 endTagCharacter = new MessageType1(
+        MessageType.Severity.error, null, 312, "character '%1' not allowed in end tag");
+    public static readonly MessageType0 endTagEntityEnd = new MessageType0(
+        MessageType.Severity.error, null, 313, "entity ended within end tag");
+    public static readonly MessageType0 unclosedEndTagShorttag = new MessageType0(
+        MessageType.Severity.warning, null, 314, "unclosed end tag requires SHORTTAG YES");
+    public static readonly MessageType1 endTagInvalidToken = new MessageType1(
+        MessageType.Severity.error, null, 315, "invalid token %1 in end tag");
+    public static readonly MessageType0 emptyEndTag = new MessageType0(
+        MessageType.Severity.warning, null, 316, "empty end tag");
+    public static readonly MessageType0 emptyEndTagBaseDtd = new MessageType0(
+        MessageType.Severity.error, null, 317, "empty end tag not allowed except in base document type");
+    public static readonly MessageType0 emptyEndTagNoOpenElements = new MessageType0(
+        MessageType.Severity.error, null, 318, "empty end tag requires open element");
+    public static readonly MessageType1 elementNotFinished = new MessageType1(
+        MessageType.Severity.warning, null, 319, "element '%1' not finished");
+    public static readonly MessageType1 elementEndTagNotFinished = new MessageType1(
+        MessageType.Severity.warning, null, 320, "element '%1' not finished but end tag found");
+    public static readonly MessageType1 elementNotFinishedDocumentEnd = new MessageType1(
+        MessageType.Severity.warning, null, 321, "element '%1' not finished at end of document");
+    public static readonly MessageType0 noDocumentElement = new MessageType0(
+        MessageType.Severity.error, null, 322, "document element not found");
+    public static readonly MessageType1 unclosedMarkedSection = new MessageType1(
+        MessageType.Severity.error, null, 323, "marked section not closed");
+    public static readonly MessageType1 missingId = new MessageType1(
+        MessageType.Severity.error, null, 324, "referenced ID '%1' not defined");
+    public static readonly MessageType1 taglen = new MessageType1(
+        MessageType.Severity.error, null, 325, "tag length exceeds TAGLEN (%1)");
+    public static readonly MessageType1 elementNotOpen = new MessageType1(
+        MessageType.Severity.error, null, 326, "end tag for element '%1' which is not open");
+    public static readonly MessageType2 omitEndTagOmittag = new MessageType2(
+        MessageType.Severity.warning, null, 327, "end tag for '%1' omitted, but OMITTAG NO");
+    public static readonly MessageType2 omitEndTagDeclare = new MessageType2(
+        MessageType.Severity.warning, null, 328, "end tag for '%1' omitted, but end tag minimization is - (MINUS)");
+    public static readonly MessageType0 pcdataNotAllowed = new MessageType0(
+        MessageType.Severity.error, null, 329, "#PCDATA not allowed here");
+    public static readonly MessageType1 startTagEmptyElement = new MessageType1(
+        MessageType.Severity.warning, null, 330, "start tag implied for element '%1' but it cannot have content");
+    public static readonly MessageType3 requiredElementExcluded = new MessageType3(
+        MessageType.Severity.error, null, 331, "required element '%2' at position %1 in content model for '%3' is excluded");
+    public static readonly MessageType1 omitStartTagDeclaredContent = new MessageType1(
+        MessageType.Severity.error, null, 332, "start tag omitted for element '%1' with non-mixed content");
+    public static readonly MessageType1 undefinedElement = new MessageType1(
+        MessageType.Severity.error, null, 333, "element '%1' undefined");
+    public static readonly MessageType1 omitStartTagDeclare = new MessageType1(
+        MessageType.Severity.warning, null, 334, "start tag for '%1' omitted, but start tag minimization is - (MINUS)");
+    public static readonly MessageType1 taglvlOpenElements = new MessageType1(
+        MessageType.Severity.error, null, 335, "number of open elements exceeds TAGLVL (%1)");
+    public static readonly MessageType0 immediateRecursion = new MessageType0(
+        MessageType.Severity.warning, null, 336, "immediately recursive element");
+    public static readonly MessageType2 missingElementInferred = new MessageType2(
+        MessageType.Severity.warning, null, 337, "element '%1' requires '%2'; inserting '%2'");
+    public static readonly MessageType2 missingElementMultiple = new MessageType2(
+        MessageType.Severity.error, null, 338, "element '%1' not allowed here; missing one of: %2");
+    public static readonly MessageType1 elementNotAllowed = new MessageType1(
+        MessageType.Severity.error, null, 339, "element '%1' not allowed here");
+    public static readonly MessageType3 invalidExclusion = new MessageType3(
+        MessageType.Severity.warning, null, 340, "element '%2' at position %1 in '%3' excluded but required");
+    public static readonly MessageType1 noCurrentRank = new MessageType1(
+        MessageType.Severity.error, null, 341, "no current rank for rank stem '%1'");
 }

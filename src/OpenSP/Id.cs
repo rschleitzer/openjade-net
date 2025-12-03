@@ -40,3 +40,11 @@ public class Id : Named
         pendingRefs_.push_back(new Location(loc));
     }
 }
+
+// IdTableIter is used to iterate over IdTable (which is a NamedTable<Id>)
+public class IdTableIter : NamedTableIter<Id>
+{
+    public IdTableIter(NamedTable<Id> table) : base(table)
+    {
+    }
+}
