@@ -16,7 +16,9 @@ public class ParserState : ContentState
     }
 
     private static readonly Location nullLocation_ = new Location();
+#pragma warning disable CS0414 // Field is assigned but never used
     private static int dummyCancel_ = 0;
+#pragma warning restore CS0414
 
     private ParserOptions options_;
     private EventHandler? handler_;
@@ -605,7 +607,7 @@ public class ParserState : ContentState
                 && !resultAttributeSpecMode_
                 && (entity.isNull() || !entity.pointer()!.declInActiveLpd()))
             {
-                ConstPtr<Entity> entity1 = new ConstPtr<Entity>(pass1Dtd_.pointer()?.lookupEntity(isParameter, name));
+                ConstPtr<Entity> entity1 = pass1Dtd_.pointer()?.lookupEntity(isParameter, name) ?? new ConstPtr<Entity>();
                 if (!entity1.isNull() && entity1.pointer()!.declInActiveLpd()
                     && !entity1.pointer()!.defaulted())
                 {
@@ -639,7 +641,7 @@ public class ParserState : ContentState
                 {
                     if (referenced)
                         note = true;
-                    ConstPtr<Entity> entity1 = new ConstPtr<Entity>(pass1Dtd_.pointer()?.defaultEntity());
+                    ConstPtr<Entity> entity1 = pass1Dtd_.pointer()?.defaultEntity() ?? new ConstPtr<Entity>();
                     if (!entity1.isNull() && entity1.pointer()!.declInActiveLpd())
                     {
                         usedPass1 = true;
@@ -766,11 +768,11 @@ public class ParserState : ContentState
         foreach (var pair in lpdEntityRefs_)
         {
             LpdEntityRef entityRef = pair.Value;
-            ConstPtr<Entity> entity = new ConstPtr<Entity>(dtd_[0].pointer()?.lookupEntity(
+            ConstPtr<Entity> entity = dtd_[0].pointer()?.lookupEntity(
                 entityRef.entity.pointer()!.declType() == Entity.DeclType.parameterEntity,
-                entityRef.entity.pointer()!.name()));
+                entityRef.entity.pointer()!.name()) ?? new ConstPtr<Entity>();
             if (entity.isNull() && entityRef.lookedAtDefault)
-                entity = new ConstPtr<Entity>(dtd_[0].pointer()?.defaultEntity());
+                entity = dtd_[0].pointer()?.defaultEntity() ?? new ConstPtr<Entity>();
             if (entity.isNull()
                 ? entityRef.foundInPass1Dtd
                 : !sameEntityDef(entityRef.entity.pointer()!, entity.pointer()!))
@@ -806,7 +808,8 @@ public class ParserState : ContentState
     {
         InputSource? ins = currentInput();
         if (ins == null) return;
-        Char[] p = ins.currentTokenStart();
+        Char[]? p = ins.currentTokenStart();
+        if (p == null) return;
         nuint count = ins.currentTokenLength();
         str.resize(count);
         for (nuint i = 0; i < count; i++)
@@ -1109,7 +1112,8 @@ public class ParserState : ContentState
     // Char currentChar() const;
     public Char currentChar()
     {
-        return currentInput()!.currentTokenStart()[0];
+        Char[]? start = currentInput()?.currentTokenStart();
+        return start != null ? start[0] : 0;
     }
 
     // StringC currentToken() const;
@@ -1117,7 +1121,9 @@ public class ParserState : ContentState
     {
         InputSource? ins = currentInput();
         if (ins == null) return new StringC();
-        return new StringC(ins.currentTokenStart(), ins.currentTokenLength());
+        Char[]? start = ins.currentTokenStart();
+        if (start == null) return new StringC();
+        return new StringC(start, ins.currentTokenLength());
     }
 
     // void getCurrentToken(StringC &str) const;
@@ -1125,7 +1131,9 @@ public class ParserState : ContentState
     {
         InputSource? ins = currentInput();
         if (ins == null) return;
-        str.assign(ins.currentTokenStart(), ins.currentTokenLength());
+        Char[]? start = ins.currentTokenStart();
+        if (start == null) return;
+        str.assign(start, ins.currentTokenLength());
     }
 
     // void setRecognizer(Mode mode, ConstPtr<Recognizer> p);
@@ -1581,7 +1589,7 @@ public class ParserState : ContentState
     }
 
     // Boolean validate() const (from AttributeContext)
-    public Boolean validate()
+    public new Boolean validate()
     {
         return validate_;
     }

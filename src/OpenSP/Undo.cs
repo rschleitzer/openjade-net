@@ -50,6 +50,8 @@ public class UndoEndTag : Undo
 
     public override void undo(ParserState parser)
     {
-        parser.pushElement(element_.extract());
+        OpenElement? e = element_.extract();
+        if (e != null)
+            parser.pushElement(e);
     }
 }
