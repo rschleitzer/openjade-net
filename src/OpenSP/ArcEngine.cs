@@ -144,7 +144,7 @@ internal class ArcProcessor : ContentState
     // MetaMap struct for attribute mapping
     public class MetaMap
     {
-        public Attributed? attributed;
+        public IAttributed? attributed;
         public uint suppressFlags;
         public Vector<uint> attMapFrom = new Vector<uint>();
         public Vector<uint> attMapTo = new Vector<uint>();

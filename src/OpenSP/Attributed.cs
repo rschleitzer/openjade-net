@@ -6,7 +6,7 @@ namespace OpenSP;
 // This is used for things that have attribute definitions
 // like notations and elements.
 
-public class Attributed
+public class Attributed : IAttributed
 {
     private Ptr<AttributeDefinitionList> attributeDef_ = new Ptr<AttributeDefinitionList>();
 
