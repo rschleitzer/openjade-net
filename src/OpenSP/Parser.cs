@@ -7567,9 +7567,151 @@ public class Parser : ParserState
     // void addCommonAttributes(Dtd &dtd);
     protected void addCommonAttributes(Dtd dtd)
     {
-        // Simplified implementation - full implementation is complex
-        // This handles the #ALL and #IMPLICIT element/notation attribute definitions
-        // For now, just a stub that does nothing
+        // These are #implicit, #all, #notation #implicit, #notation #all
+        Ptr<AttributeDefinitionList>[] commonAdl = new Ptr<AttributeDefinitionList>[4];
+        for (int idx = 0; idx < 4; idx++)
+            commonAdl[idx] = new Ptr<AttributeDefinitionList>();
+
+        // Get element #IMPLICIT and #ALL
+        {
+            ElementType? e = lookupCreateElement(syntax().rniReservedName(Syntax.ReservedName.rIMPLICIT));
+            if (e != null)
+                commonAdl[0] = e.attributeDefMutable();
+            e = dtd.removeElementType(syntax().rniReservedName(Syntax.ReservedName.rALL));
+            if (e != null)
+                commonAdl[1] = e.attributeDefMutable();
+        }
+
+        // Get notation #IMPLICIT and #ALL
+        {
+            ConstPtr<Notation> nt = lookupCreateNotation(syntax().rniReservedName(Syntax.ReservedName.rIMPLICIT));
+            if (!nt.isNull())
+                commonAdl[2] = nt.pointer()!.attributeDefMutable();
+            Ptr<Notation> ntAll = dtd.removeNotation(syntax().rniReservedName(Syntax.ReservedName.rALL));
+            if (!ntAll.isNull())
+                commonAdl[3] = ntAll.pointer()!.attributeDefMutable();
+        }
+
+        // Create iterators
+        NamedTableIter<ElementType> elementIter = dtd.elementTypeIter();
+        NamedTableIter<ElementType> element2Iter = dtd.elementTypeIter();
+        NamedResourceTableIter<Notation> notationIter = dtd.notationIter();
+        NamedResourceTableIter<Notation> notation2Iter = dtd.notationIter();
+
+        Vector<PackedBoolean> done1Adl = new Vector<PackedBoolean>();
+        done1Adl.resize(dtd.nAttributeDefinitionList());
+        for (nuint j = 0; j < done1Adl.size(); j++)
+            done1Adl[j] = false;
+
+        Vector<PackedBoolean> done2Adl = new Vector<PackedBoolean>();
+        done2Adl.resize(dtd.nAttributeDefinitionList());
+        for (nuint j = 0; j < done2Adl.size(); j++)
+            done2Adl[j] = false;
+
+        // 4 passes: #implicit elements, #all elements, #implicit notations, #all notations
+        for (int i = 0; i < 4; i++)
+        {
+            if (!commonAdl[i].isNull())
+            {
+                if (i % 2 != 0)
+                    done1Adl[commonAdl[i].pointer()!.index()] = true;
+                else
+                    done2Adl[commonAdl[i].pointer()!.index()] = true;
+
+                for (;;)
+                {
+                    Boolean skip;
+                    IAttributed? a;
+
+                    switch (i)
+                    {
+                        case 0:
+                            {
+                                ElementType? e = elementIter.next();
+                                a = e;
+                                // Don't merge #implicit attributes if e is defined
+                                skip = (e != null && e.definition() != null);
+                            }
+                            break;
+                        case 1:
+                            a = element2Iter.next();
+                            skip = false; // Always merge #all attributes
+                            break;
+                        case 2:
+                            {
+                                Notation? nt = notationIter.next().pointer();
+                                a = nt;
+                                // Don't merge #implicit attributes if nt is defined
+                                skip = (nt != null && nt.defined());
+                            }
+                            break;
+                        case 3:
+                            a = notation2Iter.next().pointer();
+                            skip = false; // Always merge #all attributes
+                            break;
+                        default:
+                            a = null;
+                            skip = true;
+                            break;
+                    }
+
+                    if (a == null)
+                        break;
+
+                    Ptr<AttributeDefinitionList> adl = a.attributeDefMutable();
+                    if (adl.isNull())
+                    {
+                        a.setAttributeDef(commonAdl[i]);
+                    }
+                    else
+                    {
+                        Boolean wasDone = (i % 2 != 0) ? done1Adl[adl.pointer()!.index()] : done2Adl[adl.pointer()!.index()];
+                        if (!wasDone)
+                        {
+                            if (i % 2 != 0)
+                                done1Adl[adl.pointer()!.index()] = true;
+                            else
+                                done2Adl[adl.pointer()!.index()] = true;
+
+                            if (!skip)
+                            {
+                                for (nuint j = 0; j < commonAdl[i].pointer()!.size(); j++)
+                                {
+                                    uint index;
+                                    if (!adl.pointer()!.attributeIndex(commonAdl[i].pointer()!.def(j)!.name(), out index))
+                                    {
+                                        adl.pointer()!.append(commonAdl[i].pointer()!.def(j)!.copy());
+                                    }
+                                    else if (i == 2)
+                                    {
+                                        // Give error if #ALL data attribute was specified
+                                        // and is later redeclared as #IMPLICIT
+                                        Boolean @implicit;
+                                        if (adl.pointer()!.def((nuint)index)!.isSpecified(out @implicit) && !@implicit)
+                                            message(ParserMessages.specifiedAttributeRedeclared,
+                                                    new StringMessageArg(adl.pointer()!.def((nuint)index)!.name()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove #IMPLICIT element type and set as implicit element attribute def
+        {
+            ElementType? e = dtd.removeElementType(syntax().rniReservedName(Syntax.ReservedName.rIMPLICIT));
+            if (e != null)
+                dtd.setImplicitElementAttributeDef(e.attributeDefMutable());
+        }
+
+        // Remove #IMPLICIT notation and set as implicit notation attribute def
+        {
+            Ptr<Notation> n = dtd.removeNotation(syntax().rniReservedName(Syntax.ReservedName.rIMPLICIT));
+            if (!n.isNull())
+                dtd.setImplicitNotationAttributeDef(n.pointer()!.attributeDefMutable());
+        }
     }
 
     // From parseSd.cxx
@@ -7862,8 +8004,12 @@ public class Parser : ParserState
     // Boolean parseSdParamLiteral(Boolean lita, String<SyntaxChar> &str);
     protected Boolean parseSdParamLiteral(Boolean lita, String<SyntaxChar> str)
     {
-        // Simplified implementation - full implementation would handle all syntax literal parsing
+        Location loc = new Location(currentLocation());
+        loc.operatorPlusAssign(1);
+        SdText text = new SdText(loc, lita);
         str.resize(0);
+        Number refLitlen = (Number)Syntax.referenceQuantity(Syntax.Quantity.qLITLEN);
+
         Mode mode = lita ? ModeConstants.sdplitaMode : ModeConstants.sdplitMode;
         for (;;)
         {
@@ -7873,17 +8019,112 @@ public class Parser : ParserState
                 case Tokens.tokenEe:
                     message(ParserMessages.literalLevel);
                     return false;
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    // Note: sdLiteralSignificant message would be issued here
+                    // if options().errorSignificant
+                    text.addChar((SyntaxChar)currentChar(), currentLocation());
+                    break;
+                case Tokens.tokenCroDigit:
+                    {
+                        InputSource @in = currentInput()!;
+                        Location startLocation = new Location(currentLocation());
+                        @in.discardInitial();
+                        extendNumber(syntax().namelen(), ParserMessages.numberLength);
+                        ulong n;
+                        Boolean valid;
+                        if (!stringToNumber(@in.currentTokenStart(), @in.currentTokenLength(), out n)
+                            || n > Constant.syntaxCharMax)
+                        {
+                            message(ParserMessages.characterNumber,
+                                    new StringMessageArg(currentToken()));
+                            valid = false;
+                        }
+                        else
+                            valid = true;
+                        Owner<Markup> markupPtr = new Owner<Markup>();
+                        if (eventsWanted().wantPrologMarkup())
+                        {
+                            markupPtr = new Owner<Markup>(new Markup());
+                            markupPtr.pointer()!.addDelim(Syntax.DelimGeneral.dCRO);
+                            markupPtr.pointer()!.addNumber(@in);
+                            switch (getToken(Mode.refMode))
+                            {
+                                case Tokens.tokenRefc:
+                                    markupPtr.pointer()!.addDelim(Syntax.DelimGeneral.dREFC);
+                                    break;
+                                case Tokens.tokenRe:
+                                    markupPtr.pointer()!.addRefEndRe();
+                                    if (options().warnRefc)
+                                        message(ParserMessages.refc);
+                                    break;
+                                default:
+                                    if (options().warnRefc)
+                                        message(ParserMessages.refc);
+                                    break;
+                            }
+                        }
+                        else if (options().warnRefc)
+                        {
+                            if (getToken(Mode.refMode) != Tokens.tokenRefc)
+                                message(ParserMessages.refc);
+                        }
+                        else
+                            getToken(Mode.refMode);
+                        if (valid)
+                            text.addChar((SyntaxChar)n,
+                                         new Location(new NumericCharRefOrigin(startLocation,
+                                                                               (Index)(currentLocation().index()
+                                                                                       + currentInput()!.currentTokenLength()
+                                                                                       - startLocation.index()),
+                                                                               markupPtr),
+                                                      0));
+                    }
+                    break;
+                case Tokens.tokenCroNameStart:
+                    if (!parseNamedCharRef())
+                        return false;
+                    break;
                 case Tokens.tokenLit:
                 case Tokens.tokenLita:
-                    if (currentMarkup() != null)
-                        currentMarkup()!.addDelim(lita ? Syntax.DelimGeneral.dLITA : Syntax.DelimGeneral.dLIT);
-                    return true;
-                default:
-                    // Add character to literal
-                    str.operatorPlusAssign((SyntaxChar)currentChar());
+                    goto done;
+                case Tokens.tokenPeroNameStart:
+                case Tokens.tokenPeroGrpo:
+                    // Parameter entity references not allowed in SGML declarations
+                    message(ParserMessages.parameterEntityNotEnded);
+                    {
+                        Location charLoc = new Location(currentLocation());
+                        Char[] p = currentInput()!.currentTokenStart();
+                        for (nuint count = 0; count < currentInput()!.currentTokenLength(); count++)
+                        {
+                            text.addChar((SyntaxChar)p![count], charLoc);
+                            charLoc.operatorPlusAssign(1);
+                        }
+                    }
+                    break;
+                case Tokens.tokenChar:
+                    if (text.@string().size() > refLitlen
+                        && currentChar() == syntax().standardFunction((int)Syntax.StandardFunction.fRE))
+                    {
+                        message(ParserMessages.parameterLiteralLength, new NumberMessageArg((ulong)refLitlen));
+                        // guess that the closing delimiter has been omitted
+                        message(ParserMessages.literalClosingDelimiter);
+                        return false;
+                    }
+                    text.addChar((SyntaxChar)currentChar(), currentLocation());
                     break;
             }
         }
+    done:
+        if (text.@string().size() > refLitlen)
+            message(ParserMessages.parameterLiteralLength,
+                    new NumberMessageArg((ulong)refLitlen));
+
+        str.assign(text.@string().data()!, text.@string().size());
+        if (currentMarkup() != null)
+            currentMarkup()!.addSdLiteral(text);
+        return true;
     }
 
     // Boolean parseSdSystemIdentifier(Boolean lita, Text &text);
