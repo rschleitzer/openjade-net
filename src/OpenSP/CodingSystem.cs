@@ -77,12 +77,12 @@ public abstract class Encoder
     }
 }
 
-public class RecoveringEncoder : Encoder
+public abstract class RecoveringEncoder : Encoder
 {
     private Handler? unencodableHandler_;
 
     // RecoveringEncoder();
-    public RecoveringEncoder()
+    protected RecoveringEncoder()
     {
         unencodableHandler_ = null;
     }
@@ -100,12 +100,7 @@ public class RecoveringEncoder : Encoder
             unencodableHandler_.handleUnencodable(c, stream);
     }
 
-    // This class is abstract in C++ - derived classes provide output()
-    public override void output(Char[] chars, nuint len, OutputByteStream stream)
-    {
-        // Default implementation - subclasses should override
-        throw new System.NotImplementedException("Derived class must implement output()");
-    }
+    // Inherits abstract output() from Encoder - subclasses must implement
 }
 
 public abstract class InputCodingSystem

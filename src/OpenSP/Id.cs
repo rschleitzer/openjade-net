@@ -39,6 +39,21 @@ public class Id : Named
     {
         pendingRefs_.push_back(new Location(loc));
     }
+
+    // Note an IDREF to this ID
+    public void noteIdref(Location loc)
+    {
+        if (!defined())
+            pendingRefs_.push_back(new Location(loc));
+    }
+
+    // Get first reference location
+    public Location firstRefLocation()
+    {
+        if (pendingRefs_.size() > 0)
+            return pendingRefs_[0];
+        return new Location();
+    }
 }
 
 // IdTableIter is used to iterate over IdTable (which is a NamedTable<Id>)

@@ -909,4 +909,8 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 576, "length of reserved name %1 exceeds NAMELEN (%2)");
     public static readonly MessageType1 cannotGenerateSystemIdNotation = new MessageType1(
         MessageType.Severity.warning, null, 577, "cannot generate system identifier for notation %1");
+
+    // Link processing messages
+    public static readonly MessageType2 idlinkElementType = new MessageType2(
+        MessageType.Severity.error, null, 321, "type %1 of element with ID %2 not associated element type for applicable link rule in ID link set");
 }

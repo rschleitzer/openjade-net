@@ -68,18 +68,16 @@ public class OrdinalMessageArg : MessageArg
     }
 }
 
-public class OtherMessageArg : MessageArg
+public abstract class OtherMessageArg : MessageArg
 {
     // RTTI_CLASS - C# has built-in RTTI
 
-    public OtherMessageArg()
+    protected OtherMessageArg()
     {
     }
 
-    public virtual MessageArg copy()
-    {
-        throw new NotImplementedException();
-    }
+    // Interface method from ICopyable<MessageArg> - subclasses must implement
+    public abstract MessageArg copy();
 
     public void append(MessageBuilder builder)
     {
