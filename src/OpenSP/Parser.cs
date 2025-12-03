@@ -2158,7 +2158,361 @@ public class Parser : ParserState
         return true;
     }
 
-    protected virtual Boolean parseEntityDecl() { throw new NotImplementedException(); }
+    // Boolean parseEntityDecl();
+    protected virtual Boolean parseEntityDecl()
+    {
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+
+        byte indDEFAULT = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rDEFAULT);
+        AllowedParams allowEntityNamePero = new AllowedParams(Param.entityName, indDEFAULT, Param.pero);
+
+        if (!parseParam(allowEntityNamePero, declInputLevel, parm))
+            return false;
+
+        Entity.DeclType declType;
+        StringC name = new StringC();  // empty for default entity
+        if (parm.type == Param.pero)
+        {
+            declType = Entity.DeclType.parameterEntity;
+            AllowedParams allowParamEntityName = new AllowedParams(Param.paramEntityName);
+            if (!parseParam(allowParamEntityName, declInputLevel, parm))
+                return false;
+            parm.token.swap(name);
+        }
+        else
+        {
+            declType = Entity.DeclType.generalEntity;
+            if (parm.type == Param.entityName)
+                parm.token.swap(name);
+            else if (sd().implydefEntity())
+                message(ParserMessages.implydefEntityDefault);
+            else if (options().warnDefaultEntityDecl)
+                message(ParserMessages.defaultEntityDecl);
+        }
+
+        byte rCDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA);
+        byte rSDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSDATA);
+        byte rPI = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rPI);
+        byte rSTARTTAG = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSTARTTAG);
+        byte rENDTAG = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rENDTAG);
+        byte rMS = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rMS);
+        byte rMD = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rMD);
+        byte rSYSTEM = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSYSTEM);
+        byte rPUBLIC = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rPUBLIC);
+
+        AllowedParams allowEntityTextType = new AllowedParams(
+            Param.paramLiteral, rCDATA, rSDATA, rPI, rSTARTTAG, rENDTAG, rMS, rMD, rSYSTEM, rPUBLIC);
+
+        if (!parseParam(allowEntityTextType, declInputLevel, parm))
+            return false;
+
+        Location typeLocation = new Location(currentLocation());
+        Entity.DataType dataType = Entity.DataType.sgmlText;
+        InternalTextEntity.Bracketed bracketed = InternalTextEntity.Bracketed.none;
+
+        if (parm.type == rSYSTEM || parm.type == rPUBLIC)
+            return parseExternalEntity(name, declType, declInputLevel, parm);
+
+        if (parm.type == rCDATA)
+        {
+            dataType = Entity.DataType.cdata;
+            if (options().warnInternalCdataEntity)
+                message(ParserMessages.internalCdataEntity);
+        }
+        else if (parm.type == rSDATA)
+        {
+            dataType = Entity.DataType.sdata;
+            if (options().warnInternalSdataEntity)
+                message(ParserMessages.internalSdataEntity);
+        }
+        else if (parm.type == rPI)
+        {
+            dataType = Entity.DataType.pi;
+            if (options().warnPiEntity)
+                message(ParserMessages.piEntity);
+        }
+        else if (parm.type == rSTARTTAG)
+        {
+            bracketed = InternalTextEntity.Bracketed.starttag;
+            if (options().warnBracketEntity)
+                message(ParserMessages.bracketEntity);
+        }
+        else if (parm.type == rENDTAG)
+        {
+            bracketed = InternalTextEntity.Bracketed.endtag;
+            if (options().warnBracketEntity)
+                message(ParserMessages.bracketEntity);
+        }
+        else if (parm.type == rMS)
+        {
+            bracketed = InternalTextEntity.Bracketed.ms;
+            if (options().warnBracketEntity)
+                message(ParserMessages.bracketEntity);
+        }
+        else if (parm.type == rMD)
+        {
+            bracketed = InternalTextEntity.Bracketed.md;
+            if (options().warnBracketEntity)
+                message(ParserMessages.bracketEntity);
+        }
+
+        if (parm.type != Param.paramLiteral)
+        {
+            AllowedParams allowParamLiteral = new AllowedParams(Param.paramLiteral);
+            if (!parseParam(allowParamLiteral, declInputLevel, parm))
+                return false;
+        }
+
+        Text text = new Text();
+        parm.literalText.swap(text);
+        if (bracketed != InternalTextEntity.Bracketed.none)
+        {
+            StringC open = new StringC();
+            StringC close = new StringC();
+            switch (bracketed)
+            {
+                case InternalTextEntity.Bracketed.starttag:
+                    open = instanceSyntax().delimGeneral((int)Syntax.DelimGeneral.dSTAGO);
+                    close = instanceSyntax().delimGeneral((int)Syntax.DelimGeneral.dTAGC);
+                    break;
+                case InternalTextEntity.Bracketed.endtag:
+                    open = instanceSyntax().delimGeneral((int)Syntax.DelimGeneral.dETAGO);
+                    close = instanceSyntax().delimGeneral((int)Syntax.DelimGeneral.dTAGC);
+                    break;
+                case InternalTextEntity.Bracketed.ms:
+                    {
+                        Syntax syn = (declType == Entity.DeclType.parameterEntity) ? syntax() : instanceSyntax();
+                        open = syn.delimGeneral((int)Syntax.DelimGeneral.dMDO);
+                        open.operatorPlusAssign(syn.delimGeneral((int)Syntax.DelimGeneral.dDSO));
+                        close = syn.delimGeneral((int)Syntax.DelimGeneral.dMSC);
+                        close.operatorPlusAssign(syn.delimGeneral((int)Syntax.DelimGeneral.dMDC));
+                    }
+                    break;
+                case InternalTextEntity.Bracketed.md:
+                    {
+                        Syntax syn = (declType == Entity.DeclType.parameterEntity) ? syntax() : instanceSyntax();
+                        open = syn.delimGeneral((int)Syntax.DelimGeneral.dMDO);
+                        close = syn.delimGeneral((int)Syntax.DelimGeneral.dMDC);
+                    }
+                    break;
+                default:
+                    throw new InvalidOperationException("CANNOT_HAPPEN");
+            }
+            text.insertChars(open, new Location(new BracketOrigin(typeLocation, BracketOrigin.Position.open), 0));
+            text.addChars(close, new Location(new BracketOrigin(typeLocation, BracketOrigin.Position.close), 0));
+            if (text.size() > syntax().litlen()
+                && text.size() - open.size() - close.size() <= syntax().litlen())
+                message(ParserMessages.bracketedLitlen,
+                        new NumberMessageArg(syntax().litlen()));
+        }
+
+        AllowedParams allowMdc = new AllowedParams(Param.mdc);
+        if (!parseParam(allowMdc, declInputLevel, parm))
+            return false;
+
+        if (declType == Entity.DeclType.parameterEntity
+            && (dataType == Entity.DataType.cdata || dataType == Entity.DataType.sdata))
+        {
+            message(ParserMessages.internalParameterDataEntity,
+                    new StringMessageArg(name));
+            return true;
+        }
+
+        Ptr<Entity> entity = new Ptr<Entity>();
+        switch (dataType)
+        {
+            case Entity.DataType.cdata:
+                entity.operatorAssign(new InternalCdataEntity(name, markupLocation(), text));
+                break;
+            case Entity.DataType.sdata:
+                entity.operatorAssign(new InternalSdataEntity(name, markupLocation(), text));
+                break;
+            case Entity.DataType.pi:
+                entity.operatorAssign(new PiEntity(name, declType, markupLocation(), text));
+                break;
+            case Entity.DataType.sgmlText:
+                entity.operatorAssign(new InternalTextEntity(name, declType, markupLocation(), text, bracketed));
+                break;
+            default:
+                throw new InvalidOperationException("CANNOT_HAPPEN");
+        }
+        maybeDefineEntity(entity);
+        return true;
+    }
+
+    // Boolean parseExternalEntity(StringC &name, Entity::DeclType declType, unsigned declInputLevel, Param &parm);
+    protected Boolean parseExternalEntity(StringC name, Entity.DeclType declType,
+                                          uint declInputLevel, Param parm)
+    {
+        byte rSUBDOC = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSUBDOC);
+        byte rCDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA);
+        byte rSDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSDATA);
+        byte rNDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNDATA);
+
+        AllowedParams allowSystemIdentifierEntityTypeMdc = new AllowedParams(
+            Param.systemIdentifier, rSUBDOC, rCDATA, rSDATA, rNDATA, Param.mdc);
+        AllowedParams allowEntityTypeMdc = new AllowedParams(
+            rSUBDOC, rCDATA, rSDATA, rNDATA, Param.mdc);
+
+        ExternalId id = new ExternalId();
+        if (!parseExternalId(allowSystemIdentifierEntityTypeMdc, allowEntityTypeMdc,
+                             true, declInputLevel, parm, id))
+            return false;
+
+        if (parm.type == Param.mdc)
+        {
+            maybeDefineEntity(new Ptr<Entity>(new ExternalTextEntity(name, declType, markupLocation(), id)));
+            return true;
+        }
+
+        Ptr<Entity> entity = new Ptr<Entity>();
+        if (parm.type == rSUBDOC)
+        {
+            if (sd().subdoc() == 0)
+                message(ParserMessages.subdocEntity, new StringMessageArg(name));
+            AllowedParams allowMdc = new AllowedParams(Param.mdc);
+            if (!parseParam(allowMdc, declInputLevel, parm))
+                return false;
+            entity.operatorAssign(new SubdocEntity(name, markupLocation(), id));
+        }
+        else
+        {
+            Entity.DataType dataType;
+            if (parm.type == rCDATA)
+            {
+                dataType = Entity.DataType.cdata;
+                if (options().warnExternalCdataEntity)
+                    message(ParserMessages.externalCdataEntity);
+            }
+            else if (parm.type == rSDATA)
+            {
+                dataType = Entity.DataType.sdata;
+                if (options().warnExternalSdataEntity)
+                    message(ParserMessages.externalSdataEntity);
+            }
+            else if (parm.type == rNDATA)
+            {
+                dataType = Entity.DataType.ndata;
+            }
+            else
+            {
+                throw new InvalidOperationException("CANNOT_HAPPEN");
+            }
+
+            AllowedParams allowName = new AllowedParams(Param.name);
+            if (!parseParam(allowName, declInputLevel, parm))
+                return false;
+            ConstPtr<Notation> notation = lookupCreateNotation(parm.token);
+
+            AllowedParams allowDsoMdc = new AllowedParams(Param.dso, Param.mdc);
+            if (!parseParam(allowDsoMdc, declInputLevel, parm))
+                return false;
+
+            AttributeList attributes = new AttributeList(notation.pointer()!.attributeDef());
+            if (parm.type == Param.dso)
+            {
+                if (attributes.size() == 0 && !sd().www())
+                    message(ParserMessages.notationNoAttributes,
+                            new StringMessageArg(notation.pointer()!.name()));
+                Boolean netEnabling;
+                Ptr<AttributeDefinitionList> newAttDef = new Ptr<AttributeDefinitionList>();
+                if (!parseAttributeSpec(Mode.asMode, attributes, out netEnabling, newAttDef))
+                    return false;
+                if (!newAttDef.isNull())
+                {
+                    newAttDef.pointer()!.setIndex(defDtd().allocAttributeDefinitionListIndex());
+                    ((Notation)notation.pointer()!).setAttributeDef(newAttDef);
+                }
+                if (attributes.nSpec() == 0)
+                    message(ParserMessages.emptyDataAttributeSpec);
+                AllowedParams allowMdc2 = new AllowedParams(Param.mdc);
+                if (!parseParam(allowMdc2, declInputLevel, parm))
+                    return false;
+            }
+            else
+            {
+                attributes.finish(this);
+            }
+            entity.operatorAssign(new ExternalDataEntity(name, dataType, markupLocation(), id,
+                                   notation, attributes,
+                                   declType == Entity.DeclType.parameterEntity
+                                   ? Entity.DeclType.parameterEntity
+                                   : Entity.DeclType.generalEntity));
+        }
+
+        if (declType == Entity.DeclType.parameterEntity && !sd().www())
+        {
+            message(ParserMessages.externalParameterDataSubdocEntity,
+                    new StringMessageArg(name));
+            return true;
+        }
+        maybeDefineEntity(entity);
+        return true;
+    }
+
+    // void maybeDefineEntity(const Ptr<Entity> &entity);
+    protected void maybeDefineEntity(Ptr<Entity> entity)
+    {
+        Dtd dtd = defDtd();
+        if (haveDefLpd())
+            entity.pointer()!.setDeclIn(dtd.namePointer(),
+                                         dtd.isBase(),
+                                         defLpd().namePointer(),
+                                         defLpd().active());
+        else
+            entity.pointer()!.setDeclIn(dtd.namePointer(), dtd.isBase());
+
+        Boolean ignored = false;
+        if (entity.pointer()!.name().size() == 0)
+        {
+            Entity? oldEntity = dtd.defaultEntity().pointer();
+            if (oldEntity == null
+                || (!oldEntity.declInActiveLpd() && entity.pointer()!.declInActiveLpd()))
+                dtd.setDefaultEntity(entity, this);
+            else
+            {
+                ignored = true;
+                if (options().warnDuplicateEntity)
+                    message(ParserMessages.duplicateEntityDeclaration,
+                            new StringMessageArg(syntax().rniReservedName(Syntax.ReservedName.rDEFAULT)));
+            }
+        }
+        else
+        {
+            Ptr<Entity> oldEntity = dtd.insertEntity(entity);
+            if (oldEntity.isNull())
+                entity.pointer()!.generateSystemId(this);
+            else if (oldEntity.pointer()!.defaulted())
+            {
+                dtd.insertEntity(entity, true);
+                message(ParserMessages.defaultedEntityDefined,
+                        new StringMessageArg(entity.pointer()!.name()));
+                entity.pointer()!.generateSystemId(this);
+            }
+            else
+            {
+                if (entity.pointer()!.declInActiveLpd() && !oldEntity.pointer()!.declInActiveLpd())
+                {
+                    dtd.insertEntity(entity, true);
+                    entity.pointer()!.generateSystemId(this);
+                }
+                else
+                {
+                    ignored = true;
+                    if (options().warnDuplicateEntity)
+                        message(entity.pointer()!.declType() == Entity.DeclType.parameterEntity
+                                ? ParserMessages.duplicateParameterEntityDeclaration
+                                : ParserMessages.duplicateEntityDeclaration,
+                                new StringMessageArg(entity.pointer()!.name()));
+                }
+            }
+        }
+        if (currentMarkup() != null)
+            eventHandler().entityDecl(new EntityDeclEvent(new ConstPtr<Entity>(entity.pointer()), ignored,
+                                       markupLocation(), currentMarkup()));
+    }
+
     protected virtual Boolean parseShortrefDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseUsemapDecl() { throw new NotImplementedException(); }
     // Boolean parseDeclarationName(Syntax::ReservedName *result, Boolean allowAfdr = 0);

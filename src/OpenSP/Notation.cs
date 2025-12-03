@@ -4,8 +4,8 @@
 namespace OpenSP;
 
 // In C++, Notation also inherits from Attributed for attribute support.
-// Since C# doesn't support multiple inheritance, we include Attributed functionality here.
-public class Notation : EntityDecl
+// Since C# doesn't support multiple inheritance, we implement IAttributed interface.
+public class Notation : EntityDecl, IAttributed
 {
     private PackedBoolean defined_;
     private ExternalId externalId_ = new ExternalId();

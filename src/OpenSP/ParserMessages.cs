@@ -556,4 +556,40 @@ public static class ParserMessages
         MessageType.Severity.error, null, 452, "notation %1 was specified with #IMPLICIT and so must not be declared");
     public static readonly MessageType0 notationIdentifierTextClass = new MessageType0(
         MessageType.Severity.error, null, 453, "public identifier text class for notation must be NOTATION");
+
+    // parseEntityDecl messages
+    public static readonly MessageType0 implydefEntityDefault = new MessageType0(
+        MessageType.Severity.error, null, 425, "declaration of default entity conflicts with IMPLYDEF ENTITY YES");
+    public static readonly MessageType0 defaultEntityDecl = new MessageType0(
+        MessageType.Severity.warning, null, 414, "declaration of default entity");
+    public static readonly MessageType0 internalCdataEntity = new MessageType0(
+        MessageType.Severity.warning, null, 375, "internal CDATA entity");
+    public static readonly MessageType0 internalSdataEntity = new MessageType0(
+        MessageType.Severity.warning, null, 376, "internal SDATA entity");
+    public static readonly MessageType0 piEntity = new MessageType0(
+        MessageType.Severity.warning, null, 373, "processing instruction entity");
+    public static readonly MessageType0 bracketEntity = new MessageType0(
+        MessageType.Severity.warning, null, 374, "bracketed text entity");
+    public static readonly MessageType1 bracketedLitlen = new MessageType1(
+        MessageType.Severity.quantityError, null, 245, "length of interpreted parameter literal in bracketed text plus the length of the bracketing delimiters must not exceed LITLEN (%1)");
+    public static readonly MessageType1 internalParameterDataEntity = new MessageType1(
+        MessageType.Severity.error, null, 86, "internal parameter entity %1 cannot be CDATA or SDATA");
+    public static readonly MessageType1 subdocEntity = new MessageType1(
+        MessageType.Severity.error, null, 185, "entity %1 declared SUBDOC, but SUBDOC NO specified in SGML declaration");
+    public static readonly MessageType0 externalCdataEntity = new MessageType0(
+        MessageType.Severity.warning, null, 377, "external CDATA entity");
+    public static readonly MessageType0 externalSdataEntity = new MessageType0(
+        MessageType.Severity.warning, null, 378, "external SDATA entity");
+    public static readonly MessageType1 notationNoAttributes = new MessageType1(
+        MessageType.Severity.error, null, 241, "no attributes defined for notation %1");
+    public static readonly MessageType0 emptyDataAttributeSpec = new MessageType0(
+        MessageType.Severity.error, null, 121, "data attribute specification must be omitted if attribute specification list is empty");
+    public static readonly MessageType1 externalParameterDataSubdocEntity = new MessageType1(
+        MessageType.Severity.error, null, 90, "external parameter entity %1 cannot be CDATA, SDATA, NDATA or SUBDOC");
+    public static readonly MessageType1 duplicateEntityDeclaration = new MessageType1(
+        MessageType.Severity.warning, null, 91, "duplicate declaration of entity %1");
+    public static readonly MessageType1 duplicateParameterEntityDeclaration = new MessageType1(
+        MessageType.Severity.warning, null, 92, "duplicate declaration of parameter entity %1");
+    public static readonly MessageType1 defaultedEntityDefined = new MessageType1(
+        MessageType.Severity.warning, null, 334, "earlier reference to entity %1 used default entity");
 }
