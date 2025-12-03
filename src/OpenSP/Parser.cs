@@ -2095,7 +2095,69 @@ public class Parser : ParserState
         }
     }
     protected virtual Boolean parseAttlistDecl() { throw new NotImplementedException(); }
-    protected virtual Boolean parseNotationDecl() { throw new NotImplementedException(); }
+
+    // Boolean parseNotationDecl();
+    protected virtual Boolean parseNotationDecl()
+    {
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+        AllowedParams allowName = new AllowedParams(Param.name);
+        if (!parseParam(allowName, declInputLevel, parm))
+            return false;
+        ConstPtr<Notation> nt = lookupCreateNotation(parm.token);
+        if (validate() && nt.pointer()!.defined())
+            message(ParserMessages.duplicateNotationDeclaration,
+                    new StringMessageArg(parm.token));
+        AttributeDefinitionList? atts = nt.pointer()!.attributeDef().pointer();
+        if (atts != null)
+        {
+            for (nuint i = 0; i < atts.size(); i++)
+            {
+                Boolean @implicit;
+                if (atts.def(i)!.isSpecified(out @implicit) && @implicit)
+                {
+                    message(ParserMessages.notationMustNotBeDeclared,
+                            new StringMessageArg(parm.token));
+                    break;
+                }
+            }
+        }
+        AllowedParams allowPublicSystem = new AllowedParams(
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rPUBLIC),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSYSTEM));
+        if (!parseParam(allowPublicSystem, declInputLevel, parm))
+            return false;
+
+        AllowedParams allowSystemIdentifierMdc = new AllowedParams(Param.systemIdentifier, Param.mdc);
+        AllowedParams allowMdc = new AllowedParams(Param.mdc);
+
+        ExternalId id = new ExternalId();
+        if (!parseExternalId(allowSystemIdentifierMdc, allowMdc,
+                             parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSYSTEM),
+                             declInputLevel, parm, id))
+            return false;
+        if (validate() && sd().formal())
+        {
+            PublicId.TextClass textClass;
+            PublicId? publicId = id.publicId();
+            if (publicId != null
+                && publicId.getTextClass(out textClass)
+                && textClass != PublicId.TextClass.NOTATION)
+                message(ParserMessages.notationIdentifierTextClass);
+        }
+        if (!nt.pointer()!.defined())
+        {
+            // Cast away const - Notation needs to be mutable here
+            Notation ntMut = (Notation)nt.pointer()!;
+            ntMut.setExternalId(id, markupLocation());
+            ntMut.generateSystemId(this);
+            if (currentMarkup() != null)
+                eventHandler().notationDecl(new NotationDeclEvent(
+                    new ConstPtr<Notation>(ntMut), markupLocation(), currentMarkup()));
+        }
+        return true;
+    }
+
     protected virtual Boolean parseEntityDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseShortrefDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseUsemapDecl() { throw new NotImplementedException(); }

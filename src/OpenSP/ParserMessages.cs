@@ -548,4 +548,12 @@ public static class ParserMessages
         MessageType.Severity.error, null, 450, "notation attribute for element %1 with EMPTY declared content");
     public static readonly MessageType1 conrefEmpty = new MessageType1(
         MessageType.Severity.error, null, 451, "CONREF attribute for element %1 with EMPTY declared content");
+
+    // parseNotationDecl messages
+    public static readonly MessageType1 duplicateNotationDeclaration = new MessageType1(
+        MessageType.Severity.error, null, 61, "notation %1 already defined");
+    public static readonly MessageType1 notationMustNotBeDeclared = new MessageType1(
+        MessageType.Severity.error, null, 452, "notation %1 was specified with #IMPLICIT and so must not be declared");
+    public static readonly MessageType0 notationIdentifierTextClass = new MessageType0(
+        MessageType.Severity.error, null, 453, "public identifier text class for notation must be NOTATION");
 }
