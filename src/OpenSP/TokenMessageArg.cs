@@ -113,4 +113,10 @@ public class TokenMessageArg : MessageArg
         if (fragment != null)
             builder.appendFragment(fragment);
     }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
+    }
 }

@@ -29,6 +29,33 @@ public class StringC : String<Char>
         operatorPlusAssign(c);
     }
 
+    // String constructor - converts from C# string to StringC
+    public StringC(string s) : base()
+    {
+        if (s != null)
+        {
+            foreach (char c in s)
+                operatorPlusAssign((Char)c);
+        }
+    }
+
+    // operator== comparison
+    public Boolean operatorEquals(StringC other)
+    {
+        if (other == null) return false;
+        if (size() != other.size()) return false;
+        Char[]? data1 = data();
+        Char[]? data2 = other.data();
+        if (data1 == null && data2 == null) return true;
+        if (data1 == null || data2 == null) return false;
+        for (nuint i = 0; i < size(); i++)
+        {
+            if (data1[i] != data2[i])
+                return false;
+        }
+        return true;
+    }
+
     // StringC substr(size_t start, size_t length) const
     public StringC substr(nuint start, nuint length)
     {

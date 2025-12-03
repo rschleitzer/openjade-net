@@ -232,6 +232,12 @@ public class AllowedGroupTokensMessageArg : MessageArg
             builder.appendChars(@implicit.data(), @implicit.size());
         }
     }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
+    }
 }
 
 public class AllowedGroupConnectorsMessageArg : MessageArg
@@ -276,5 +282,11 @@ public class AllowedGroupConnectorsMessageArg : MessageArg
                 builder.appendChars(delim.data(), delim.size());
             }
         }
+    }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
     }
 }

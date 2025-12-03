@@ -166,6 +166,19 @@ public class EncodeOutputCharStream : OutputCharStream, IDisposable
         encoder_!.startFile(byteStream_);
     }
 
+    // Overload for CodingSystem (which includes both input and output)
+    public EncodeOutputCharStream(OutputByteStream byteStream, CodingSystem codingSystem)
+    {
+        buf_ = null;
+        byteStream_ = byteStream;
+        escaper_ = null;
+        ownedEncoder_ = new Owner<Encoder>(codingSystem.makeEncoder());
+        encoder_ = ownedEncoder_.pointer();
+        encoder_!.setUnencodableHandler(new UnencodableHandler(this));
+        allocBuf((int)codingSystem.fixedBytesPerChar());
+        encoder_!.startFile(byteStream_);
+    }
+
     // ~EncodeOutputCharStream();
     public void Dispose()
     {

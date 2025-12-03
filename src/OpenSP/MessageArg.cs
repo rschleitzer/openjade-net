@@ -6,6 +6,71 @@ namespace OpenSP;
 public interface MessageArg : ICopyable<MessageArg>
 {
     void append(MessageBuilder builder);
+
+    // appendToStringC - appends the argument value to a StringC
+    // Default implementation uses a StringCMessageBuilder
+    void appendToStringC(StringC s);
+}
+
+// Helper class to collect MessageArg output into a StringC
+internal class StringCMessageBuilder : MessageBuilder
+{
+    private StringC result_;
+
+    public StringCMessageBuilder(StringC result)
+    {
+        result_ = result;
+    }
+
+    public void appendNumber(ulong n)
+    {
+        string s = n.ToString();
+        foreach (char c in s)
+            result_.operatorPlusAssign((Char)c);
+    }
+
+    public void appendOrdinal(ulong n)
+    {
+        appendNumber(n);
+        // Add ordinal suffix
+        string suffix = "th";
+        if (n % 100 < 10 || n % 100 > 20)
+        {
+            switch (n % 10)
+            {
+                case 1: suffix = "st"; break;
+                case 2: suffix = "nd"; break;
+                case 3: suffix = "rd"; break;
+            }
+        }
+        foreach (char c in suffix)
+            result_.operatorPlusAssign((Char)c);
+    }
+
+    public void appendChars(Char[]? data, nuint size)
+    {
+        if (data != null)
+        {
+            for (nuint i = 0; i < size; i++)
+                result_.operatorPlusAssign(data[i]);
+        }
+    }
+
+    public void appendOther(OtherMessageArg arg)
+    {
+        // For other args, just append a placeholder
+        result_.operatorPlusAssign((Char)'?');
+    }
+
+    public void appendFragment(MessageFragment frag)
+    {
+        string? text = frag.text();
+        if (text != null)
+        {
+            foreach (char c in text)
+                result_.operatorPlusAssign((Char)c);
+        }
+    }
 }
 
 public class StringMessageArg : MessageArg
@@ -25,6 +90,12 @@ public class StringMessageArg : MessageArg
     public void append(MessageBuilder builder)
     {
         builder.appendChars(s_.data(), s_.size());
+    }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
     }
 }
 
@@ -46,6 +117,12 @@ public class NumberMessageArg : MessageArg
     {
         builder.appendNumber(n_);
     }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
+    }
 }
 
 public class OrdinalMessageArg : MessageArg
@@ -66,6 +143,12 @@ public class OrdinalMessageArg : MessageArg
     {
         builder.appendOrdinal(n_);
     }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
+    }
 }
 
 public abstract class OtherMessageArg : MessageArg
@@ -82,6 +165,12 @@ public abstract class OtherMessageArg : MessageArg
     public void append(MessageBuilder builder)
     {
         builder.appendOther(this);
+    }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
     }
 }
 
@@ -107,6 +196,12 @@ public class StringVectorMessageArg : MessageArg
                 builder.appendFragment(ParserMessages.listSep);
             builder.appendChars(v_[i].data(), v_[i].size());
         }
+    }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
     }
 }
 
@@ -165,5 +260,11 @@ public class CharsetMessageArg : MessageArg
                 builder.appendNumber(max);
             }
         }
+    }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
     }
 }

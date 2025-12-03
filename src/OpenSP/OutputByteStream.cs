@@ -173,7 +173,7 @@ public class FileOutputByteStream : OutputByteStream, IDisposable
 {
     private const int bufSize = 8192;
     private String<sbyte> buf_ = new String<sbyte>();
-    private FileStream? stream_;
+    private Stream? stream_;
     private Boolean closeStream_;
 
     // FileOutputByteStream();
@@ -184,12 +184,13 @@ public class FileOutputByteStream : OutputByteStream, IDisposable
     }
 
     // FileOutputByteStream(int fd, Boolean closeFd = 1);
-    public FileOutputByteStream(FileStream stream, Boolean closeStream = true)
+    public FileOutputByteStream(Stream stream, Boolean closeStream = true)
     {
         stream_ = null;
         closeStream_ = false;
         attach(stream, closeStream);
     }
+
 
     // virtual ~FileOutputByteStream();
     public void Dispose()
@@ -218,7 +219,7 @@ public class FileOutputByteStream : OutputByteStream, IDisposable
     }
 
     // Boolean attach(int fd, Boolean closeFd = 1);
-    public Boolean attach(FileStream stream, Boolean closeStream = true)
+    public Boolean attach(Stream stream, Boolean closeStream = true)
     {
         close();
         stream_ = stream;

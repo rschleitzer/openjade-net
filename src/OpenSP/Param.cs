@@ -379,4 +379,10 @@ public class AllowedParamsMessageArg : MessageArg
             }
         }
     }
+
+    public void appendToStringC(StringC result)
+    {
+        StringCMessageBuilder builder = new StringCMessageBuilder(result);
+        append(builder);
+    }
 }
