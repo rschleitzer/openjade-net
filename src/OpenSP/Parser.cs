@@ -7413,8 +7413,83 @@ public class Parser : ParserState
     }
 
     // From parseSd.cxx
-    protected virtual Boolean implySgmlDecl() { throw new NotImplementedException(); }
-    protected virtual Boolean scanForSgmlDecl(CharsetInfo initCharset) { throw new NotImplementedException(); }
+    // Boolean implySgmlDecl();
+    protected virtual Boolean implySgmlDecl()
+    {
+        Syntax syntaxp = new Syntax(sd());
+        StandardSyntaxSpec spec;
+        if (options().shortref)
+            spec = refSyntax;
+        else
+            spec = coreSyntax;
+        CharSwitcher switcher = new CharSwitcher();
+        if (!setStandardSyntax(syntaxp, spec, sd().internalCharset(), switcher, false))
+            return false;
+        syntaxp.implySgmlChar(sd());
+        for (int i = 0; i < Syntax.nQuantity; i++)
+            syntaxp.setQuantity(i, options().quantity[i]);
+        setSyntax(new ConstPtr<Syntax>(syntaxp));
+        return true;
+    }
+
+    // Boolean scanForSgmlDecl(const CharsetInfo &initCharset);
+    protected virtual Boolean scanForSgmlDecl(CharsetInfo initCharset)
+    {
+        Char rs;
+        if (!univToDescCheck(initCharset, UnivCharsetDesc.rs, out rs))
+            return false;
+        Char re;
+        if (!univToDescCheck(initCharset, UnivCharsetDesc.re, out re))
+            return false;
+        Char space;
+        if (!univToDescCheck(initCharset, UnivCharsetDesc.space, out space))
+            return false;
+        Char tab;
+        if (!univToDescCheck(initCharset, UnivCharsetDesc.tab, out tab))
+            return false;
+        InputSource? inSrc = currentInput();
+        if (inSrc == null)
+            return false;
+        Xchar c = inSrc.get(messenger());
+        while (c == rs || c == space || c == re || c == tab)
+            c = inSrc.tokenChar(messenger());
+        if (c != initCharset.execToDesc((sbyte)'<'))
+            return false;
+        if (inSrc.tokenChar(messenger()) != initCharset.execToDesc((sbyte)'!'))
+            return false;
+        c = inSrc.tokenChar(messenger());
+        if (c != initCharset.execToDesc((sbyte)'S') && c != initCharset.execToDesc((sbyte)'s'))
+            return false;
+        c = inSrc.tokenChar(messenger());
+        if (c != initCharset.execToDesc((sbyte)'G') && c != initCharset.execToDesc((sbyte)'g'))
+            return false;
+        c = inSrc.tokenChar(messenger());
+        if (c != initCharset.execToDesc((sbyte)'M') && c != initCharset.execToDesc((sbyte)'m'))
+            return false;
+        c = inSrc.tokenChar(messenger());
+        if (c != initCharset.execToDesc((sbyte)'L') && c != initCharset.execToDesc((sbyte)'l'))
+            return false;
+        c = inSrc.tokenChar(messenger());
+        // Don't recognize this if SGML is followed by a name character.
+        if (c == InputSource.eE)
+            return true;
+        inSrc.endToken(inSrc.currentTokenLength() - 1);
+        if (c == initCharset.execToDesc((sbyte)'-'))
+            return false;
+        if (c == initCharset.execToDesc((sbyte)'.'))
+            return false;
+        UnivChar univ;
+        if (!initCharset.descToUniv((Char)c, out univ))
+            return true;
+        if (UnivCharsetDesc.a <= univ && univ < UnivCharsetDesc.a + 26)
+            return false;
+        if (UnivCharsetDesc.A <= univ && univ < UnivCharsetDesc.A + 26)
+            return false;
+        if (UnivCharsetDesc.zero <= univ && univ < UnivCharsetDesc.zero + 10)
+            return false;
+        return true;
+    }
+
     protected virtual Boolean parseSgmlDecl() { throw new NotImplementedException(); }
 
     // Additional helper methods from parseInstance.cxx
