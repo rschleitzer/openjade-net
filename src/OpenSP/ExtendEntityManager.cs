@@ -349,6 +349,45 @@ public abstract class ExtendEntityManager : EntityManager
         return p.convertOffset(off, loc);
     }
 
+    // static Boolean defLocation(const Location &, StorageObjectLocation &);
+    // Converts a Location to a StorageObjectLocation by walking up the origin chain
+    protected static Boolean defLocation(Location defLocation, StorageObjectLocation soLoc)
+    {
+        Offset off = 0;
+        ExternalInfo? info = null;
+        Origin? origin = defLocation.origin().pointer();
+        Index index = defLocation.index();
+
+        for (;;)
+        {
+            if (origin == null)
+                return false;
+
+            InputSourceOrigin? inputSourceOrigin = origin.asInputSourceOrigin();
+            if (inputSourceOrigin != null)
+            {
+                off = inputSourceOrigin.startOffset(index);
+                info = inputSourceOrigin.externalInfo();
+                if (info != null)
+                    break;
+                Origin? newOrigin;
+                Index newIndex;
+                if (!inputSourceOrigin.defLocation(off, out newOrigin, out newIndex))
+                    return false;
+                origin = newOrigin;
+                index = newIndex;
+            }
+            else
+            {
+                Location parentLoc = origin.parent();
+                origin = parentLoc.origin().pointer();
+                index = parentLoc.index();
+            }
+        }
+
+        return externalize(info, off, soLoc);
+    }
+
     // static ExtendEntityManager *make(...);
     public static ExtendEntityManager make(StorageManager sm,
                                            InputCodingSystem cs,
@@ -616,8 +655,12 @@ internal class EntityManagerImpl : ExtendEntityManager
                                             StringC result)
     {
         ParsedSystemId parsedSysid = new ParsedSystemId();
+        StorageObjectLocation defSoLoc = new StorageObjectLocation();
         StorageObjectLocation? defSoLocP = null;
-        // TODO: Get default location from defLoc
+
+        // Get default location from defLoc if possible
+        if (defLocation(defLoc, defSoLoc))
+            defSoLocP = defSoLoc;
 
         if (!parseSystemId(str, charsetInfo, isNdataFlag, defSoLocP, mgr, parsedSysid))
             return false;

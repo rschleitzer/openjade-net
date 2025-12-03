@@ -4,7 +4,7 @@
 namespace OpenSP;
 
 // Factory class for creating OASIS catalog managers
-public class SOCatalogManager : ExtendEntityManager.CatalogManager
+public abstract class SOCatalogManager : ExtendEntityManager.CatalogManager
 {
     // static ExtendEntityManager::CatalogManager *make(...);
     public static ExtendEntityManager.CatalogManager make(Vector<StringC> sysids,
@@ -16,20 +16,7 @@ public class SOCatalogManager : ExtendEntityManager.CatalogManager
         return new SOCatalogManagerImpl(sysids, nSysidsMustExist, sysidCharset, catalogCharset, useDocCatalog);
     }
 
-    public override ConstPtr<EntityCatalog> makeCatalog(StringC systemId,
-                                                         CharsetInfo docCharset,
-                                                         ExtendEntityManager? em,
-                                                         Messenger mgr)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override Boolean mapCatalog(ParsedSystemId systemId,
-                                       ExtendEntityManager? em,
-                                       Messenger mgr)
-    {
-        throw new NotImplementedException();
-    }
+    // Abstract methods - implemented by SOCatalogManagerImpl
 }
 
 // Implementation of catalog manager
