@@ -23,6 +23,49 @@ public class Parser : ParserState
         recoverUnquoted
     }
 
+    // StandardSyntaxSpec - specification for standard syntax
+    public struct StandardSyntaxSpec
+    {
+        public struct AddedFunction
+        {
+            public string name;
+            public Syntax.FunctionClass functionClass;
+            public SyntaxChar syntaxChar;
+
+            public AddedFunction(string name, Syntax.FunctionClass functionClass, SyntaxChar syntaxChar)
+            {
+                this.name = name;
+                this.functionClass = functionClass;
+                this.syntaxChar = syntaxChar;
+            }
+        }
+
+        public AddedFunction[] addedFunction;
+        public nuint nAddedFunction;
+        public Boolean shortref;
+
+        public StandardSyntaxSpec(AddedFunction[] addedFunction, nuint nAddedFunction, Boolean shortref)
+        {
+            this.addedFunction = addedFunction;
+            this.nAddedFunction = nAddedFunction;
+            this.shortref = shortref;
+        }
+    }
+
+    // Core syntax functions - TAB as SEPCHAR
+    private static readonly StandardSyntaxSpec.AddedFunction[] coreFunctions = new StandardSyntaxSpec.AddedFunction[]
+    {
+        new StandardSyntaxSpec.AddedFunction("TAB", Syntax.FunctionClass.cSEPCHAR, 9)
+    };
+
+    // Core syntax specification (no shortref)
+    private static readonly StandardSyntaxSpec coreSyntax = new StandardSyntaxSpec(
+        coreFunctions, (nuint)coreFunctions.Length, false);
+
+    // Reference syntax specification (with shortref)
+    private static readonly StandardSyntaxSpec refSyntax = new StandardSyntaxSpec(
+        coreFunctions, (nuint)coreFunctions.Length, true);
+
     private StringC sysid_ = new StringC();
 
     // Parser(const SgmlParser::Params &);
@@ -8014,5 +8057,545 @@ public class Parser : ParserState
                 return currentDtdNonConst().lookupElementType(fullName);
         }
         return null;
+    }
+
+    // ========================================================================
+    // SGML Declaration Support Methods
+    // ========================================================================
+
+    // Boolean univToDescCheck(const CharsetInfo &charset, UnivChar from, Char &to);
+    protected Boolean univToDescCheck(CharsetInfo charset, UnivChar from, out Char to)
+    {
+        WideChar c;
+        ISet<WideChar> descSet = new ISet<WideChar>();
+        uint ret = charset.univToDesc(from, out c, descSet);
+        if (ret > 1)
+        {
+            if (options().warnSgmlDecl)
+                message(ParserMessages.ambiguousDocCharacter, new CharsetMessageArg(descSet));
+            ret = 1;
+        }
+        if (ret != 0 && c <= Constant.charMax)
+        {
+            to = (Char)c;
+            return true;
+        }
+        to = 0;
+        return false;
+    }
+
+    // Boolean univToDescCheck(const CharsetInfo &charset, UnivChar from, Char &to, WideChar &count);
+    protected Boolean univToDescCheck(CharsetInfo charset, UnivChar from, out Char to, out WideChar count)
+    {
+        WideChar c;
+        ISet<WideChar> descSet = new ISet<WideChar>();
+        uint ret = charset.univToDesc(from, out c, descSet, out count);
+        if (ret > 1)
+        {
+            if (options().warnSgmlDecl)
+                message(ParserMessages.ambiguousDocCharacter, new CharsetMessageArg(descSet));
+            ret = 1;
+        }
+        if (ret != 0 && c <= Constant.charMax)
+        {
+            to = (Char)c;
+            return true;
+        }
+        to = 0;
+        return false;
+    }
+
+    // UnivChar translateUniv(UnivChar univChar, CharSwitcher &switcher, const CharsetInfo &syntaxCharset);
+    protected UnivChar translateUniv(UnivChar univChar, CharSwitcher switcher, CharsetInfo syntaxCharset)
+    {
+        WideChar syntaxChar;
+        ISet<WideChar> syntaxChars = new ISet<WideChar>();
+        if (syntaxCharset.univToDesc(univChar, out syntaxChar, syntaxChars) != 1)
+        {
+            message(ParserMessages.missingSyntaxChar, new NumberMessageArg(univChar));
+            return univChar;
+        }
+        SyntaxChar tem = switcher.subst(syntaxChar);
+        UnivChar resultUniv = univChar;
+        if (tem != syntaxChar && !syntaxCharset.descToUniv(tem, out resultUniv))
+            message(sd().internalCharsetIsDocCharset()
+                ? ParserMessages.translateSyntaxCharDoc
+                : ParserMessages.translateSyntaxCharInternal,
+                new NumberMessageArg(syntaxChar));
+        return resultUniv;
+    }
+
+    // Boolean translateSyntax(CharSwitcher &switcher, const CharsetInfo &syntaxCharset,
+    //                         const CharsetInfo &internalCharset, WideChar syntaxChar, Char &docChar);
+    protected Boolean translateSyntax(CharSwitcher switcher, CharsetInfo syntaxCharset,
+                                      CharsetInfo internalCharset, WideChar syntaxChar, out Char docChar)
+    {
+        syntaxChar = switcher.subst(syntaxChar);
+        UnivChar univChar;
+        if (syntaxCharset.descToUniv(syntaxChar, out univChar)
+            && univToDescCheck(internalCharset, univChar, out docChar))
+            return true;
+        message(sd().internalCharsetIsDocCharset()
+            ? ParserMessages.translateSyntaxCharDoc
+            : ParserMessages.translateSyntaxCharInternal,
+            new NumberMessageArg(syntaxChar));
+        docChar = 0;
+        return false;
+    }
+
+    // Boolean checkNotFunction(const Syntax &syn, Char c);
+    protected Boolean checkNotFunction(Syntax syn, Char c)
+    {
+        if (syn.charSet((int)Syntax.Set.functionChar)!.contains(c))
+        {
+            message(ParserMessages.oneFunction, new NumberMessageArg(c));
+            return false;
+        }
+        else
+            return true;
+    }
+
+    // Boolean checkNmchars(const ISet<Char> &set, const Syntax &syntax);
+    protected Boolean checkNmchars(ISet<Char> set, Syntax syntax)
+    {
+        Boolean valid = true;
+        ISet<WideChar> bad = new ISet<WideChar>();
+        intersectCharSets(set, syntax.charSet((int)Syntax.Set.nameStart)!, bad);
+        if (!bad.isEmpty())
+        {
+            message(ParserMessages.nmcharLetter, new CharsetMessageArg(bad));
+            valid = false;
+            bad.clear();
+        }
+        intersectCharSets(set, syntax.charSet((int)Syntax.Set.digit)!, bad);
+        if (!bad.isEmpty())
+        {
+            message(ParserMessages.nmcharDigit, new CharsetMessageArg(bad));
+            valid = false;
+            bad.clear();
+        }
+        Char funChar;
+        if (syntax.getStandardFunction((int)Syntax.StandardFunction.fRE, out funChar) && set.contains(funChar))
+        {
+            message(ParserMessages.nmcharRe, new NumberMessageArg(funChar));
+            valid = false;
+        }
+        if (syntax.getStandardFunction((int)Syntax.StandardFunction.fRS, out funChar) && set.contains(funChar))
+        {
+            message(ParserMessages.nmcharRs, new NumberMessageArg(funChar));
+            valid = false;
+        }
+        if (syntax.getStandardFunction((int)Syntax.StandardFunction.fSPACE, out funChar) && set.contains(funChar))
+        {
+            message(ParserMessages.nmcharSpace, new NumberMessageArg(funChar));
+            valid = false;
+        }
+        intersectCharSets(set, syntax.charSet((int)Syntax.Set.sepchar)!, bad);
+        if (!bad.isEmpty())
+        {
+            message(ParserMessages.nmcharSepchar, new CharsetMessageArg(bad));
+            valid = false;
+        }
+        return valid;
+    }
+
+    // void intersectCharSets(const ISet<Char> &s1, const ISet<Char> &s2, ISet<WideChar> &inter);
+    protected void intersectCharSets(ISet<Char> s1, ISet<Char> s2, ISet<WideChar> inter)
+    {
+        ISetIter<Char> i1 = new ISetIter<Char>(s1);
+        ISetIter<Char> i2 = new ISetIter<Char>(s2);
+        Char min1, max1, min2, max2;
+        if (i1.next(out min1, out max1) == 0)
+            return;
+        if (i2.next(out min2, out max2) == 0)
+            return;
+        for (;;)
+        {
+            if (max1 < min2)
+            {
+                if (i1.next(out min1, out max1) == 0)
+                    break;
+            }
+            else if (max2 < min1)
+            {
+                if (i2.next(out min2, out max2) == 0)
+                    break;
+            }
+            else
+            {
+                // The two ranges intersect.
+                inter.addRange(min1 > min2 ? min1 : min2,
+                              max1 < max2 ? max1 : max2);
+                // Discard the range that ends first.
+                if (max1 < max2)
+                {
+                    if (i1.next(out min1, out max1) == 0)
+                        break;
+                }
+                else if (max2 < max1)
+                {
+                    if (i2.next(out min2, out max2) == 0)
+                        break;
+                }
+                else
+                {
+                    if (i1.next(out min1, out max1) == 0)
+                        break;
+                    if (i2.next(out min2, out max2) == 0)
+                        break;
+                }
+            }
+        }
+    }
+
+    // Boolean checkGeneralDelim(const Syntax &syn, const StringC &delim);
+    protected Boolean checkGeneralDelim(Syntax syn, StringC delim)
+    {
+        ISet<Char>? functionSet = syn.charSet((int)Syntax.Set.functionChar);
+        if (delim.size() > 0)
+        {
+            Boolean allFunction = true;
+            for (nuint i = 0; i < delim.size(); i++)
+                if (functionSet == null || !functionSet.contains(delim[i]))
+                    allFunction = false;
+            if (allFunction)
+            {
+                message(ParserMessages.generalDelimAllFunction, new StringMessageArg(delim));
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Boolean checkSwitches(CharSwitcher &switcher, const CharsetInfo &syntaxCharset);
+    protected Boolean checkSwitches(CharSwitcher switcher, CharsetInfo syntaxCharset)
+    {
+        Boolean valid = true;
+        for (nuint i = 0; i < switcher.nSwitches(); i++)
+        {
+            WideChar[] c = new WideChar[2];
+            c[0] = switcher.switchFrom(i);
+            c[1] = switcher.switchTo(i);
+            for (int j = 0; j < 2; j++)
+            {
+                UnivChar univChar;
+                if (syntaxCharset.descToUniv(c[j], out univChar))
+                {
+                    // Check that it is not Digit Lcletter or Ucletter
+                    if ((UnivCharsetDesc.a <= univChar && univChar < UnivCharsetDesc.a + 26)
+                        || (UnivCharsetDesc.A <= univChar && univChar < UnivCharsetDesc.A + 26)
+                        || (UnivCharsetDesc.zero <= univChar && univChar < UnivCharsetDesc.zero + 10))
+                    {
+                        message(ParserMessages.switchLetterDigit, new NumberMessageArg(univChar));
+                        valid = false;
+                    }
+                }
+            }
+        }
+        return valid;
+    }
+
+    // Boolean checkSwitchesMarkup(CharSwitcher &switcher);
+    protected Boolean checkSwitchesMarkup(CharSwitcher switcher)
+    {
+        Boolean valid = true;
+        nuint nSwitches = switcher.nSwitches();
+        for (nuint i = 0; i < nSwitches; i++)
+            if (!switcher.switchUsed(i))
+            {
+                // If the switch wasn't used, then the character wasn't a markup character.
+                message(ParserMessages.switchNotMarkup, new NumberMessageArg(switcher.switchFrom(i)));
+                valid = false;
+            }
+        return valid;
+    }
+
+    // Boolean setRefDelimGeneral(Syntax &syntax, const CharsetInfo &syntaxCharset,
+    //                            const CharsetInfo &internalCharset, CharSwitcher &switcher);
+    protected Boolean setRefDelimGeneral(Syntax syntax, CharsetInfo syntaxCharset,
+                                         CharsetInfo internalCharset, CharSwitcher switcher)
+    {
+        // Column 3 from Figure 3
+        sbyte[][] delims = new sbyte[][]
+        {
+            new sbyte[] { 38 },                    // &
+            new sbyte[] { 45, 45 },                // --
+            new sbyte[] { 38, 35 },                // &#
+            new sbyte[] { 93 },                    // ]
+            new sbyte[] { 91 },                    // [
+            new sbyte[] { 93 },                    // ]
+            new sbyte[] { 91 },                    // [
+            new sbyte[] { 38 },                    // &
+            new sbyte[] { 60, 47 },                // </
+            new sbyte[] { 41 },                    // )
+            new sbyte[] { 40 },                    // (
+            new sbyte[] { 0 },                     // HCRO (not defined in reference)
+            new sbyte[] { 34 },                    // "
+            new sbyte[] { 39 },                    // '
+            new sbyte[] { 62 },                    // >
+            new sbyte[] { 60, 33 },                // <!
+            new sbyte[] { 45 },                    // -
+            new sbyte[] { 93, 93 },                // ]]
+            new sbyte[] { 47 },                    // /
+            new sbyte[] { 47 },                    // NESTC /
+            new sbyte[] { 63 },                    // ?
+            new sbyte[] { 124 },                   // |
+            new sbyte[] { 37 },                    // %
+            new sbyte[] { 62 },                    // >
+            new sbyte[] { 60, 63 },                // <?
+            new sbyte[] { 43 },                    // +
+            new sbyte[] { 59 },                    // ;
+            new sbyte[] { 42 },                    // *
+            new sbyte[] { 35 },                    // #
+            new sbyte[] { 44 },                    // ,
+            new sbyte[] { 60 },                    // <
+            new sbyte[] { 62 },                    // >
+            new sbyte[] { 61 },                    // =
+        };
+
+        Boolean valid = true;
+        ISet<WideChar> missing = new ISet<WideChar>();
+
+        for (int i = 0; i < Syntax.nDelimGeneral; i++)
+        {
+            if (syntax.delimGeneral(i).size() == 0)
+            {
+                StringC delim = new StringC();
+                nuint j;
+                for (j = 0; j < 2 && delims[i].Length > (int)j && delims[i][j] != 0; j++)
+                {
+                    UnivChar univChar = translateUniv((UnivChar)delims[i][j], switcher, syntaxCharset);
+                    Char c;
+                    if (univToDescCheck(internalCharset, univChar, out c))
+                        delim.operatorPlusAssign(c);
+                    else
+                    {
+                        missing.add(univChar);
+                        valid = false;
+                    }
+                }
+                if (delim.size() == j)
+                {
+                    if (checkGeneralDelim(syntax, delim))
+                        syntax.setDelimGeneral(i, delim);
+                    else
+                        valid = false;
+                }
+            }
+        }
+        if (!missing.isEmpty())
+            message(ParserMessages.missingSignificant646, new CharsetMessageArg(missing));
+        return valid;
+    }
+
+    // void setRefNames(Syntax &syntax, const CharsetInfo &internalCharset, Boolean www);
+    protected void setRefNames(Syntax syntax, CharsetInfo internalCharset, Boolean www)
+    {
+        string[] referenceNames = new string[]
+        {
+            "ALL", "ANY", "ATTLIST", "CDATA", "CONREF", "CURRENT",
+            "DATA", "DEFAULT", "DOCTYPE", "ELEMENT", "EMPTY", "ENDTAG",
+            "ENTITIES", "ENTITY", "FIXED", "ID", "IDLINK", "IDREF",
+            "IDREFS", "IGNORE", "IMPLICIT", "IMPLIED", "INCLUDE", "INITIAL",
+            "LINK", "LINKTYPE", "MD", "MS", "NAME", "NAMES",
+            "NDATA", "NMTOKEN", "NMTOKENS", "NOTATION", "NUMBER", "NUMBERS",
+            "NUTOKEN", "NUTOKENS", "O", "PCDATA", "PI", "POSTLINK",
+            "PUBLIC", "RCDATA", "RE", "REQUIRED", "RESTORE", "RS",
+            "SDATA", "SHORTREF", "SIMPLE", "SPACE", "STARTTAG", "SUBDOC",
+            "SYSTEM", "TEMP", "USELINK", "USEMAP"
+        };
+
+        for (int i = 0; i < Syntax.nNames; i++)
+        {
+            switch (i)
+            {
+                case (int)Syntax.ReservedName.rDATA:
+                case (int)Syntax.ReservedName.rIMPLICIT:
+                    if (!www)
+                        continue;
+                    goto default;
+                case (int)Syntax.ReservedName.rALL:
+                    if (!www && options().errorAfdr)
+                        continue;
+                    goto default;
+                default:
+                    {
+                        StringC docName = internalCharset.execToDesc(referenceNames[i]);
+                        Syntax.ReservedName tem;
+                        if (syntax.lookupReservedName(docName, out tem))
+                            message(ParserMessages.nameReferenceReservedName, new StringMessageArg(docName));
+                        if (syntax.reservedName((Syntax.ReservedName)i).size() == 0)
+                            syntax.setName(i, docName);
+                    }
+                    break;
+            }
+        }
+    }
+
+    // Boolean addRefDelimShortref(Syntax &syntax, const CharsetInfo &syntaxCharset,
+    //                             const CharsetInfo &internalCharset, CharSwitcher &switcher);
+    protected Boolean addRefDelimShortref(Syntax syntax, CharsetInfo syntaxCharset,
+                                          CharsetInfo internalCharset, CharSwitcher switcher)
+    {
+        // Column 2 from Figure 4 - shortref delimiters
+        // 66 = 'B' which represents blank
+        sbyte[][] delimShortref = new sbyte[][]
+        {
+            new sbyte[] { 9 },                     // TAB
+            new sbyte[] { 13 },                    // RE (CR)
+            new sbyte[] { 10 },                    // RS (LF)
+            new sbyte[] { 10, 66 },                // RS B
+            new sbyte[] { 10, 13 },                // RS RE
+            new sbyte[] { 10, 66, 13 },            // RS B RE
+            new sbyte[] { 66, 13 },                // B RE
+            new sbyte[] { 32 },                    // SPACE
+            new sbyte[] { 66, 66 },                // BB
+            new sbyte[] { 34 },                    // "
+            new sbyte[] { 35 },                    // #
+            new sbyte[] { 37 },                    // %
+            new sbyte[] { 39 },                    // '
+            new sbyte[] { 40 },                    // (
+            new sbyte[] { 41 },                    // )
+            new sbyte[] { 42 },                    // *
+            new sbyte[] { 43 },                    // +
+            new sbyte[] { 44 },                    // ,
+            new sbyte[] { 45 },                    // -
+            new sbyte[] { 45, 45 },                // --
+            new sbyte[] { 58 },                    // :
+            new sbyte[] { 59 },                    // ;
+            new sbyte[] { 61 },                    // =
+            new sbyte[] { 64 },                    // @
+            new sbyte[] { 91 },                    // [
+            new sbyte[] { 93 },                    // ]
+            new sbyte[] { 94 },                    // ^
+            new sbyte[] { 95 },                    // _
+            new sbyte[] { 123 },                   // {
+            new sbyte[] { 124 },                   // |
+            new sbyte[] { 125 },                   // }
+            new sbyte[] { 126 },                   // ~
+        };
+
+        ISet<WideChar> missing = new ISet<WideChar>();
+
+        for (nuint i = 0; i < (nuint)delimShortref.Length; i++)
+        {
+            StringC delim = new StringC();
+
+            nuint j;
+            for (j = 0; j < 3 && delimShortref[(int)i].Length > (int)j && delimShortref[(int)i][j] != 0; j++)
+            {
+                Char c;
+                UnivChar univChar = translateUniv((UnivChar)delimShortref[(int)i][j], switcher, syntaxCharset);
+                if (univToDescCheck(internalCharset, univChar, out c))
+                    delim.operatorPlusAssign(c);
+                else
+                    missing.add(univChar);
+            }
+            if (delim.size() == j)
+            {
+                if (switcher.nSwitches() > 0 && syntax.isValidShortref(delim))
+                    message(ParserMessages.duplicateDelimShortref, new StringMessageArg(delim));
+                else
+                    syntax.addDelimShortref(delim, internalCharset);
+            }
+        }
+        if (!missing.isEmpty())
+            message(ParserMessages.missingSignificant646, new CharsetMessageArg(missing));
+        return true;
+    }
+
+    // Boolean setStandardSyntax(Syntax &syn, const StandardSyntaxSpec &spec,
+    //                           const CharsetInfo &internalCharset, CharSwitcher &switcher, Boolean www);
+    protected Boolean setStandardSyntax(Syntax syn, StandardSyntaxSpec spec,
+                                        CharsetInfo internalCharset, CharSwitcher switcher, Boolean www)
+    {
+        // Static syntax charset (ASCII 0-127)
+        UnivCharsetDesc.Range[] syntaxCharsetRanges = new UnivCharsetDesc.Range[]
+        {
+            new UnivCharsetDesc.Range { descMin = 0, count = 128, univMin = 0 }
+        };
+        UnivCharsetDesc syntaxCharsetDesc = new UnivCharsetDesc(syntaxCharsetRanges, (nuint)syntaxCharsetRanges.Length);
+        CharsetInfo syntaxCharset = new CharsetInfo(syntaxCharsetDesc);
+
+        Boolean valid = true;
+        if (!checkSwitches(switcher, syntaxCharset))
+            valid = false;
+
+        for (nuint i = 0; i < switcher.nSwitches(); i++)
+            if (switcher.switchTo(i) >= 128)
+                message(ParserMessages.switchNotInCharset, new NumberMessageArg(switcher.switchTo(i)));
+
+        // Shunned characters
+        Char[] shunchar = new Char[]
+        {
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+            16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+            127, 255
+        };
+
+        for (nuint i = 0; i < (nuint)shunchar.Length; i++)
+            syn.addShunchar(shunchar[i]);
+        syn.setShuncharControls();
+
+        // Standard function characters
+        Syntax.StandardFunction[] standardFunctions = new Syntax.StandardFunction[]
+        {
+            Syntax.StandardFunction.fRE, Syntax.StandardFunction.fRS, Syntax.StandardFunction.fSPACE
+        };
+        SyntaxChar[] functionChars = new SyntaxChar[] { 13, 10, 32 };  // CR, LF, SPACE
+
+        for (int i = 0; i < 3; i++)
+        {
+            Char docChar;
+            if (translateSyntax(switcher, syntaxCharset, internalCharset, functionChars[i], out docChar)
+                && checkNotFunction(syn, docChar))
+                syn.setStandardFunction(standardFunctions[i], docChar);
+            else
+                valid = false;
+        }
+
+        // Added function characters from spec
+        for (nuint i = 0; i < spec.nAddedFunction; i++)
+        {
+            Char docChar;
+            if (translateSyntax(switcher, syntaxCharset, internalCharset,
+                               spec.addedFunction[i].syntaxChar, out docChar)
+                && checkNotFunction(syn, docChar))
+                syn.addFunctionChar(internalCharset.execToDesc(spec.addedFunction[i].name),
+                                   spec.addedFunction[i].functionClass,
+                                   docChar);
+            else
+                valid = false;
+        }
+
+        // Name characters: '-' and '.'
+        SyntaxChar[] nameChars = new SyntaxChar[] { 45, 46 };  // '-' '.'
+        ISet<Char> nameCharSet = new ISet<Char>();
+        for (int i = 0; i < 2; i++)
+        {
+            Char docChar;
+            if (translateSyntax(switcher, syntaxCharset, internalCharset, nameChars[i], out docChar))
+                nameCharSet.add(docChar);
+            else
+                valid = false;
+        }
+        if (!checkNmchars(nameCharSet, syn))
+            valid = false;
+        else
+            syn.addNameCharacters(nameCharSet);
+
+        syn.setNamecaseGeneral(true);
+        syn.setNamecaseEntity(false);
+
+        if (!setRefDelimGeneral(syn, syntaxCharset, internalCharset, switcher))
+            valid = false;
+
+        setRefNames(syn, internalCharset, www);
+        syn.enterStandardFunctionNames();
+
+        if (spec.shortref && !addRefDelimShortref(syn, syntaxCharset, internalCharset, switcher))
+            valid = false;
+
+        return valid;
     }
 }

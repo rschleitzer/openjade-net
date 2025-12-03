@@ -341,6 +341,119 @@ public class Syntax : Resource
         quantity_[i] = n;
     }
 
+    // void implySgmlChar(const Sd &sd);
+    public void implySgmlChar(Sd sd)
+    {
+        CharsetInfo internalCharset = sd.internalCharset();
+        internalCharset.getDescSet(set_[(int)Set.sgmlChar]);
+        ISet<WideChar> invalid = new ISet<WideChar>();
+        checkSgmlChar(sd, null, false, invalid);
+        ISetIter<WideChar> iter = new ISetIter<WideChar>(invalid);
+        WideChar min, max;
+        while (iter.next(out min, out max) != 0)
+        {
+            do
+            {
+                if (min <= Constant.charMax)
+                    set_[(int)Set.sgmlChar].remove((Char)min);
+            } while (min++ != max);
+        }
+    }
+
+    // void checkSgmlChar(const Sd &sd, const Syntax *otherSyntax, Boolean invalidUseDocumentCharset, ISet<WideChar> &invalid) const;
+    public void checkSgmlChar(Sd sd, Syntax? otherSyntax, Boolean invalidUseDocumentCharset, ISet<WideChar> invalid)
+    {
+        ISetIter<Char> iter = new ISetIter<Char>(shunchar_);
+        Char min, max;
+        while (iter.next(out min, out max) != 0)
+        {
+            if (min <= max)
+            {
+                do
+                {
+                    Char c;
+                    if (!sd.internalCharsetIsDocCharset())
+                    {
+                        UnivChar univ;
+                        WideChar tem;
+                        ISet<WideChar> set = new ISet<WideChar>();
+                        if (sd.docCharset().descToUniv(min, out univ)
+                            && sd.internalCharset().univToDesc(univ, out tem, set) > 0
+                            && tem <= Constant.charMax)
+                            c = (Char)tem;
+                        else
+                        {
+                            // If it's a declared but unknown character, it can't be significant
+                            PublicId? basePub;
+                            StringC lit = new StringC();
+                            Number n;
+                            CharsetDeclRange.Type type;
+                            if (invalidUseDocumentCharset
+                                && sd.docCharsetDecl().getCharInfo(min,
+                                                                   out basePub,
+                                                                   out type,
+                                                                   out n,
+                                                                   lit)
+                                && type != CharsetDeclRange.Type.unused)
+                                invalid.add(min);
+                            continue;
+                        }
+                    }
+                    else
+                        c = min;
+                    if (!set_[(int)Set.significant].contains(c)
+                        && (otherSyntax == null || !otherSyntax.set_[(int)Set.significant].contains(c))
+                        && set_[(int)Set.sgmlChar].contains(c))
+                        invalid.add(invalidUseDocumentCharset ? min : c);
+                } while (min++ != max);
+            }
+        }
+        if (shuncharControls_)
+        {
+            UnivChar i;
+            CharsetInfo charset = invalidUseDocumentCharset ? sd.docCharset() : sd.internalCharset();
+            for (i = 0; i < 32; i++)
+                checkUnivControlChar(i, charset, otherSyntax, invalid);
+            for (i = 127; i < 160; i++)
+                checkUnivControlChar(i, charset, otherSyntax, invalid);
+        }
+    }
+
+    // Helper method for checkSgmlChar
+    private void checkUnivControlChar(UnivChar univChar, CharsetInfo internalCharset, Syntax? otherSyntax, ISet<WideChar> invalid)
+    {
+        WideChar c;
+        ISet<WideChar> set = new ISet<WideChar>();
+        uint nChars = internalCharset.univToDesc(univChar, out c, set);
+        switch (nChars)
+        {
+            case 0:
+                break;
+            case 1:
+                set.add(c);
+                goto default;
+            default:
+                {
+                    ISetIter<WideChar> iter = new ISetIter<WideChar>(set);
+                    WideChar min, max;
+                    while (iter.next(out min, out max) != 0)
+                    {
+                        do
+                        {
+                            if (min > Constant.charMax)
+                                break;
+                            Char ch = (Char)min;
+                            if (!set_[(int)Set.significant].contains(ch)
+                                && (otherSyntax == null || !otherSyntax.set_[(int)Set.significant].contains(ch))
+                                && set_[(int)Set.sgmlChar].contains(ch))
+                                invalid.add(ch);
+                        } while (min++ != max);
+                    }
+                }
+                break;
+        }
+    }
+
     // const SubstTable *generalSubstTable() const;
     public SubstTable? generalSubstTable()
     {

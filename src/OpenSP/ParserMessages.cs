@@ -767,4 +767,42 @@ public static class ParserMessages
         MessageType.Severity.error, null, 291, "only one ID link set declaration allowed in an LPD subset");
     public static readonly MessageType1 duplicateLinkSet = new MessageType1(
         MessageType.Severity.error, null, 277, "link set %1 already defined");
+
+    // SGML Declaration (parseSd) messages
+    public static readonly MessageType1 ambiguousDocCharacter = new MessageType1(
+        MessageType.Severity.warning, null, 500, "character numbers %1 in the document character set have been assigned the same meaning, but this is the meaning of a significant character");
+    public static readonly MessageType1 missingSyntaxChar = new MessageType1(
+        MessageType.Severity.error, null, 501, "the character with number %1 in ISO 646 is significant but has no representation in the syntax reference character set");
+    public static readonly MessageType1 translateSyntaxCharDoc = new MessageType1(
+        MessageType.Severity.error, null, 502, "there is no unique character in the document character set corresponding to character number %1 in the syntax reference character set");
+    public static readonly MessageType1 translateSyntaxCharInternal = new MessageType1(
+        MessageType.Severity.error, null, 503, "there is no unique character in the internal character set corresponding to character number %1 in the syntax reference character set");
+    public static readonly MessageType1 oneFunction = new MessageType1(
+        MessageType.Severity.error, null, 504, "character number %1 assigned to more than one function");
+    public static readonly MessageType1 switchNotMarkup = new MessageType1(
+        MessageType.Severity.error, null, 505, "character number %1 in the syntax reference character set was specified as a character to be switched but is not a markup character");
+    public static readonly MessageType1 switchNotInCharset = new MessageType1(
+        MessageType.Severity.error, null, 506, "character number %1 was specified as a character to be switched but is not in the syntax reference character set");
+    public static readonly MessageType1 missingSignificant646 = new MessageType1(
+        MessageType.Severity.error, null, 507, "characters with the following numbers in ISO 646 are significant in the concrete syntax but are not in the document character set: %1");
+    public static readonly MessageType1 generalDelimAllFunction = new MessageType1(
+        MessageType.Severity.error, null, 508, "general delimiter %1 consists solely of function characters");
+    public static readonly MessageType1 nmcharLetter = new MessageType1(
+        MessageType.Severity.error, null, 509, "letters assigned to LCNMCHAR, UCNMCHAR, LCNMSTRT or UCNMSTRT: %1");
+    public static readonly MessageType1 nmcharDigit = new MessageType1(
+        MessageType.Severity.error, null, 510, "digits assigned to LCNMCHAR, UCNMCHAR, LCNMSTRT or UCNMSTRT: %1");
+    public static readonly MessageType1 nmcharRe = new MessageType1(
+        MessageType.Severity.error, null, 511, "character number %1 cannot be assigned to LCNMCHAR, UCNMCHAR, LCNMSTRT or UCNMSTRT because it is RE");
+    public static readonly MessageType1 nmcharRs = new MessageType1(
+        MessageType.Severity.error, null, 512, "character number %1 cannot be assigned to LCNMCHAR, UCNMCHAR, LCNMSTRT or UCNMSTRT because it is RS");
+    public static readonly MessageType1 nmcharSpace = new MessageType1(
+        MessageType.Severity.error, null, 513, "character number %1 cannot be assigned to LCNMCHAR, UCNMCHAR, LCNMSTRT or UCNMSTRT because it is SPACE");
+    public static readonly MessageType1 nmcharSepchar = new MessageType1(
+        MessageType.Severity.error, null, 514, "separator characters assigned to LCNMCHAR, UCNMCHAR, LCNMSTRT or UCNMSTRT: %1");
+    public static readonly MessageType1 switchLetterDigit = new MessageType1(
+        MessageType.Severity.error, null, 515, "character number %1 cannot be switched because it is a Digit, LC Letter or UC Letter");
+    public static readonly MessageType1 nameReferenceReservedName = new MessageType1(
+        MessageType.Severity.error, null, 516, "%1 cannot be the replacement for a reference reserved name because it is another reference reserved name");
+    public static readonly MessageType1 duplicateDelimShortref = new MessageType1(
+        MessageType.Severity.error, null, 517, "short reference delimiter %1 already specified");
 }

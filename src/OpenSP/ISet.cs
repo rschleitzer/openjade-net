@@ -39,6 +39,13 @@ public class ISet<T> where T : struct, IComparable<T>
             add(v[i]);
     }
 
+    // Copy constructor - ISet(const ISet<T> &)
+    public ISet(ISet<T> other)
+    {
+        for (nuint i = 0; i < other.r_.size(); i++)
+            r_.push_back(other.r_[i]);
+    }
+
     // ~ISet();
     // C# GC handles this
 

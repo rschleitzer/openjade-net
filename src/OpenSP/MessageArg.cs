@@ -131,3 +131,41 @@ public class LocationMessageArg : OtherMessageArg
         return loc_;
     }
 }
+
+// CharsetMessageArg - displays a set of character codes as a formatted list
+public class CharsetMessageArg : MessageArg
+{
+    private ISet<WideChar> set_;
+
+    public CharsetMessageArg(ISet<WideChar> set)
+    {
+        set_ = new ISet<WideChar>(set);
+    }
+
+    public MessageArg copy()
+    {
+        return new CharsetMessageArg(set_);
+    }
+
+    public void append(MessageBuilder builder)
+    {
+        ISetIter<WideChar> iter = new ISetIter<WideChar>(set_);
+        WideChar min, max;
+        Boolean first = true;
+        while (iter.next(out min, out max) != 0)
+        {
+            if (first)
+                first = false;
+            else
+                builder.appendFragment(ParserMessages.listSep);
+            builder.appendNumber(min);
+            if (max != min)
+            {
+                builder.appendFragment(max == min + 1
+                    ? ParserMessages.listSep
+                    : ParserMessages.rangeSep);
+                builder.appendNumber(max);
+            }
+        }
+    }
+}
