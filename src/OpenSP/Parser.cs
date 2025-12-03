@@ -387,6 +387,35 @@ public class Parser : ParserState
         return false;
     }
 
+    // Boolean parseComment(Mode mode);
+    protected Boolean parseComment(Mode mode)
+    {
+        Location startLoc = currentLocation();
+        Markup? markup = currentMarkup();
+        if (markup != null)
+            markup.addCommentStart();
+        Token token;
+        while ((token = getToken(mode)) != Tokens.tokenCom)
+        {
+            switch (token)
+            {
+                case Tokens.tokenUnrecognized:
+                    if (!reportNonSgmlCharacter())
+                        message(ParserMessages.sdCommentSignificant,
+                                new StringMessageArg(currentToken()));
+                    break;
+                case Tokens.tokenEe:
+                    message(ParserMessages.commentEntityEnd, startLoc);
+                    return false;
+                default:
+                    if (markup != null)
+                        markup.addCommentChar(currentChar());
+                    break;
+            }
+        }
+        return true;
+    }
+
     // From parseDecl.cxx
     protected virtual void declSubsetRecover(uint startLevel) { /* TODO */ }
     protected virtual void prologRecover() { /* TODO */ }
@@ -433,7 +462,62 @@ public class Parser : ParserState
     protected virtual void parseEmptyEndTag() { /* TODO */ }
     protected virtual void parseNullEndTag() { /* TODO */ }
     protected virtual void endAllElements() { /* TODO */ }
-    protected virtual Boolean parseProcessingInstruction() { return false; }
+
+    // Boolean parseProcessingInstruction();
+    protected Boolean parseProcessingInstruction()
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return false;
+        ins.startToken();
+        Location location = currentLocation();
+        StringC buf = new StringC();
+        for (;;)
+        {
+            Token token = getToken(Mode.piMode);
+            if (token == Tokens.tokenPic)
+                break;
+            switch (token)
+            {
+                case Tokens.tokenEe:
+                    message(ParserMessages.processingInstructionEntityEnd);
+                    return false;
+                case Tokens.tokenUnrecognized:
+                    reportNonSgmlCharacter();
+                    goto case Tokens.tokenChar;
+                case Tokens.tokenChar:
+                    Char[]? start = ins.currentTokenStart();
+                    if (start != null)
+                        buf.operatorPlusAssign(start[0]);
+                    if (buf.size() / 2 > syntax().pilen())
+                    {
+                        message(ParserMessages.processingInstructionLength,
+                                new NumberMessageArg(syntax().pilen()));
+                        message(ParserMessages.processingInstructionClose);
+                        return false;
+                    }
+                    break;
+            }
+        }
+        if (buf.size() > syntax().pilen())
+            message(ParserMessages.processingInstructionLength,
+                    new NumberMessageArg(syntax().pilen()));
+        if (options().warnPiMissingName)
+        {
+            nuint i = 0;
+            if (buf.size() > 0 && syntax().isNameStartCharacter((Xchar)buf[0]))
+            {
+                for (i = 1; i < buf.size(); i++)
+                    if (!syntax().isNameCharacter((Xchar)buf[i]))
+                        break;
+            }
+            if (i == 0 || (i < buf.size() && !syntax().isS((Xchar)buf[i])))
+                message(ParserMessages.piMissingName);
+        }
+        noteMarkup();
+        eventHandler().pi(new ImmediatePiEvent(buf, location));
+        return true;
+    }
+
     protected virtual void handleShortref(int index) { /* TODO */ }
     protected virtual void endInstance() { /* TODO */ }
     protected virtual void checkIdrefs() { /* TODO */ }

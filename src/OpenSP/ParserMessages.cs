@@ -194,7 +194,7 @@ public static class ParserMessages
         MessageType.Severity.error, null, 236, "no applicable DTD");
     public static readonly MessageType1 defaultEntityReference = new MessageType1(
         MessageType.Severity.warning, null, 237, "reference to default entity '%1'");
-    public static readonly MessageType1L commentEntityEnd = new MessageType1L(
+    public static readonly MessageType0L commentEntityEnd = new MessageType0L(
         MessageType.Severity.error, null, 238, "comment closed by entity end started here");
     public static readonly MessageType1 sdCommentSignificant = new MessageType1(
         MessageType.Severity.error, null, 239, "'%1' invalid in SGML declaration comment");
