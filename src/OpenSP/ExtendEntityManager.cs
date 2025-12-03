@@ -849,7 +849,9 @@ internal class ExternalInputSource : InputSource
     private Boolean insertRS_;
     private Decoder? decoder_;
     private byte[] leftOver_ = Array.Empty<byte>();
+#pragma warning disable CS0414 // Field is assigned but never used
     private nuint nLeftOver_;
+#pragma warning restore CS0414
     private Boolean mayRewind_;
     private Boolean mayNotExist_;
     private RecordType recordType_;

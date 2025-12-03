@@ -239,19 +239,21 @@ public class MessageReporter : Messenger
                                         {
                                             i++;
                                             if (text[i] == '1')
-                                                os_.operatorOutput(origin.entityName()!);
+                                                os_!.operatorOutput(origin.entityName()!);
                                             else if (text[i] == '2')
                                                 printLocation(parentInfo, parentOff);
                                             else if (text[i] >= '3' && text[i] <= '9')
-                                                ; // skip
+                                            {
+                                                // skip unused placeholders %3-%9
+                                            }
                                             else
-                                                os_.put(text[i]);
+                                                os_!.put(text[i]);
                                         }
                                     }
                                     else
-                                        os_.put(text[i]);
+                                        os_!.put(text[i]);
                                 }
-                                os_.put((Char)'\n');
+                                os_!.put((Char)'\n');
                             }
                         }
                         doneHeader = true;

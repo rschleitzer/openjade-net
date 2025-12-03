@@ -104,7 +104,7 @@ public class LinkProcess
                 linkAttributes = rule.attributes();
                 resultElementSpec = rule.resultElementSpec();
 
-                if (!rule.isAssociatedWith(element))
+                if (!rule.isAssociatedWith(element!))
                 {
                     mgr.setNextLocation(location);
                     mgr.message(ParserMessages.idlinkElementType,
@@ -116,7 +116,7 @@ public class LinkProcess
         }
 
         LinkSet? currentLinkSet = open_.head()!.current;
-        nuint nRules = currentLinkSet!.nLinkRules(element);
+        nuint nRules = currentLinkSet!.nLinkRules(element!);
         if (nRules > 0)
         {
             nuint selected;
@@ -124,7 +124,7 @@ public class LinkProcess
             {
                 linkAttributes_.resize(nRules);
                 for (nuint i = 0; i < nRules; i++)
-                    linkAttributes_[i] = currentLinkSet.linkRule(element, i).attributes();
+                    linkAttributes_[i] = currentLinkSet!.linkRule(element!, i)!.attributes();
                 if (!selectLinkRule(linkAttributes_, location, out selected))
                 {
                     linkAttributes = null;
@@ -135,9 +135,9 @@ public class LinkProcess
             else
                 selected = 0;
 
-            SourceLinkRuleResource? rule = currentLinkSet.linkRule(element, selected);
+            SourceLinkRuleResource? rule = currentLinkSet!.linkRule(element!, selected);
             open_.insert(new LinkProcessOpenElement(open_.head()!.current, rule!));
-            linkAttributes = rule.attributes();
+            linkAttributes = rule!.attributes();
             resultElementSpec = rule.resultElementSpec();
             return true;
         }

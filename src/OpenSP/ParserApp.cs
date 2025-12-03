@@ -8,7 +8,7 @@ public abstract class ParserApp : EntityApp
 {
     public const uint DEFAULT_ERROR_LIMIT = 200;
 
-    protected ParserOptions options_ = new ParserOptions();
+    protected new ParserOptions options_ = new ParserOptions();
     protected SgmlParser parser_ = new SgmlParser();
     protected uint errorLimit_;
     protected Vector<StringC> arcNames_ = new Vector<StringC>();

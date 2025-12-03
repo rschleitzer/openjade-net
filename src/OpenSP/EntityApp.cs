@@ -117,7 +117,7 @@ public abstract class EntityApp : CmdLineApp
 
         entityManager_ = new Ptr<ExtendEntityManager>(
             ExtendEntityManager.make(sm,
-                                     codingSystem(),
+                                     codingSystem()!,
                                      inputCodingSystemKit(),
                                      internalCharsetIsDocCharset_));
 

@@ -154,7 +154,7 @@ public class WinApp
             sm.addSearchDir(dirs[i]);
 
         ExtendEntityManager xem = ExtendEntityManager.make(sm,
-                                                            inputCodingSystem,
+                                                            inputCodingSystem!,
                                                             icsk,
                                                             false);
         em.operatorAssign(xem);
@@ -214,7 +214,7 @@ public class WinApp
             return null;
         if (codingSystemKit_.isNull())
             codingSystemKit_ = new ConstPtr<InputCodingSystemKit>(CodingSystemKit.make(null));
-        string tem;
+        string? tem;
         return codingSystemKit_.pointer()!.makeInputCodingSystem(name,
                                                                    codingSystemKit_.pointer()!.systemCharset(),
                                                                    false,

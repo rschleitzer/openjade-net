@@ -241,8 +241,10 @@ internal class ArcProcessor : ContentState
     private StringC piDeclAttspecText_ = new StringC();
     private Index piDeclAttspecIndex_;
     private ConstPtr<AttributeDefinitionList> archPiAttributeDefs_ = new ConstPtr<AttributeDefinitionList>();
+#pragma warning disable CS0414 // Field is assigned but never used
     private Boolean arcDtdIsParam_;
     private Boolean arcAuto_;
+#pragma warning restore CS0414
     private Vector<StringC> arcOpts_ = new Vector<StringC>();
     private StringC rniContent_ = new StringC();
     private StringC rniArcCont_ = new StringC();
@@ -259,7 +261,9 @@ internal class ArcProcessor : ContentState
     private ArcDirector? director_;
     private EventHandler? docHandler_;
     private Owner<EventHandler> ownEventHandler_ = new Owner<EventHandler>();
+#pragma warning disable CS0414 // Field is assigned but never used
     private nuint docIndex_;
+#pragma warning restore CS0414
 
     // ArcProcessor();
     public ArcProcessor()
@@ -464,28 +468,28 @@ internal class ArcProcessor : ContentState
         mgr_?.dispatchMessage(msg);
     }
 
-    public ConstPtr<Notation> getAttributeNotation(StringC name, Location loc)
+    public new ConstPtr<Notation> getAttributeNotation(StringC name, Location loc)
     {
         if (metaDtd_.isNull())
             return new ConstPtr<Notation>();
         return metaDtd_.pointer()!.lookupNotationConst(name);
     }
 
-    public ConstPtr<Entity> getAttributeEntity(StringC name, Location loc)
+    public new ConstPtr<Entity> getAttributeEntity(StringC name, Location loc)
     {
         if (metaDtd_.isNull())
             return new ConstPtr<Entity>();
         return metaDtd_.pointer()!.lookupEntity(false, name);
     }
 
-    public void noteCurrentAttribute(nuint i, AttributeValue? value)
+    public new void noteCurrentAttribute(nuint i, AttributeValue? value)
     {
         if (i >= currentAttributes_.size())
             currentAttributes_.resize(i + 1);
         currentAttributes_[i] = new ConstPtr<AttributeValue>(value);
     }
 
-    public ConstPtr<AttributeValue> getCurrentAttribute(nuint i)
+    public new ConstPtr<AttributeValue> getCurrentAttribute(nuint i)
     {
         if (i < currentAttributes_.size())
             return currentAttributes_[i];
@@ -507,7 +511,7 @@ internal class ArcProcessor : ContentState
         return true;
     }
 
-    public void noteIdref(StringC str, Location loc)
+    public new void noteIdref(StringC str, Location loc)
     {
         Id? id = lookupCreateId(str);
         id?.noteIdref(loc);
@@ -543,12 +547,18 @@ internal class ArcEngineImpl : DelegateEventHandler
     private NullEventHandler nullHandler_;
     private SgmlParser? parser_;
     private Location currentLocation_ = new Location();
+#pragma warning disable CS0414 // Field is assigned but never used
     private uint gatheringContent_;
+#pragma warning restore CS0414
     private Text content_ = new Text();
+#pragma warning disable CS0414 // Field is assigned but never used
     private uint startAgain_;
+#pragma warning restore CS0414
     private Allocator alloc_;
     private StringC appinfo_ = new StringC();
+#pragma warning disable CS0649 // Field is never assigned
     private AttributeList? linkAttributes_;
+#pragma warning restore CS0649
     private LinkProcess linkProcess_ = new LinkProcess();
     private Boolean haveLinkProcess_;
     private Vector<StringC> docName_ = new Vector<StringC>();

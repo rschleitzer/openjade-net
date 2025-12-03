@@ -49,9 +49,10 @@ public class ErrorCountEventHandler : EventHandler
     }
 
     // void message(MessageEvent *);
-    public override void message(MessageEvent ev)
+    public override void message(MessageEvent? ev)
     {
-        noteMessage(ev.message());
+        if (ev != null)
+            noteMessage(ev.message());
     }
 
     // void noteMessage(const Message &);

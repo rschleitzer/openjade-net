@@ -1701,7 +1701,7 @@ public class Parser : ParserState
                     break;
                 case Tokens.tokenCharDelim:
                     message(ParserMessages.dataCharDelim,
-                            new StringMessageArg(new StringC(currentInput()!.currentTokenStart(),
+                            new StringMessageArg(new StringC(currentInput()!.currentTokenStart()!,
                                                              currentInput()!.currentTokenLength())));
                     goto case Tokens.tokenChar;
                 case Tokens.tokenChar:
@@ -5752,7 +5752,7 @@ public class Parser : ParserState
                     break;
                 case Tokens.tokenCharDelim:
                     message(ParserMessages.dataCharDelim,
-                            new StringMessageArg(new StringC(currentInput()!.currentTokenStart(),
+                            new StringMessageArg(new StringC(currentInput()!.currentTokenStart()!,
                                                              currentInput()!.currentTokenLength())));
                     goto case Tokens.tokenChar;
                 case Tokens.tokenChar:
@@ -6216,7 +6216,7 @@ public class Parser : ParserState
         }
         if (e == null)
             e = lookupCreateUndefinedElement(name, currentLocation(), currentDtdNonConst(), implydefElement() != Sd.ImplydefElement.implydefElementAnyother);
-        AttributeList? attributes = allocAttributeList(e?.attributeDef(), 0);
+        AttributeList? attributes = allocAttributeList(e!.attributeDef(), 0);
         Token closeToken = getToken(Mode.tagMode);
         if (closeToken == Tokens.tokenTagc)
         {
@@ -6265,7 +6265,7 @@ public class Parser : ParserState
             ElementDefinition? def = rankStem.definition(i);
             if (def == null) continue;
             for (nuint j = 0; j < def.nRankStems(); j++)
-                setCurrentRank(def.rankStem(j), rankSuffix);
+                setCurrentRank(def.rankStem(j)!, rankSuffix);
         }
     }
 
@@ -6283,7 +6283,7 @@ public class Parser : ParserState
             e = currentElement().type();
         if (e == null)
             e = currentDtd().documentElementType();
-        AttributeList? attributes = allocAttributeList(e?.attributeDef(), 0);
+        AttributeList? attributes = allocAttributeList(e!.attributeDef(), 0);
         attributes?.finish(this);
         Markup? markup = startMarkup(eventsWanted().wantInstanceMarkup(),
                                      currentLocation());
@@ -6866,7 +6866,7 @@ public class Parser : ParserState
             if (syn.isS(c)
                 || !syn.isSgmlChar(c)
                 || c == InputSource.eE
-                || c == syn.delimGeneral((int)Syntax.DelimGeneral.dTAGC).data()[0])
+                || c == syn.delimGeneral((int)Syntax.DelimGeneral.dTAGC).data()![0])
                 break;
             length++;
         }
@@ -8095,7 +8095,7 @@ public class Parser : ParserState
                     message(ParserMessages.parameterEntityNotEnded);
                     {
                         Location charLoc = new Location(currentLocation());
-                        Char[] p = currentInput()!.currentTokenStart();
+                        Char[]? p = currentInput()!.currentTokenStart();
                         for (nuint count = 0; count < currentInput()!.currentTokenLength(); count++)
                         {
                             text.addChar((SyntaxChar)p![count], charLoc);
@@ -10837,7 +10837,7 @@ public class Parser : ParserState
                         noteEndElement(included);
                         return;
                     }
-                    if (end != null && !elementIsOpen(end.elementType()))
+                    if (end != null && !elementIsOpen(end.elementType()!))
                     {
                         message(ParserMessages.elementNotOpen,
                                 new StringMessageArg(end.elementType()?.name() ?? new StringC()));
@@ -11046,14 +11046,14 @@ public class Parser : ParserState
                 v.push_back(null);
             return;
         }
-        if (elementIsExcluded(e))
+        if (elementIsExcluded(e!))
             return;
         nuint newSize = 0;
         currentElement().matchState().possibleTransitions(v);
         // FIXME also get currentInclusions
         for (nuint i = 0; i < v.size(); i++)
         {
-            if (v[i] != null && !elementIsExcluded(v[i]))
+            if (v[i] != null && !elementIsExcluded(v[i]!))
             {
                 Boolean success = false;
                 ElementDefinition? def = v[i]!.definition();

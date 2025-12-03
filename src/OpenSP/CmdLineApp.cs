@@ -168,7 +168,7 @@ public abstract class CmdLineApp : MessageReporter
                     new ErrnoMessageArg(0)); // errno not easily available in C#
                 return 1;
             }
-            setMessageStream(new EncodeOutputCharStream(file, codingSystem()));
+            setMessageStream(new EncodeOutputCharStream(file, codingSystem()!));
         }
         if (outputCodingSystem_ == null)
             outputCodingSystem_ = codingSystem();
@@ -226,7 +226,7 @@ public abstract class CmdLineApp : MessageReporter
         Owner<OutputCharStream> stdOut = new Owner<OutputCharStream>(ConsoleOutput.makeOutputCharStream(1));
         if (stdOut.pointer() == null)
             stdOut = new Owner<OutputCharStream>(new EncodeOutputCharStream(
-                new FileOutputByteStream(Console.OpenStandardOutput()), codingSystem()));
+                new FileOutputByteStream(Console.OpenStandardOutput()), codingSystem()!));
 
         Vector<CopyOwner<MessageArg>> args = new Vector<CopyOwner<MessageArg>>(1);
         StringMessageArg arg = new StringMessageArg(convertInput("program"));
@@ -285,7 +285,7 @@ public abstract class CmdLineApp : MessageReporter
                 s.operatorPlusAssign((Char)'-');
                 s.operatorPlusAssign((Char)'-');
                 for (nuint j = 0; j < (nuint)opts_[i].name!.Length; j++)
-                    s.operatorPlusAssign(opts_[i].name[j]);
+                    s.operatorPlusAssign(opts_[i].name![(int)j]);
                 if (opts_[i].hasArgument)
                 {
                     s.operatorPlusAssign((Char)'=');
@@ -381,7 +381,7 @@ public abstract class CmdLineApp : MessageReporter
             return os;
         return new EncodeOutputCharStream(
             new FileOutputByteStream(Console.OpenStandardOutput()),
-            outputCodingSystem_);
+            outputCodingSystem_!);
     }
 
     // OutputCharStream *makeStdErr();
@@ -392,7 +392,7 @@ public abstract class CmdLineApp : MessageReporter
             return os;
         return new EncodeOutputCharStream(
             new FileOutputByteStream(Console.OpenStandardError()),
-            codingSystem());
+            codingSystem()!);
     }
 
     // virtual void registerOption(AppChar c, const AppChar *name, const MessageType1 &doc);
