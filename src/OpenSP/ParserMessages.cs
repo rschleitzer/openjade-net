@@ -312,8 +312,8 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 321, "element '%1' not finished at end of document");
     public static readonly MessageType0 noDocumentElement = new MessageType0(
         MessageType.Severity.error, null, 322, "document element not found");
-    public static readonly MessageType1 unclosedMarkedSection = new MessageType1(
-        MessageType.Severity.error, null, 323, "marked section not closed");
+    public static readonly MessageType0L unclosedMarkedSection = new MessageType0L(
+        MessageType.Severity.error, null, 323, "missing marked section end", "marked section started here");
     public static readonly MessageType1 missingId = new MessageType1(
         MessageType.Severity.error, null, 324, "referenced ID '%1' not defined");
     public static readonly MessageType1 taglen = new MessageType1(

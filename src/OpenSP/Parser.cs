@@ -6772,9 +6772,8 @@ public class Parser : ParserState
         endAllElements();
         while (markedSectionLevel() > 0)
         {
-            // TODO: auxiliary location support - currentMarkedSectionStartLocation()
             message(ParserMessages.unclosedMarkedSection,
-                    new StringMessageArg(new StringC()));
+                    currentMarkedSectionStartLocation());
             endMarkedSection();
         }
         checkIdrefs();
