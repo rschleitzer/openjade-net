@@ -648,4 +648,24 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 450, "if the declared value is NOTATION a default value of CONREF is useless");
     public static readonly MessageType0 conrefAttribute = new MessageType0(
         MessageType.Severity.warning, null, 367, "CONREF attribute");
+
+    // parseShortrefDecl messages
+    public static readonly MessageType0 shortrefOnlyInBaseDtd = new MessageType0(
+        MessageType.Severity.error, null, 286, "a short reference mapping declaration is allowed only in the base DTD");
+    public static readonly MessageType1L duplicateShortrefDeclaration = new MessageType1L(
+        MessageType.Severity.error, null, 264, "short reference map %1 already defined", "first defined here");
+    public static readonly MessageType1 unknownShortrefDelim = new MessageType1(
+        MessageType.Severity.error, null, 105, "%1 is not a short reference delimiter");
+    public static readonly MessageType1 delimDuplicateMap = new MessageType1(
+        MessageType.Severity.error, null, 106, "short reference delimiter %1 already mapped in this declaration");
+
+    // parseUsemapDecl messages
+    public static readonly MessageType0 usemapOnlyInBaseDtd = new MessageType0(
+        MessageType.Severity.error, null, 287, "a short reference use declaration is allowed only in the base DTD");
+    public static readonly MessageType1 undefinedShortrefMapInstance = new MessageType1(
+        MessageType.Severity.error, null, 100, "short reference map %1 not defined");
+    public static readonly MessageType0 usemapAssociatedElementTypeDtd = new MessageType0(
+        MessageType.Severity.error, null, 101, "short reference map in DTD must specify associated element type");
+    public static readonly MessageType0 usemapAssociatedElementTypeInstance = new MessageType0(
+        MessageType.Severity.error, null, 102, "short reference map in document instance cannot specify associated element type");
 }

@@ -3179,8 +3179,214 @@ public class Parser : ParserState
                                        markupLocation(), currentMarkup()));
     }
 
-    protected virtual Boolean parseShortrefDecl() { throw new NotImplementedException(); }
-    protected virtual Boolean parseUsemapDecl() { throw new NotImplementedException(); }
+    // Boolean parseShortrefDecl();
+    protected virtual Boolean parseShortrefDecl()
+    {
+        if (!defDtd().isBase())
+            message(ParserMessages.shortrefOnlyInBaseDtd);
+
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+
+        AllowedParams allowName = new AllowedParams(Param.name);
+        if (!parseParam(allowName, declInputLevel, parm))
+            return false;
+
+        ShortReferenceMap? map = lookupCreateMap(parm.token);
+        Boolean valid = true;
+        if (map!.defined())
+        {
+            message(ParserMessages.duplicateShortrefDeclaration,
+                    new StringMessageArg(parm.token),
+                    map.defLocation());
+            valid = false;
+        }
+        else
+            map.setDefLocation(markupLocation());
+
+        AllowedParams allowParamLiteral = new AllowedParams(Param.paramLiteral);
+        if (!parseParam(allowParamLiteral, declInputLevel, parm))
+            return false;
+
+        Vector<StringC> vec = new Vector<StringC>();
+        do
+        {
+            StringC delim = new StringC(parm.literalText.@string());
+            instanceSyntax().generalSubstTable()!.subst(delim);
+            nuint srIndex;
+            if (!defDtd().shortrefIndex(delim, instanceSyntax(), out srIndex))
+            {
+                message(ParserMessages.unknownShortrefDelim,
+                        new StringMessageArg(prettifyDelim(delim)));
+                valid = false;
+            }
+            AllowedParams allowEntityName = new AllowedParams(Param.entityName);
+            if (!parseParam(allowEntityName, declInputLevel, parm))
+                return false;
+            if (valid)
+            {
+                if (srIndex >= vec.size())
+                    vec.resize(srIndex + 1);
+                if (vec[srIndex].size() > 0)
+                {
+                    message(ParserMessages.delimDuplicateMap,
+                            new StringMessageArg(prettifyDelim(delim)));
+                    valid = false;
+                }
+                else
+                    parm.token.swap(vec[srIndex]);
+            }
+            AllowedParams allowParamLiteralMdc = new AllowedParams(Param.paramLiteral, Param.mdc);
+            if (!parseParam(allowParamLiteralMdc, declInputLevel, parm))
+                return false;
+        } while (parm.type != Param.mdc);
+
+        if (valid)
+        {
+            map.setNameMap(vec);
+            if (currentMarkup() != null)
+                eventHandler().shortrefDecl(new ShortrefDeclEvent(map,
+                                                                   currentDtdPointer(),
+                                                                   markupLocation(),
+                                                                   currentMarkup()));
+        }
+        return true;
+    }
+
+    // StringC prettifyDelim(const StringC &delim);
+    protected StringC prettifyDelim(StringC delim)
+    {
+        StringC prettyDelim = new StringC();
+        for (nuint i = 0; i < delim.size(); i++)
+        {
+            StringC? nameP;
+            if (syntax().charFunctionName(delim[i], out nameP))
+            {
+                prettyDelim.operatorPlusAssign(syntax().delimGeneral((int)Syntax.DelimGeneral.dCRO));
+                prettyDelim.operatorPlusAssign(nameP!);
+                prettyDelim.operatorPlusAssign(syntax().delimGeneral((int)Syntax.DelimGeneral.dREFC));
+            }
+            else
+                prettyDelim.operatorPlusAssign(delim[i]);
+        }
+        return prettyDelim;
+    }
+
+    // ShortReferenceMap *lookupCreateMap(const StringC &name);
+    protected ShortReferenceMap lookupCreateMap(StringC name)
+    {
+        ShortReferenceMap? map = defDtd().lookupShortReferenceMap(name);
+        if (map == null)
+        {
+            map = new ShortReferenceMap(name);
+            defDtd().insertShortReferenceMap(map);
+        }
+        return map;
+    }
+
+    // Boolean parseUsemapDecl();
+    protected virtual Boolean parseUsemapDecl()
+    {
+        if (!inInstance() && !defDtd().isBase())
+            message(ParserMessages.usemapOnlyInBaseDtd);
+
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+
+        byte indEMPTY = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rEMPTY);
+        AllowedParams allowNameEmpty = new AllowedParams(Param.name, indEMPTY);
+        if (!parseParam(allowNameEmpty, declInputLevel, parm))
+            return false;
+
+        ShortReferenceMap? map;
+        if (parm.type == Param.name)
+        {
+            if (inInstance())
+            {
+                map = currentDtd().lookupShortReferenceMap(parm.token);
+                if (map == null)
+                    message(ParserMessages.undefinedShortrefMapInstance,
+                            new StringMessageArg(parm.token));
+            }
+            else
+            {
+                ShortReferenceMap? tem = lookupCreateMap(parm.token);
+                tem.setUsed();
+                map = tem;
+            }
+        }
+        else
+            map = ContentState.theEmptyMap;
+
+        AllowedParams allowNameNameGroupMdc = new AllowedParams(Param.name, Param.nameGroup, Param.mdc);
+        if (!parseParam(allowNameNameGroupMdc, declInputLevel, parm))
+            return false;
+
+        if (parm.type != Param.mdc)
+        {
+            if (inInstance())
+            {
+                message(ParserMessages.usemapAssociatedElementTypeInstance);
+                AllowedParams allowMdc = new AllowedParams(Param.mdc);
+                if (!parseParam(allowMdc, declInputLevel, parm))
+                    return false;
+            }
+            else
+            {
+                Vector<ElementType?> v = new Vector<ElementType?>();
+                if (parm.type == Param.name)
+                {
+                    ElementType? e = lookupCreateElement(parm.token);
+                    v.push_back(e);
+                    if (e != null && e.map() == null)
+                        e.setMap(map);
+                }
+                else
+                {
+                    v.resize(parm.nameTokenVector.size());
+                    for (nuint i = 0; i < parm.nameTokenVector.size(); i++)
+                    {
+                        ElementType? e = lookupCreateElement(parm.nameTokenVector[(int)i].name);
+                        v[i] = e;
+                        if (e != null && e.map() == null)
+                            e.setMap(map);
+                    }
+                }
+                AllowedParams allowMdc = new AllowedParams(Param.mdc);
+                if (!parseParam(allowMdc, declInputLevel, parm))
+                    return false;
+                if (currentMarkup() != null)
+                    eventHandler().usemap(new UsemapEvent(map, v,
+                                                           currentDtdPointer(),
+                                                           markupLocation(),
+                                                           currentMarkup()));
+            }
+        }
+        else
+        {
+            if (!inInstance())
+                message(ParserMessages.usemapAssociatedElementTypeDtd);
+            else if (map != null)
+            {
+                if (map != ContentState.theEmptyMap && !map.defined())
+                    message(ParserMessages.undefinedShortrefMapInstance,
+                            new StringMessageArg(map.name()));
+                else
+                {
+                    if (currentMarkup() != null)
+                    {
+                        Vector<ElementType?> v = new Vector<ElementType?>();
+                        eventHandler().usemap(new UsemapEvent(map, v,
+                                                               currentDtdPointer(),
+                                                               markupLocation(),
+                                                               currentMarkup()));
+                    }
+                    currentElement().setMap(map);
+                }
+            }
+        }
+        return true;
+    }
     // Boolean parseDeclarationName(Syntax::ReservedName *result, Boolean allowAfdr = 0);
     protected Boolean parseDeclarationName(out Syntax.ReservedName result, Boolean allowAfdr = false)
     {
