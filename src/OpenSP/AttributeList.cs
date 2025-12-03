@@ -214,6 +214,19 @@ public class AttributeList
         nEntityNames_ = 0;
     }
 
+    // Copy constructor - AttributeList(const AttributeList &);
+    public AttributeList(AttributeList other)
+    {
+        conref_ = other.conref_;
+        nIdrefs_ = other.nIdrefs_;
+        nEntityNames_ = other.nEntityNames_;
+        nSpec_ = other.nSpec_;
+        def_ = other.def_;
+        vec_ = new Vector<Attribute>(other.vec_.size());
+        for (nuint i = 0; i < other.vec_.size(); i++)
+            vec_[i] = new Attribute(other.vec_[i]);
+    }
+
     // inline ~AttributeList() {}
     // C# GC handles cleanup
 

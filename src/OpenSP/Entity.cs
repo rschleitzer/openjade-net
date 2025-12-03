@@ -209,10 +209,7 @@ public class ExternalDataEntity : ExternalNonTextEntity
 
     public override Entity copy()
     {
-        // Create a copy of the AttributeList
-        // For the copy, we create a new AttributeList with the same definition
-        AttributeList attrCopy = new AttributeList();
-        // TODO: Implement proper AttributeList copying if needed
+        AttributeList attrCopy = new AttributeList(attributes_);
         return new ExternalDataEntity(name(), dataType(), defLocation(), externalId(), notation_, attrCopy, declType());
     }
 
