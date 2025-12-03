@@ -120,6 +120,18 @@ public static class ParserMessages
         MessageType.Severity.error, null, 124, "token %1 can be value for multiple attributes so attribute name required");
     public static readonly MessageType0 missingAttributeName = new MessageType0(
         MessageType.Severity.warning, null, 125, "attribute name missing");
+    public static readonly MessageType0 attributeSpecEntityEnd = new MessageType0(
+        MessageType.Severity.error, null, 129, "entity end not allowed in attribute specification list except in attribute value literal");
+    public static readonly MessageType0 attributeSpecNameTokenExpected = new MessageType0(
+        MessageType.Severity.error, null, 130, "an attribute specification must start with a name or name token");
+    public static readonly MessageType0 attributeSpecLiteral = new MessageType0(
+        MessageType.Severity.error, null, 131, "an attribute value literal can occur in an attribute specification list only after a VI delimiter");
+    public static readonly MessageType0 unclosedStartTagShorttag = new MessageType0(
+        MessageType.Severity.error, null, 132, "unclosed start-tag requires SHORTTAG YES");
+    public static readonly MessageType0 netEnablingStartTagShorttag = new MessageType0(
+        MessageType.Severity.error, null, 138, "NET-enabling start-tag requires SHORTTAG YES");
+    public static readonly MessageType0 nestcWithoutNet = new MessageType0(
+        MessageType.Severity.error, null, 139, "NET-enabling start-tag not immediately followed by null end-tag");
 
     // Parser state related messages
     public static readonly MessageType0 pass2Ee = new MessageType0(

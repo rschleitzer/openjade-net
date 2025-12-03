@@ -6396,6 +6396,160 @@ public class Parser : ParserState
     }
 
     // From parseAttribute.cxx
+
+    // void extendUnquotedAttributeValue();
+    protected void extendUnquotedAttributeValue()
+    {
+        InputSource? @in = currentInput();
+        nuint length = @in!.currentTokenLength();
+        Syntax syn = syntax();
+        for (;;)
+        {
+            Xchar c = @in.tokenChar(messenger());
+            if (syn.isS(c)
+                || !syn.isSgmlChar(c)
+                || c == InputSource.eE
+                || c == syn.delimGeneral((int)Syntax.DelimGeneral.dTAGC).data()[0])
+                break;
+            length++;
+        }
+        @in.endToken(length);
+    }
+
+    // Boolean parseAttributeParameter(Mode mode, Boolean allowVi,
+    //                                  AttributeParameter::Type &result, Boolean &netEnabling);
+    protected Boolean parseAttributeParameter(Mode mode, Boolean allowVi,
+                                              out AttributeParameterType result, out Boolean netEnabling)
+    {
+        result = AttributeParameterType.end;
+        netEnabling = false;
+        Token token = getToken(mode);
+        Markup? markup = currentMarkup();
+        if (mode == Mode.piPasMode)
+        {
+            for (;;)
+            {
+                switch (token)
+                {
+                    case Tokens.tokenCom:
+                        if (!parseComment(Mode.comMode))
+                            return false;
+                        if (options().warnPsComment)
+                            message(ParserMessages.psComment);
+                        token = getToken(mode);
+                        continue;
+                    case Tokens.tokenS:
+                        token = getToken(mode);
+                        continue;
+                    default:
+                        break;
+                }
+                break;
+            }
+        }
+        else if (markup != null)
+        {
+            while (token == Tokens.tokenS)
+            {
+                markup.addS(currentChar());
+                token = getToken(mode);
+            }
+        }
+        else
+        {
+            while (token == Tokens.tokenS)
+                token = getToken(mode);
+        }
+        switch (token)
+        {
+            case Tokens.tokenUnrecognized:
+                if (reportNonSgmlCharacter())
+                    return false;
+                extendUnquotedAttributeValue();
+                result = AttributeParameterType.recoverUnquoted;
+                break;
+            case Tokens.tokenEe:
+                if (mode != Mode.piPasMode)
+                {
+                    message(ParserMessages.attributeSpecEntityEnd);
+                    return false;
+                }
+                result = AttributeParameterType.end;
+                break;
+            case Tokens.tokenEtago:
+            case Tokens.tokenStago:
+                if (!sd().startTagUnclosed())
+                    message(ParserMessages.unclosedStartTagShorttag);
+                result = AttributeParameterType.end;
+                currentInput()!.ungetToken();
+                netEnabling = false;
+                break;
+            case Tokens.tokenNestc:
+                if (markup != null)
+                    markup.addDelim(Syntax.DelimGeneral.dNESTC);
+                switch (sd().startTagNetEnable())
+                {
+                    case Sd.NetEnable.netEnableNo:
+                        message(ParserMessages.netEnablingStartTagShorttag);
+                        break;
+                    case Sd.NetEnable.netEnableImmednet:
+                        if (getToken(Mode.econnetMode) != Tokens.tokenNet)
+                            message(ParserMessages.nestcWithoutNet);
+                        currentInput()!.ungetToken();
+                        break;
+                    case Sd.NetEnable.netEnableAll:
+                        break;
+                }
+                netEnabling = true;
+                result = AttributeParameterType.end;
+                break;
+            case Tokens.tokenTagc:
+                if (markup != null)
+                    markup.addDelim(Syntax.DelimGeneral.dTAGC);
+                netEnabling = false;
+                result = AttributeParameterType.end;
+                break;
+            case Tokens.tokenDsc:
+                if (markup != null)
+                    markup.addDelim(Syntax.DelimGeneral.dDSC);
+                result = AttributeParameterType.end;
+                break;
+            case Tokens.tokenNameStart:
+                extendNameToken(syntax().namelen(), ParserMessages.nameTokenLength);
+                if (markup != null)
+                    markup.addName(currentInput()!);
+                result = AttributeParameterType.name;
+                break;
+            case Tokens.tokenDigit:
+            case Tokens.tokenLcUcNmchar:
+                extendNameToken(syntax().namelen(), ParserMessages.nameTokenLength);
+                if (markup != null)
+                    markup.addName(currentInput()!);
+                result = AttributeParameterType.nameToken;
+                break;
+            case Tokens.tokenLit:
+            case Tokens.tokenLita:
+                message(allowVi
+                        ? ParserMessages.attributeSpecLiteral
+                        : ParserMessages.attributeSpecNameTokenExpected);
+                return false;
+            case Tokens.tokenVi:
+                if (!allowVi)
+                {
+                    message(ParserMessages.attributeSpecNameTokenExpected);
+                    return false;
+                }
+                if (markup != null)
+                    markup.addDelim(Syntax.DelimGeneral.dVI);
+                result = AttributeParameterType.vi;
+                break;
+            default:
+                // CANNOT_HAPPEN();
+                break;
+        }
+        return true;
+    }
+
     protected virtual Boolean parseAttributeSpec(Mode mode, AttributeList atts, out Boolean netEnabling,
                                                   Ptr<AttributeDefinitionList> newAttDefList)
     { throw new NotImplementedException(); }
