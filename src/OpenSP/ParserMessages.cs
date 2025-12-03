@@ -112,6 +112,14 @@ public static class ParserMessages
         MessageType.Severity.error, null, 120, "number of entity name values exceeds GRPCNT (%1)");
     public static readonly MessageType0 conrefNotation = new MessageType0(
         MessageType.Severity.error, null, 121, "CONREF attribute not allowed with NOTATION");
+    public static readonly MessageType1 noSuchAttributeToken = new MessageType1(
+        MessageType.Severity.error, null, 122, "%1 is not a member of a group specified for any attribute");
+    public static readonly MessageType0 attributeNameShorttag = new MessageType0(
+        MessageType.Severity.error, null, 123, "the name and VI delimiter can be omitted from an attribute specification only if SHORTTAG YES is specified");
+    public static readonly MessageType1 attributeTokenNotUnique = new MessageType1(
+        MessageType.Severity.error, null, 124, "token %1 can be value for multiple attributes so attribute name required");
+    public static readonly MessageType0 missingAttributeName = new MessageType0(
+        MessageType.Severity.warning, null, 125, "attribute name missing");
 
     // Parser state related messages
     public static readonly MessageType0 pass2Ee = new MessageType0(

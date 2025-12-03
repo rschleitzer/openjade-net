@@ -5827,7 +5827,37 @@ public class Parser : ParserState
             origin.clear();
         return true;
     }
-    protected virtual Boolean parseEntityReferenceNameGroup(ref Boolean ignore) { throw new NotImplementedException(); }
+    // Boolean parseEntityReferenceNameGroup(Boolean &ignore);
+    protected virtual Boolean parseEntityReferenceNameGroup(ref Boolean ignore)
+    {
+        Param parm = new Param();
+        if (!parseNameGroup(inputLevel(), parm))
+            return false;
+        if (inInstance())
+        {
+            for (nuint i = 0; i < parm.nameTokenVector.size(); i++)
+            {
+                Lpd? lpd = lookupLpd(parm.nameTokenVector[(int)i].name).pointer();
+                if (lpd != null && lpd.active())
+                {
+                    ignore = false;
+                    return true;
+                }
+                Ptr<Dtd> dtd = lookupDtd(parm.nameTokenVector[(int)i].name);
+                if (!dtd.isNull())
+                {
+                    instantiateDtd(dtd);
+                    if (currentDtdPointer() == dtd)
+                    {
+                        ignore = false;
+                        return true;
+                    }
+                }
+            }
+        }
+        ignore = true;
+        return true;
+    }
 
     // From parseInstance.cxx
     // void parsePcdata();
@@ -6335,12 +6365,62 @@ public class Parser : ParserState
     protected virtual Boolean parseAttributeSpec(Mode mode, AttributeList atts, out Boolean netEnabling,
                                                   Ptr<AttributeDefinitionList> newAttDefList)
     { throw new NotImplementedException(); }
-    protected virtual Boolean handleAttributeNameToken(Text text, AttributeList atts, ref uint specLength) { throw new NotImplementedException(); }
+    protected virtual Boolean handleAttributeNameToken(Text text, AttributeList atts, ref uint specLength)
+    {
+        uint index = 0;
+        if (!atts.tokenIndex(text.@string(), out index))
+        {
+            if (atts.handleAsUnterminated(this))
+                return false;
+            atts.noteInvalidSpec();
+            message(ParserMessages.noSuchAttributeToken,
+                    new StringMessageArg(text.@string()));
+        }
+        else if (sd().www() && !atts.tokenIndexUnique(text.@string(), index))
+        {
+            atts.noteInvalidSpec();
+            message(ParserMessages.attributeTokenNotUnique,
+                    new StringMessageArg(text.@string()));
+        }
+        else
+        {
+            if (!sd().attributeOmitName())
+                message(ParserMessages.attributeNameShorttag);
+            else if (options().warnMissingAttributeName)
+                message(ParserMessages.missingAttributeName);
+            atts.setSpec(index, this);
+            atts.setValueToken(index, text, this, ref specLength);
+        }
+        return true;
+    }
 
     // Helper methods from parseDecl.cxx
 
     // Boolean lookingAtStartTag(StringC &gi);
-    protected virtual Boolean lookingAtStartTag(StringC gi) { throw new NotImplementedException(); }
+    protected virtual Boolean lookingAtStartTag(StringC gi)
+    {
+        // This is harder than might be expected since we may not have compiled
+        // the recognizers for the instance yet.
+        StringC stago = instanceSyntax().delimGeneral((int)Syntax.DelimGeneral.dSTAGO);
+        for (nuint i = currentInput()!.currentTokenLength();
+             i < stago.size();
+             i++)
+            if (currentInput()!.tokenChar(messenger()) == InputSource.eE)
+                return false;
+        StringC delim = new StringC();
+        getCurrentToken(instanceSyntax().generalSubstTable(), delim);
+        if (delim != stago)
+            return false;
+        Xchar c = currentInput()!.tokenChar(messenger());
+        if (!instanceSyntax().isNameStartCharacter(c))
+            return false;
+        do
+        {
+            gi.operatorPlusAssign(instanceSyntax().generalSubstTable()![(Char)c]);
+            c = currentInput()!.tokenChar(messenger());
+        } while (instanceSyntax().isNameCharacter(c));
+        return true;
+    }
 
     // void implyDtd(const StringC &gi);
     protected virtual void implyDtd(StringC gi)
