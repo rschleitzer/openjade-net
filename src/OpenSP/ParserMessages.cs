@@ -502,4 +502,50 @@ public static class ParserMessages
         MessageType.Severity.error, null, 355, "Web SGML adaptations were used but minimum literal was not \"ISO 8879:1986 (WWW)\"");
     public static readonly MessageType0 missingSystemId = new MessageType0(
         MessageType.Severity.warning, null, 381, "no system id specified");
+
+    // parseElementDecl messages
+    public static readonly MessageType0 elementGroupDecl = new MessageType0(
+        MessageType.Severity.warning, null, 387, "element declaration for group of element types");
+    public static readonly MessageType0 rank = new MessageType0(
+        MessageType.Severity.warning, null, 380, "rank stem");
+    public static readonly MessageType1 genericIdentifierLength = new MessageType1(
+        MessageType.Severity.error, null, 246, "length of rank stem plus length of rank suffix must not exceed NAMELEN (%1)");
+    public static readonly MessageType1 rankStemGenericIdentifier = new MessageType1(
+        MessageType.Severity.error, null, 58, "%1 used both a rank stem and generic identifier");
+    public static readonly MessageType0 psRequired = new MessageType0(
+        MessageType.Severity.error, null, 7, "a parameter separator is required after a number that is followed by a name start character");
+    public static readonly MessageType0 minimizationParam = new MessageType0(
+        MessageType.Severity.warning, null, 396, "element type minimization parameter");
+    public static readonly MessageType0 missingTagMinimization = new MessageType0(
+        MessageType.Severity.error, null, 50, "omitted tag minimization parameter can be omitted only if OMITTAG NO is specified");
+    public static readonly MessageType0 cdataContent = new MessageType0(
+        MessageType.Severity.warning, null, 360, "CDATA declared content");
+    public static readonly MessageType0 rcdataContent = new MessageType0(
+        MessageType.Severity.warning, null, 361, "RCDATA declared content");
+    public static readonly MessageType0 emptyOmitEndTag = new MessageType0(
+        MessageType.Severity.warning, null, 230, "end-tag minimization should be O for element with declared content of EMPTY");
+    public static readonly MessageType1 grpgtcnt = new MessageType1(
+        MessageType.Severity.error, null, 249, "grand total of content tokens exceeds GRPGTCNT (%1)");
+    public static readonly MessageType0 pcdataUnreachable = new MessageType0(
+        MessageType.Severity.warning, null, 329, "content model is mixed but does not allow #PCDATA everywhere");
+    public static readonly MessageType1 duplicateElementDefinition = new MessageType1(
+        MessageType.Severity.error, null, 60, "element type %1 already defined");
+    public static readonly MessageType3 ambiguousModelInitial = new MessageType3(
+        MessageType.Severity.warning, null, 133, "content model is ambiguous: when no tokens have been matched, both occurrence %2 and occurrence %3 of %1 are possible");
+    public static readonly MessageType5 ambiguousModel = new MessageType5(
+        MessageType.Severity.warning, null, 134, "content model is ambiguous: when the current token is occurrence %2 of %1, both occurrence %4 and occurrence %5 of %3 are possible");
+    public static readonly MessageType5 ambiguousModelSingleAnd = new MessageType5(
+        MessageType.Severity.warning, null, 135, "content model is ambiguous: when current token is occurrence %2 of %1 and an and-group has been matched, both occurrence %4 and occurrence %5 of %3 are possible");
+    public static readonly MessageType6 ambiguousModelMultipleAnd = new MessageType6(
+        MessageType.Severity.warning, null, 136, "content model is ambiguous: when current token is occurrence %2 of %1 and %3 and-groups have been matched, both occurrence %5 and occurrence %6 of %4 are possible");
+    public static readonly MessageType0 exclusion = new MessageType0(
+        MessageType.Severity.warning, null, 383, "exclusion");
+    public static readonly MessageType0 inclusion = new MessageType0(
+        MessageType.Severity.warning, null, 385, "inclusion");
+    public static readonly MessageType1 excludeIncludeSame = new MessageType1(
+        MessageType.Severity.error, null, 449, "element %1 appears in both inclusion and exclusion");
+    public static readonly MessageType1 notationEmpty = new MessageType1(
+        MessageType.Severity.error, null, 450, "notation attribute for element %1 with EMPTY declared content");
+    public static readonly MessageType1 conrefEmpty = new MessageType1(
+        MessageType.Severity.error, null, 451, "CONREF attribute for element %1 with EMPTY declared content");
 }

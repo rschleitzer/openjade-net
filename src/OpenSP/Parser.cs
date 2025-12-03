@@ -859,6 +859,21 @@ public class Parser : ParserState
         return e;
     }
 
+    // RankStem *lookupCreateRankStem(const StringC &name);
+    protected RankStem? lookupCreateRankStem(StringC name)
+    {
+        RankStem? r = defDtd().lookupRankStem(name);
+        if (r == null)
+        {
+            r = new RankStem(name, defDtd().nRankStem());
+            defDtd().insertRankStem(r);
+            ElementType? e = defDtd().lookupElementType(name);
+            if (e != null && e.definition() != null)
+                message(ParserMessages.rankStemGenericIdentifier, new StringMessageArg(name));
+        }
+        return r;
+    }
+
     // From parseCommon.cxx
     protected virtual void doInit() { throw new NotImplementedException(); }
 
@@ -1734,7 +1749,351 @@ public class Parser : ParserState
             }
         }
     }
-    protected virtual Boolean parseElementDecl() { throw new NotImplementedException(); }
+    // Boolean parseElementDecl();
+    protected virtual Boolean parseElementDecl()
+    {
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+        AllowedParams allowNameNameGroup = new AllowedParams(Param.name, Param.nameGroup);
+        if (!parseParam(allowNameNameGroup, declInputLevel, parm))
+            return false;
+        Vector<NameToken> nameVector = new Vector<NameToken>();
+        if (parm.type == Param.nameGroup)
+        {
+            parm.nameTokenVector.swap(nameVector);
+            if (options().warnElementGroupDecl)
+                message(ParserMessages.elementGroupDecl);
+        }
+        else
+        {
+            nameVector.resize(1);
+            parm.token.swap(nameVector[0].name);
+            parm.origToken.swap(nameVector[0].origName);
+        }
+        AllowedParams allowRankOmissionContent = new AllowedParams(
+            Param.number,
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rO),
+            Param.minus,
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rRCDATA),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rEMPTY),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rANY),
+            Param.modelGroup);
+        if (!parseParam(allowRankOmissionContent, declInputLevel, parm))
+            return false;
+        StringC rankSuffix = new StringC();
+        Vector<ElementType?> elements = new Vector<ElementType?>(nameVector.size());
+        Vector<RankStem?> rankStems = new Vector<RankStem?>();
+        Vector<RankStem?> constRankStems = new Vector<RankStem?>();
+        nuint i;
+        if (parm.type == Param.number)
+        {
+            if (options().warnRank)
+                message(ParserMessages.rank);
+            parm.token.swap(rankSuffix);
+            rankStems.resize(nameVector.size());
+            constRankStems.resize(nameVector.size());
+            for (i = 0; i < elements.size(); i++)
+            {
+                StringC name = new StringC(nameVector[(int)i].name);
+                name.operatorPlusAssign(rankSuffix);
+                if (name.size() > syntax().namelen()
+                    && nameVector[(int)i].name.size() <= syntax().namelen())
+                    message(ParserMessages.genericIdentifierLength,
+                            new NumberMessageArg(syntax().namelen()));
+                elements[(int)i] = lookupCreateElement(name);
+                rankStems[(int)i] = lookupCreateRankStem(nameVector[(int)i].name);
+                constRankStems[(int)i] = rankStems[(int)i];
+            }
+            AllowedParams allowOmissionContent = new AllowedParams(
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rO),
+                Param.minus,
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rRCDATA),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rEMPTY),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rANY),
+                Param.modelGroup);
+            Token token = getToken(Mode.mdMinusMode);
+            if (token == Tokens.tokenNameStart)
+                message(ParserMessages.psRequired);
+            currentInput()!.ungetToken();
+            if (!parseParam(allowOmissionContent, declInputLevel, parm))
+                return false;
+        }
+        else
+        {
+            for (i = 0; i < elements.size(); i++)
+            {
+                elements[(int)i] = lookupCreateElement(nameVector[(int)i].name);
+                elements[(int)i]!.setOrigName(nameVector[(int)i].origName);
+            }
+        }
+        for (i = 0; i < elements.size(); i++)
+            if (defDtd().lookupRankStem(elements[(int)i]!.name()) != null && validate())
+                message(ParserMessages.rankStemGenericIdentifier,
+                        new StringMessageArg(elements[(int)i]!.name()));
+        byte omitFlags = 0;
+        if (parm.type == Param.minus
+            || parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rO))
+        {
+            if (options().warnMinimizationParam)
+                message(ParserMessages.minimizationParam);
+            omitFlags |= (byte)ElementDefinition.OmitFlags.omitSpec;
+            if (parm.type != Param.minus)
+                omitFlags |= (byte)ElementDefinition.OmitFlags.omitStart;
+            AllowedParams allowOmission = new AllowedParams(
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rO),
+                Param.minus);
+            if (!parseParam(allowOmission, declInputLevel, parm))
+                return false;
+            if (parm.type != Param.minus)
+                omitFlags |= (byte)ElementDefinition.OmitFlags.omitEnd;
+            AllowedParams allowContent = new AllowedParams(
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rRCDATA),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rEMPTY),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rANY),
+                Param.modelGroup);
+            if (!parseParam(allowContent, declInputLevel, parm))
+                return false;
+        }
+        else
+        {
+            if (sd().omittag())
+                message(ParserMessages.missingTagMinimization);
+        }
+        Ptr<ElementDefinition> def = new Ptr<ElementDefinition>();
+        AllowedParams allowMdc = new AllowedParams(Param.mdc);
+        if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA))
+        {
+            def = new Ptr<ElementDefinition>(new ElementDefinition(markupLocation(),
+                defDtd().allocElementDefinitionIndex(),
+                omitFlags,
+                ElementDefinition.DeclaredContent.cdata));
+            if (!parseParam(allowMdc, declInputLevel, parm))
+                return false;
+            if (options().warnCdataContent)
+                message(ParserMessages.cdataContent);
+        }
+        else if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rRCDATA))
+        {
+            def = new Ptr<ElementDefinition>(new ElementDefinition(markupLocation(),
+                defDtd().allocElementDefinitionIndex(),
+                omitFlags,
+                ElementDefinition.DeclaredContent.rcdata));
+            if (!parseParam(allowMdc, declInputLevel, parm))
+                return false;
+            if (options().warnRcdataContent)
+                message(ParserMessages.rcdataContent);
+        }
+        else if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rEMPTY))
+        {
+            def = new Ptr<ElementDefinition>(new ElementDefinition(markupLocation(),
+                defDtd().allocElementDefinitionIndex(),
+                omitFlags,
+                ElementDefinition.DeclaredContent.empty));
+            if ((omitFlags & (byte)ElementDefinition.OmitFlags.omitSpec) != 0
+                && (omitFlags & (byte)ElementDefinition.OmitFlags.omitEnd) == 0
+                && options().warnShould)
+                message(ParserMessages.emptyOmitEndTag);
+            if (!parseParam(allowMdc, declInputLevel, parm))
+                return false;
+        }
+        else if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rANY))
+        {
+            def = new Ptr<ElementDefinition>(new ElementDefinition(markupLocation(),
+                defDtd().allocElementDefinitionIndex(),
+                omitFlags,
+                ElementDefinition.DeclaredContent.any));
+            if (!parseExceptions(declInputLevel, def))
+                return false;
+        }
+        else if (parm.type == Param.modelGroup)
+        {
+            nuint cnt = (nuint)parm.modelGroupPtr.pointer()!.grpgtcnt();
+            // The outermost model group isn't formally a content token.
+            if (cnt - 1 > syntax().grpgtcnt())
+                message(ParserMessages.grpgtcnt, new NumberMessageArg(syntax().grpgtcnt()));
+            Owner<CompiledModelGroup> modelGroup = new Owner<CompiledModelGroup>(
+                new CompiledModelGroup(parm.modelGroupPtr));
+            Vector<ContentModelAmbiguity> ambiguities = new Vector<ContentModelAmbiguity>();
+            Boolean pcdataUnreachable = false;
+            modelGroup.pointer()!.compile(currentDtd().nElementTypeIndex(), ambiguities,
+                                          ref pcdataUnreachable);
+            if (pcdataUnreachable && options().warnMixedContent)
+                message(ParserMessages.pcdataUnreachable);
+            if (validate())
+            {
+                for (i = 0; i < ambiguities.size(); i++)
+                {
+                    ContentModelAmbiguity a = ambiguities[(int)i];
+                    reportAmbiguity(a.from, a.to1, a.to2, a.andDepth);
+                }
+            }
+            def = new Ptr<ElementDefinition>(new ElementDefinition(markupLocation(),
+                defDtd().allocElementDefinitionIndex(),
+                omitFlags,
+                ElementDefinition.DeclaredContent.modelGroup,
+                modelGroup));
+            if (!parseExceptions(declInputLevel, def))
+                return false;
+        }
+        if (rankSuffix.size() > 0)
+            def.pointer()!.setRank(rankSuffix, constRankStems);
+        ConstPtr<ElementDefinition> constDef = new ConstPtr<ElementDefinition>(def.pointer());
+        for (i = 0; i < elements.size(); i++)
+        {
+            if (elements[(int)i]!.definition() != null)
+            {
+                if (validate())
+                    message(ParserMessages.duplicateElementDefinition,
+                            new StringMessageArg(elements[(int)i]!.name()));
+            }
+            else
+            {
+                elements[(int)i]!.setElementDefinition(constDef, i);
+                if (!elements[(int)i]!.attributeDef().isNull())
+                    checkElementAttribute(elements[(int)i]);
+            }
+            if (rankStems.size() > 0)
+                rankStems[(int)i]!.addDefinition(constDef);
+        }
+        if (currentMarkup() != null)
+        {
+            Vector<ElementType?> v = new Vector<ElementType?>(elements.size());
+            for (i = 0; i < elements.size(); i++)
+                v[(int)i] = elements[(int)i];
+            eventHandler().elementDecl(new ElementDeclEvent(v, currentDtdPointer(),
+                                                            markupLocation(),
+                                                            currentMarkup()));
+        }
+        return true;
+    }
+
+    // Boolean parseExceptions(unsigned declInputLevel, Ptr<ElementDefinition> &def);
+    protected Boolean parseExceptions(uint declInputLevel, Ptr<ElementDefinition> def)
+    {
+        Param parm = new Param();
+        AllowedParams allowExceptionsMdc = new AllowedParams(Param.mdc, Param.exclusions, Param.inclusions);
+        if (!parseParam(allowExceptionsMdc, declInputLevel, parm))
+            return false;
+        if (parm.type == Param.exclusions)
+        {
+            if (options().warnExclusion)
+                message(ParserMessages.exclusion);
+            def.pointer()!.setExclusions(parm.elementVector);
+            AllowedParams allowInclusionsMdc = new AllowedParams(Param.mdc, Param.inclusions);
+            if (!parseParam(allowInclusionsMdc, declInputLevel, parm))
+                return false;
+        }
+        if (parm.type == Param.inclusions)
+        {
+            if (options().warnInclusion)
+                message(ParserMessages.inclusion);
+            def.pointer()!.setInclusions(parm.elementVector);
+            nuint nI = def.pointer()!.nInclusions();
+            nuint nE = def.pointer()!.nExclusions();
+            if (nE > 0)
+            {
+                for (nuint j = 0; j < nI; j++)
+                {
+                    ElementType? e = def.pointer()!.inclusion(j);
+                    for (nuint k = 0; k < nE; k++)
+                        if (def.pointer()!.exclusion(k) == e)
+                            message(ParserMessages.excludeIncludeSame,
+                                    new StringMessageArg(e!.name()));
+                }
+            }
+            AllowedParams allowMdc = new AllowedParams(Param.mdc);
+            if (!parseParam(allowMdc, declInputLevel, parm))
+                return false;
+        }
+        return true;
+    }
+
+    // void reportAmbiguity(const LeafContentToken *from, const LeafContentToken *to1,
+    //                      const LeafContentToken *to2, unsigned ambigAndDepth);
+    protected void reportAmbiguity(LeafContentToken? from, LeafContentToken? to1,
+                                   LeafContentToken? to2, uint ambigAndDepth)
+    {
+        StringC toName = new StringC();
+        ElementType? toType = to1!.elementType();
+        if (toType != null)
+            toName = toType.name();
+        else
+        {
+            toName = syntax().delimGeneral((int)Syntax.DelimGeneral.dRNI);
+            toName.operatorPlusAssign(syntax().reservedName(Syntax.ReservedName.rPCDATA));
+        }
+        uint to1Index = to1.typeIndex() + 1;
+        uint to2Index = to2!.typeIndex() + 1;
+        if (from!.isInitial())
+            message(ParserMessages.ambiguousModelInitial,
+                    new StringMessageArg(toName),
+                    new OrdinalMessageArg(to1Index),
+                    new OrdinalMessageArg(to2Index));
+        else
+        {
+            StringC fromName = new StringC();
+            ElementType? fromType = from.elementType();
+            if (fromType != null)
+                fromName = fromType.name();
+            else
+            {
+                fromName = syntax().delimGeneral((int)Syntax.DelimGeneral.dRNI);
+                fromName.operatorPlusAssign(syntax().reservedName(Syntax.ReservedName.rPCDATA));
+            }
+            uint fromIndex = from.typeIndex() + 1;
+            uint andMatches = from.andDepth() - ambigAndDepth;
+            if (andMatches == 0)
+                message(ParserMessages.ambiguousModel,
+                        new StringMessageArg(fromName),
+                        new OrdinalMessageArg(fromIndex),
+                        new StringMessageArg(toName),
+                        new OrdinalMessageArg(to1Index),
+                        new OrdinalMessageArg(to2Index));
+            else if (andMatches == 1)
+                message(ParserMessages.ambiguousModelSingleAnd,
+                        new StringMessageArg(fromName),
+                        new OrdinalMessageArg(fromIndex),
+                        new StringMessageArg(toName),
+                        new OrdinalMessageArg(to1Index),
+                        new OrdinalMessageArg(to2Index));
+            else
+                message(ParserMessages.ambiguousModelMultipleAnd,
+                        new StringMessageArg(fromName),
+                        new OrdinalMessageArg(fromIndex),
+                        new NumberMessageArg(andMatches),
+                        new StringMessageArg(toName),
+                        new OrdinalMessageArg(to1Index),
+                        new OrdinalMessageArg(to2Index));
+        }
+    }
+
+    // void checkElementAttribute(const ElementType *e, size_t checkFrom = 0);
+    protected void checkElementAttribute(ElementType? e, nuint checkFrom = 0)
+    {
+        if (!validate())
+            return;
+        AttributeDefinitionList? attDef = e!.attributeDef().pointer();
+        Boolean conref = false;
+        ElementDefinition? edef = e.definition();
+        nuint attDefLength = attDef!.size();
+        for (nuint j = checkFrom; j < attDefLength; j++)
+        {
+            AttributeDefinition? p = attDef.def(j);
+            if (p!.isConref())
+                conref = true;
+            if (p.isNotation()
+                && edef!.declaredContent() == ElementDefinition.DeclaredContent.empty)
+                message(ParserMessages.notationEmpty, new StringMessageArg(e.name()));
+        }
+        if (conref)
+        {
+            if (edef!.declaredContent() == ElementDefinition.DeclaredContent.empty)
+                message(ParserMessages.conrefEmpty, new StringMessageArg(e.name()));
+        }
+    }
     protected virtual Boolean parseAttlistDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseNotationDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseEntityDecl() { throw new NotImplementedException(); }
