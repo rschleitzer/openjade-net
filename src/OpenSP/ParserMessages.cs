@@ -831,4 +831,38 @@ public static class ParserMessages
         MessageType.Severity.error, null, 537, "characters with the following numbers in the document character set are significant in the concrete syntax but are not in SGML character set: %1");
     public static readonly MessageType1 sdTextClass = new MessageType1(
         MessageType.Severity.warning, null, 538, "public identifier \"%1\" has wrong text class for SGML declaration");
+    public static readonly MessageType1 unknownCapacitySet = new MessageType1(
+        MessageType.Severity.error, null, 539, "capacity set %1 is unknown");
+    public static readonly MessageType1 duplicateCapacity = new MessageType1(
+        MessageType.Severity.warning, null, 540, "capacity %1 already specified");
+    public static readonly MessageType1 capacityExceedsTotalcap = new MessageType1(
+        MessageType.Severity.error, null, 541, "value of capacity %1 exceeds value of TOTALCAP");
+    public static readonly MessageType1 unknownPublicSyntax = new MessageType1(
+        MessageType.Severity.error, null, 542, "syntax %1 is unknown");
+    public static readonly MessageType1 capacityTextClass = new MessageType1(
+        MessageType.Severity.error, null, 543, "public text class of formal public identifier of capacity set must be CAPACITY");
+    public static readonly MessageType1 syntaxTextClass = new MessageType1(
+        MessageType.Severity.error, null, 544, "public text class of formal public identifier of concrete syntax must be SYNTAX");
+    public static readonly MessageType0 immednetRequiresEmptynrm = new MessageType0(
+        MessageType.Severity.error, null, 545, "NETENABL IMMEDNET requires EMPTYNRM YES");
+    public static readonly MessageType1 basesetTextClass = new MessageType1(
+        MessageType.Severity.error, null, 546, "public text class of formal public identifier of base character set must be CHARSET");
+    public static readonly MessageType1 unknownBaseset = new MessageType1(
+        MessageType.Severity.error, null, 547, "base character set %1 is unknown");
+    public static readonly MessageType0 zeroNumberOfCharacters = new MessageType0(
+        MessageType.Severity.warning, null, 548, "number of characters declared is zero");
+    public static readonly MessageType1 documentCharMax = new MessageType1(
+        MessageType.Severity.error, null, 549, "character numbers declared exceed document character set maximum of %1");
+    public static readonly MessageType1 basesetCharsMissing = new MessageType1(
+        MessageType.Severity.warning, null, 550, "base character set characters missing from document character set: %1");
+    public static readonly MessageType0 tooManyCharsMinimumLiteral = new MessageType0(
+        MessageType.Severity.error, null, 551, "more than 256 character numbers cannot be assigned with minimum literal");
+    public static readonly MessageType1 duplicateCharNumbers = new MessageType1(
+        MessageType.Severity.error, null, 552, "character numbers declared more than once: %1");
+    public static readonly MessageType1 codeSetHoles = new MessageType1(
+        MessageType.Severity.warning, null, 553, "character numbers not declared: %1");
+    public static readonly MessageType0 scopeInstanceSyntaxCharset = new MessageType0(
+        MessageType.Severity.error, null, 554, "syntax reference character set must be ISO 646 when scope is INSTANCE");
+    public static readonly MessageType1 missingMinimumChars = new MessageType1(
+        MessageType.Severity.error, null, 555, "missing minimum data characters in document character set: %1");
 }

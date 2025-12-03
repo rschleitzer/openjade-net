@@ -6,23 +6,23 @@ namespace OpenSP;
 // SdParam - parameter for SGML declaration parsing
 public class SdParam
 {
-    // Type constants
-    public const byte invalid = 0;
-    public const byte eE = 1;
-    public const byte minimumLiteral = 2;
-    public const byte mdc = 3;
-    public const byte minus = 4;
-    public const byte number = 5;
-    public const byte capacityName = 6;
-    public const byte name = 7;
-    public const byte paramLiteral = 8;
-    public const byte systemIdentifier = 9;
-    public const byte generalDelimiterName = 10;
-    public const byte referenceReservedName = 11;
-    public const byte quantityName = 12;
-    public const byte reservedName = 13;  // Sd.ReservedName is added to this
+    // Type constants - using uint to allow for reservedName + Sd.ReservedName values
+    public const uint invalid = 0;
+    public const uint eE = 1;
+    public const uint minimumLiteral = 2;
+    public const uint mdc = 3;
+    public const uint minus = 4;
+    public const uint number = 5;
+    public const uint capacityName = 6;
+    public const uint name = 7;
+    public const uint paramLiteral = 8;
+    public const uint systemIdentifier = 9;
+    public const uint generalDelimiterName = 10;
+    public const uint referenceReservedName = 11;
+    public const uint quantityName = 12;
+    public const uint reservedName = 13;  // Sd.ReservedName is added to this
 
-    public byte type;
+    public uint type;
     public StringC token = new StringC();
     public Text literalText = new Text();
     public String<SyntaxChar> paramLiteralText = new String<SyntaxChar>();
@@ -49,14 +49,14 @@ public class SdParam
 public class AllowedSdParams
 {
     private const int maxAllow = 6;
-    private byte[] allow_ = new byte[maxAllow];
+    private uint[] allow_ = new uint[maxAllow];
 
-    public AllowedSdParams(byte t1,
-                           byte t2 = SdParam.invalid,
-                           byte t3 = SdParam.invalid,
-                           byte t4 = SdParam.invalid,
-                           byte t5 = SdParam.invalid,
-                           byte t6 = SdParam.invalid)
+    public AllowedSdParams(uint t1,
+                           uint t2 = SdParam.invalid,
+                           uint t3 = SdParam.invalid,
+                           uint t4 = SdParam.invalid,
+                           uint t5 = SdParam.invalid,
+                           uint t6 = SdParam.invalid)
     {
         allow_[0] = t1;
         allow_[1] = t2;
@@ -66,7 +66,7 @@ public class AllowedSdParams
         allow_[5] = t6;
     }
 
-    public Boolean param(byte t)
+    public Boolean param(uint t)
     {
         for (int i = 0; i < maxAllow && allow_[i] != SdParam.invalid; i++)
             if (allow_[i] == t)
@@ -74,7 +74,7 @@ public class AllowedSdParams
         return false;
     }
 
-    public byte get(int i)
+    public uint get(int i)
     {
         if (i >= 0 && i < maxAllow)
             return allow_[i];

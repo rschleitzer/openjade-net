@@ -7790,7 +7790,7 @@ public class Parser : ParserState
                         }
                         for (int i = 0; ; i++)
                         {
-                            byte t = allow.get(i);
+                            uint t = allow.get(i);
                             if (t == SdParam.invalid)
                                 break;
                             if (t >= SdParam.reservedName)
@@ -8084,47 +8084,1184 @@ public class Parser : ParserState
         return true;
     }
 
-    // Stub implementations for SD section parsers - these will be implemented incrementally
+    // void findMissingMinimum(const UnivCharsetDesc &desc, ISet<WideChar> &missing);
+    // Overload that takes UnivCharsetDesc and creates a CharsetInfo internally
+    protected void findMissingMinimum(UnivCharsetDesc desc, ISet<WideChar> missing)
+    {
+        CharsetInfo charset = new CharsetInfo(desc);
+        findMissingMinimum(charset, missing);
+    }
+
+    // void translateDocSet(const CharsetInfo &fromCharset, const CharsetInfo &toCharset,
+    //                      const ISet<Char> &fromSet, ISet<Char> &toSet);
+    protected void translateDocSet(CharsetInfo fromCharset, CharsetInfo toCharset,
+                                   ISet<Char> fromSet, ISet<Char> toSet)
+    {
+        ISetIter<Char> iter = new ISetIter<Char>(fromSet);
+        Char min, max;
+        while (iter.next(out min, out max) != 0)
+        {
+            do
+            {
+                UnivChar univChar;
+                Char internalChar;
+                WideChar count2, alsoMax;
+                if (!fromCharset.descToUniv(min, out univChar, out alsoMax))
+                {
+                    if (alsoMax >= max)
+                        break;
+                    min = (Char)alsoMax;
+                }
+                else
+                {
+                    // FIXME better not to use univToDescCheck here
+                    // Maybe OK if multiple internal chars corresponding to doc char
+                    Boolean nMap = univToDescCheck(toCharset, univChar, out internalChar, out count2);
+                    if (alsoMax > max)
+                        alsoMax = max;
+                    if (alsoMax - min > count2 - 1)
+                        alsoMax = (WideChar)(min + (count2 - 1));
+                    if (nMap)
+                        toSet.addRange(internalChar, (Char)(internalChar + (alsoMax - min)));
+                    min = (Char)alsoMax;
+                }
+            } while (min++ != max);
+        }
+    }
+
+    // UnivChar charNameToUniv(Sd &sd, const StringC &name);
+    protected UnivChar charNameToUniv(Sd sd, StringC name)
+    {
+        UnivChar univ;
+        if (entityCatalog().lookupChar(name, sd.internalCharset(), messenger(), out univ))
+            return univ;
+        else
+            return sd.nameToUniv(name);
+    }
+
+    // Boolean referencePublic(const PublicId &id, PublicId::TextClass entityType, Boolean &givenError);
+    protected Boolean referencePublic(PublicId id, PublicId.TextClass entityType, out Boolean givenError)
+    {
+        givenError = false;
+        StringC sysid = new StringC();
+        if (entityCatalog().lookupPublic(id.@string(),
+                                          sd().internalCharset(),
+                                          messenger(),
+                                          sysid))
+        {
+            Location loc = currentLocation();
+            eventHandler().sgmlDeclEntity(new SgmlDeclEntityEvent(id,
+                                                                   entityType,
+                                                                   sysid,
+                                                                   loc));
+            EntityOrigin origin = EntityOrigin.make(internalAllocator(),
+                                                     new ConstPtr<Entity>(),
+                                                     loc);
+            if (currentMarkup() != null)
+                currentMarkup()!.addEntityStart(new Ptr<EntityOrigin>(origin));
+            InputSource? @in = entityManager().open(sysid,
+                                                    sd().docCharset(),
+                                                    origin,
+                                                    0,
+                                                    messenger());
+            if (@in == null)
+            {
+                givenError = true;
+                return false;
+            }
+            pushInput(@in);
+            return true;
+        }
+        return false;
+    }
+
+    // const StandardSyntaxSpec *lookupSyntax(const PublicId &id);
+    protected StandardSyntaxSpec? lookupSyntax(PublicId id)
+    {
+        PublicId.OwnerType ownerType;
+        if (!id.getOwnerType(out ownerType) || ownerType != PublicId.OwnerType.ISO)
+            return null;
+        StringC str = new StringC();
+        if (!id.getOwner(str))
+            return null;
+        if (!str.Equals(sd().execToInternal("ISO 8879:1986"))
+            && !str.Equals(sd().execToInternal("ISO 8879-1986")))
+            return null;
+        PublicId.TextClass textClass;
+        if (!id.getTextClass(out textClass) || textClass != PublicId.TextClass.SYNTAX)
+            return null;
+        if (!id.getDescription(str))
+            return null;
+        if (str.Equals(sd().execToInternal("Reference")))
+            return refSyntax;
+        if (str.Equals(sd().execToInternal("Core")))
+            return coreSyntax;
+        return null;
+    }
+
+    // void requireWWW(SdBuilder &sdBuilder);
+    protected void requireWWW(SdBuilder sdBuilder)
+    {
+        if (!sdBuilder.www)
+        {
+            message(ParserMessages.wwwRequired);
+            sdBuilder.www = true;
+        }
+    }
+
+    // Boolean sdParseCharset(SdBuilder &sdBuilder, SdParam &parm, Boolean isDocument,
+    //                        CharsetDecl &decl, UnivCharsetDesc &desc);
+    protected Boolean sdParseCharset(SdBuilder sdBuilder, SdParam parm, Boolean isDocument,
+                                     CharsetDecl decl, UnivCharsetDesc desc)
+    {
+        decl.clear();
+        ISet<WideChar> multiplyDeclared = new ISet<WideChar>();
+        // This is for checking whether the syntax reference character set
+        // is ISO 646 when SCOPE is INSTANCE.
+        Boolean maybeISO646 = true;
+        do
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.minimumLiteral), parm))
+                return false;
+            UnivCharsetDesc baseDesc = new UnivCharsetDesc();
+            PublicId id = new PublicId();
+            Boolean found;
+            PublicId.TextClass textClass;
+            MessageType1? err;
+            MessageType1? err1;
+            if (id.init(parm.literalText, sd().internalCharset(), syntax().space(), out err, out err1) != PublicId.Type.fpi)
+                sdBuilder.addFormalError(currentLocation(),
+                                         err!,
+                                         id.@string());
+            else if (id.getTextClass(out textClass)
+                     && textClass != PublicId.TextClass.CHARSET)
+                sdBuilder.addFormalError(currentLocation(),
+                                         ParserMessages.basesetTextClass,
+                                         id.@string());
+            Boolean givenError;
+            if (referencePublic(id, PublicId.TextClass.CHARSET, out givenError))
+                found = sdParseExternalCharset(sdBuilder.sd.pointer()!, baseDesc);
+            else if (!givenError)
+            {
+                found = false;
+                PublicId.OwnerType ownerType;
+                if (id.getOwnerType(out ownerType) && ownerType == PublicId.OwnerType.ISO)
+                {
+                    StringC sequence = new StringC();
+                    if (id.getDesignatingSequence(sequence))
+                    {
+                        CharsetRegistry.ISORegistrationNumber number
+                            = CharsetRegistry.getRegistrationNumber(sequence, sd().internalCharset());
+                        if (number != CharsetRegistry.ISORegistrationNumber.UNREGISTERED)
+                        {
+                            CharsetRegistry.Iter? iter = CharsetRegistry.makeIter(number);
+                            if (iter != null)
+                            {
+                                found = true;
+                                WideChar min;
+                                WideChar max;
+                                UnivChar univ;
+                                while (iter.next(out min, out max, out univ))
+                                    baseDesc.addRange(min, max, univ);
+                            }
+                        }
+                    }
+                }
+                if (!found)
+                    message(ParserMessages.unknownBaseset, new StringMessageArg(id.@string()));
+            }
+            else
+                found = false;
+            if (!found)
+                maybeISO646 = false;
+            decl.addSection(id);
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rDESCSET),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                return false;
+            do
+            {
+                WideChar min = parm.n;
+                if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                    return false;
+                Number count = parm.n;
+                Number adjCount;
+                if (options().warnSgmlDecl && count == 0)
+                    message(ParserMessages.zeroNumberOfCharacters);
+                decl.rangeDeclared(min, count, multiplyDeclared);
+                if (isDocument
+                    && count > 0
+                    && (min > Constant.charMax || count - 1 > Constant.charMax - min))
+                {
+                    message(ParserMessages.documentCharMax, new NumberMessageArg(Constant.charMax));
+                    adjCount = min > Constant.charMax ? 0 : 1 + (Constant.charMax - min);
+                    maybeISO646 = false;
+                }
+                else
+                    adjCount = count;
+                if (!parseSdParam(new AllowedSdParams(SdParam.number,
+                                                      SdParam.minimumLiteral,
+                                                      SdParam.reservedName + (uint)Sd.ReservedName.rUNUSED),
+                                  parm))
+                    return false;
+                switch (parm.type)
+                {
+                    case SdParam.number:
+                        decl.addRange(min, count, parm.n);
+                        if (found && adjCount > 0)
+                        {
+                            ISet<WideChar> baseMissing = new ISet<WideChar>();
+                            desc.addBaseRange(baseDesc, min, min + (adjCount - 1), parm.n,
+                                              baseMissing);
+                            if (!baseMissing.isEmpty() && options().warnSgmlDecl)
+                                message(ParserMessages.basesetCharsMissing,
+                                        new CharsetMessageArg(baseMissing));
+                        }
+                        break;
+                    case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rUNUSED:
+                        decl.addRange(min, count);
+                        break;
+                    case SdParam.minimumLiteral:
+                        {
+                            UnivChar c = charNameToUniv(sdBuilder.sd.pointer()!, parm.literalText.@string());
+                            if (adjCount > 256)
+                            {
+                                message(ParserMessages.tooManyCharsMinimumLiteral);
+                                adjCount = 256;
+                            }
+                            for (Number i = 0; i < adjCount; i++)
+                                desc.addRange(min + i, min + i, c);
+                        }
+                        maybeISO646 = false;
+                        decl.addRange(min, count, parm.literalText.@string());
+                        break;
+                    default:
+                        throw new InvalidOperationException("CANNOT_HAPPEN");
+                }
+                uint follow = isDocument
+                    ? SdParam.reservedName + (uint)Sd.ReservedName.rCAPACITY
+                    : SdParam.reservedName + (uint)Sd.ReservedName.rFUNCTION;
+                if (!parseSdParam(new AllowedSdParams(SdParam.number,
+                                                      SdParam.reservedName + (uint)Sd.ReservedName.rBASESET,
+                                                      follow),
+                                  parm))
+                    return false;
+            } while (parm.type == SdParam.number);
+        } while (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rBASESET);
+        if (!multiplyDeclared.isEmpty())
+            message(ParserMessages.duplicateCharNumbers,
+                    new CharsetMessageArg(multiplyDeclared));
+        ISet<WideChar> declaredSet = new ISet<WideChar>();
+        decl.declaredSet(declaredSet);
+        ISetIter<WideChar> iter2 = new ISetIter<WideChar>(declaredSet);
+        WideChar min2, max2, lastMax;
+        if (iter2.next(out min2, out max2) != 0)
+        {
+            ISet<WideChar> holes = new ISet<WideChar>();
+            lastMax = max2;
+            while (iter2.next(out min2, out max2) != 0)
+            {
+                if (min2 - lastMax > 1)
+                    holes.addRange(lastMax + 1, min2 - 1);
+                lastMax = max2;
+            }
+            if (!holes.isEmpty())
+                message(ParserMessages.codeSetHoles, new CharsetMessageArg(holes));
+        }
+        if (!isDocument && sdBuilder.sd.pointer()!.scopeInstance())
+        {
+            // If scope is INSTANCE, syntax reference character set
+            // must be same as reference.
+            UnivCharsetDescIter iter3 = new UnivCharsetDescIter(desc);
+            WideChar descMin, descMax;
+            UnivChar univMin;
+            Char nextDescMin = 0;
+            while (maybeISO646)
+            {
+                if (!iter3.next(out descMin, out descMax, out univMin))
+                {
+                    if (nextDescMin != 128)
+                        maybeISO646 = false;
+                    break;
+                }
+                if (descMin != nextDescMin || univMin != descMin)
+                    maybeISO646 = false;
+                nextDescMin = (Char)(descMax + 1);
+            }
+            if (!maybeISO646)
+                message(ParserMessages.scopeInstanceSyntaxCharset);
+        }
+        return true;
+    }
+
+    // Boolean sdParseExternalCharset(Sd &sd, UnivCharsetDesc &desc);
+    protected Boolean sdParseExternalCharset(Sd sd, UnivCharsetDesc desc)
+    {
+        SdParam parm = new SdParam();
+        for (;;)
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.number, SdParam.eE),
+                              parm))
+                break;
+            if (parm.type == SdParam.eE)
+                return true;
+            WideChar min = parm.n;
+            if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                break;
+            Number count = parm.n;
+            if (!parseSdParam(new AllowedSdParams(SdParam.number,
+                                                  SdParam.minimumLiteral,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rUNUSED),
+                              parm))
+                break;
+            if (parm.type == SdParam.number)
+            {
+                if (count > 0)
+                    desc.addRange(min, min + (count - 1), parm.n);
+            }
+            else if (parm.type == SdParam.minimumLiteral)
+            {
+                UnivChar c = charNameToUniv(sd, parm.literalText.@string());
+                if (count > 256)
+                {
+                    message(ParserMessages.tooManyCharsMinimumLiteral);
+                    count = 256;
+                }
+                for (Number i = 0; i < count; i++)
+                    desc.addRange(min + i, min + i, c);
+            }
+        }
+        popInputStack();
+        return false;
+    }
+
+    // SD section parsers
     protected virtual Boolean sdParseDocumentCharset(SdBuilder sdBuilder, SdParam parm)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException("sdParseDocumentCharset not yet implemented");
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rCHARSET),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rBASESET),
+                          parm))
+            return false;
+        CharsetDecl decl = new CharsetDecl();
+        UnivCharsetDesc desc = new UnivCharsetDesc();
+        if (!sdParseCharset(sdBuilder, parm, true, decl, desc))
+            return false;
+        ISet<WideChar> missing = new ISet<WideChar>();
+        findMissingMinimum(desc, missing);
+        if (!missing.isEmpty())
+        {
+            message(ParserMessages.missingMinimumChars,
+                    new CharsetMessageArg(missing));
+            return false;
+        }
+        ISet<Char> sgmlChar = new ISet<Char>();
+        decl.usedSet(sgmlChar);
+        sdBuilder.sd.pointer()!.setDocCharsetDesc(desc);
+        sdBuilder.sd.pointer()!.setDocCharsetDecl(decl);
+        sdBuilder.syntax = new Ptr<Syntax>(new Syntax(sdBuilder.sd.pointer()!));
+        if (sd().internalCharsetIsDocCharset())
+            sdBuilder.syntax.pointer()!.setSgmlChar(sgmlChar);
+        else
+        {
+            ISet<Char> internalSgmlChar = new ISet<Char>();
+            translateDocSet(sdBuilder.sd.pointer()!.docCharset(), sdBuilder.sd.pointer()!.internalCharset(),
+                            sgmlChar, internalSgmlChar);
+            sdBuilder.syntax.pointer()!.setSgmlChar(internalSgmlChar);
+        }
+        return true;
     }
 
     protected virtual Boolean sdParseCapacity(SdBuilder sdBuilder, SdParam parm)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException("sdParseCapacity not yet implemented");
+        if (!parseSdParam(sdBuilder.www
+                          ? new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNONE,
+                                                SdParam.reservedName + (uint)Sd.ReservedName.rPUBLIC,
+                                                SdParam.reservedName + (uint)Sd.ReservedName.rSGMLREF)
+                          : new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rPUBLIC,
+                                                SdParam.reservedName + (uint)Sd.ReservedName.rSGMLREF),
+                          parm))
+            return false;
+        Boolean pushed = false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rNONE)
+            return parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSCOPE),
+                                parm);
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rPUBLIC)
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.minimumLiteral), parm))
+                return false;
+            PublicId id = new PublicId();
+            PublicId.TextClass textClass;
+            MessageType1? err;
+            MessageType1? err1;
+            if (id.init(parm.literalText, sd().internalCharset(), syntax().space(), out err, out err1) != PublicId.Type.fpi)
+                sdBuilder.addFormalError(currentLocation(),
+                                         err!,
+                                         id.@string());
+            else if (id.getTextClass(out textClass)
+                     && textClass != PublicId.TextClass.CAPACITY)
+                sdBuilder.addFormalError(currentLocation(),
+                                         ParserMessages.capacityTextClass,
+                                         id.@string());
+            StringC str = id.@string();
+            if (!str.Equals(sd().execToInternal("ISO 8879-1986//CAPACITY Reference//EN"))
+                && !str.Equals(sd().execToInternal("ISO 8879:1986//CAPACITY Reference//EN")))
+            {
+                Boolean givenError;
+                if (referencePublic(id, PublicId.TextClass.CAPACITY, out givenError))
+                    pushed = true;
+                else if (!givenError)
+                    message(ParserMessages.unknownCapacitySet, new StringMessageArg(str));
+            }
+            if (!pushed)
+                return parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSCOPE),
+                                    parm);
+        }
+
+        PackedBoolean[] capacitySpecified = new PackedBoolean[(int)Sd.nCapacity];
+        for (int i = 0; i < (int)Sd.nCapacity; i++)
+            capacitySpecified[i] = false;
+        uint final = pushed ? SdParam.eE : SdParam.reservedName + (uint)Sd.ReservedName.rSCOPE;
+        if (!parseSdParam(sdBuilder.www
+                          ? new AllowedSdParams(SdParam.capacityName, final)
+                          : new AllowedSdParams(SdParam.capacityName), parm))
+            return false;
+        while (parm.type == SdParam.capacityName)
+        {
+            Sd.Capacity capacityIndex = parm.capacityIndex;
+            if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                return false;
+
+            if (!capacitySpecified[(int)capacityIndex])
+            {
+                sdBuilder.sd.pointer()!.setCapacity((int)capacityIndex, parm.n);
+                capacitySpecified[(int)capacityIndex] = true;
+            }
+            else if (options().warnSgmlDecl)
+                message(ParserMessages.duplicateCapacity,
+                        new StringMessageArg(sd().capacityName((int)capacityIndex)));
+            if (!parseSdParam(new AllowedSdParams(SdParam.capacityName, final),
+                              parm))
+                return false;
+        }
+        Number totalcap = sdBuilder.sd.pointer()!.capacity(0);
+        for (int i = 1; i < (int)Sd.nCapacity; i++)
+            if (sdBuilder.sd.pointer()!.capacity(i) > totalcap)
+                message(ParserMessages.capacityExceedsTotalcap,
+                        new StringMessageArg(sd().capacityName(i)));
+        if (pushed)
+            return parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSCOPE),
+                                parm);
+        return true;
     }
 
     protected virtual Boolean sdParseScope(SdBuilder sdBuilder, SdParam parm)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException("sdParseScope not yet implemented");
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rINSTANCE,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rDOCUMENT),
+                          parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rINSTANCE)
+            sdBuilder.sd.pointer()!.setScopeInstance();
+        return true;
     }
 
     protected virtual Boolean sdParseSyntax(SdBuilder sdBuilder, SdParam parm)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException("sdParseSyntax not yet implemented");
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSYNTAX),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSHUNCHAR,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rPUBLIC),
+                          parm))
+            return false;
+
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rPUBLIC)
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.minimumLiteral), parm))
+                return false;
+            PublicId id = new PublicId();
+            MessageType1? err;
+            MessageType1? err1;
+            PublicId.TextClass textClass;
+            if (id.init(parm.literalText, sd().internalCharset(), syntax().space(), out err, out err1) != PublicId.Type.fpi)
+                sdBuilder.addFormalError(currentLocation(),
+                                         err!,
+                                         id.@string());
+            else if (id.getTextClass(out textClass)
+                     && textClass != PublicId.TextClass.SYNTAX)
+                sdBuilder.addFormalError(currentLocation(),
+                                         ParserMessages.syntaxTextClass,
+                                         id.@string());
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rFEATURES,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rSWITCHES),
+                              parm))
+                return false;
+            if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rSWITCHES)
+            {
+                if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                    return false;
+                for (;;)
+                {
+                    SyntaxChar c = parm.n;
+                    if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                        return false;
+                    sdBuilder.switcher.addSwitch(c, parm.n);
+                    if (!parseSdParam(new AllowedSdParams(SdParam.number,
+                                                          SdParam.reservedName
+                                                          + (uint)Sd.ReservedName.rFEATURES),
+                                      parm))
+                        return false;
+                    if (parm.type != SdParam.number)
+                        break;
+                }
+            }
+            StandardSyntaxSpec? spec = lookupSyntax(id);
+            if (spec != null)
+            {
+                if (!setStandardSyntax(sdBuilder.syntax.pointer()!,
+                                       spec.Value,
+                                       sdBuilder.sd.pointer()!.internalCharset(),
+                                       sdBuilder.switcher,
+                                       sdBuilder.www))
+                    sdBuilder.valid = false;
+            }
+            else
+            {
+                Boolean givenError;
+                if (referencePublic(id, PublicId.TextClass.SYNTAX, out givenError))
+                {
+                    sdBuilder.externalSyntax = true;
+                    SdParam parm2 = new SdParam();
+                    if (!parseSdParam(new AllowedSdParams(SdParam.reservedName
+                                                          + (uint)Sd.ReservedName.rSHUNCHAR),
+                                      parm2))
+                        return false;
+                    if (!sdParseExplicitSyntax(sdBuilder, parm2))
+                        return false;
+                }
+                else
+                {
+                    if (!givenError)
+                        message(ParserMessages.unknownPublicSyntax,
+                                new StringMessageArg(id.@string()));
+                    sdBuilder.valid = false;
+                }
+            }
+        }
+        else
+        {
+            if (!sdParseExplicitSyntax(sdBuilder, parm))
+                return false;
+        }
+        if (!sdBuilder.sd.pointer()!.scopeInstance())
+        {
+            // we know the significant chars now
+            ISet<WideChar> invalidSgmlChar = new ISet<WideChar>();
+            sdBuilder.syntax.pointer()!.checkSgmlChar(sdBuilder.sd.pointer()!,
+                                            null,
+                                            true,
+                                            invalidSgmlChar);
+            if (!invalidSgmlChar.isEmpty())
+                message(ParserMessages.invalidSgmlChar, new CharsetMessageArg(invalidSgmlChar));
+        }
+        checkSyntaxNames(sdBuilder.syntax.pointer()!);
+        checkSyntaxNamelen(sdBuilder.syntax.pointer()!);
+        checkSwitchesMarkup(sdBuilder.switcher);
+        return true;
+    }
+
+    // void checkSyntaxNames(const Syntax &syntax);
+    protected void checkSyntaxNames(Syntax syntax)
+    {
+        // TODO: Implement syntax name checking
+        // This validates that syntax names are consistent and properly defined
+    }
+
+    // void checkSyntaxNamelen(const Syntax &syntax);
+    protected void checkSyntaxNamelen(Syntax syntax)
+    {
+        // TODO: Implement syntax name length checking
+        // This validates NAMELEN quantity against defined names
+    }
+
+    // Boolean sdParseExplicitSyntax(SdBuilder &sdBuilder, SdParam &parm);
+    protected Boolean sdParseExplicitSyntax(SdBuilder sdBuilder, SdParam parm)
+    {
+        // Call each syntax component parser in order
+        if (!sdParseShunchar(sdBuilder, parm))
+            return false;
+        if (!sdParseSyntaxCharset(sdBuilder, parm))
+            return false;
+        if (!sdParseFunction(sdBuilder, parm))
+            return false;
+        if (!sdParseNaming(sdBuilder, parm))
+            return false;
+        if (!sdParseDelim(sdBuilder, parm))
+            return false;
+        if (!sdParseNames(sdBuilder, parm))
+            return false;
+        if (!sdParseQuantity(sdBuilder, parm))
+            return false;
+        return true;
+    }
+
+    // Stub implementations for explicit syntax component parsers
+    protected virtual Boolean sdParseShunchar(SdBuilder sdBuilder, SdParam parm)
+    {
+        throw new NotImplementedException("sdParseShunchar not yet implemented");
+    }
+
+    protected virtual Boolean sdParseSyntaxCharset(SdBuilder sdBuilder, SdParam parm)
+    {
+        throw new NotImplementedException("sdParseSyntaxCharset not yet implemented");
+    }
+
+    protected virtual Boolean sdParseFunction(SdBuilder sdBuilder, SdParam parm)
+    {
+        throw new NotImplementedException("sdParseFunction not yet implemented");
+    }
+
+    protected virtual Boolean sdParseNaming(SdBuilder sdBuilder, SdParam parm)
+    {
+        throw new NotImplementedException("sdParseNaming not yet implemented");
+    }
+
+    protected virtual Boolean sdParseDelim(SdBuilder sdBuilder, SdParam parm)
+    {
+        throw new NotImplementedException("sdParseDelim not yet implemented");
+    }
+
+    protected virtual Boolean sdParseNames(SdBuilder sdBuilder, SdParam parm)
+    {
+        throw new NotImplementedException("sdParseNames not yet implemented");
+    }
+
+    protected virtual Boolean sdParseQuantity(SdBuilder sdBuilder, SdParam parm)
+    {
+        throw new NotImplementedException("sdParseQuantity not yet implemented");
     }
 
     protected virtual Boolean sdParseFeatures(SdBuilder sdBuilder, SdParam parm)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException("sdParseFeatures not yet implemented");
+        // Feature info structure
+        int booleanFeature = 0;
+        int numberFeature = 0;
+
+        // MINIMIZE section
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rMINIMIZE),
+                          parm))
+            return false;
+
+        // DATATAG
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rDATATAG),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fDATATAG,
+                                        parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        booleanFeature++;
+
+        // OMITTAG
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rOMITTAG),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fOMITTAG,
+                                        parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        booleanFeature++;
+
+        // RANK
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rRANK),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fRANK,
+                                        parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        booleanFeature++;
+
+        // SHORTTAG
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSHORTTAG),
+                          parm))
+            return false;
+        // Check for simple YES/NO vs expanded SHORTTAG (STARTTAG etc.)
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSTARTTAG,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rNO
+            || parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES)
+        {
+            // Simple SHORTTAG YES/NO form
+            sdBuilder.sd.pointer()!.setShorttag(parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            // Skip the detailed SHORTTAG boolean features
+            booleanFeature += 12; // Skip fSTARTTAGEMPTY through fIMPLYDEFNOTATION
+        }
+        else
+        {
+            // Extended SHORTTAG form - parse STARTTAG, ENDTAG, ATTRIB sections
+            // STARTTAG subsection
+            // EMPTY
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rEMPTY),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fSTARTTAGEMPTY,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // UNCLOSED
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rUNCLOSED),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fSTARTTAGUNCLOSED,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // NETENABL
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNETENABL),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rIMMEDNET,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rALL),
+                              parm))
+                return false;
+            switch (parm.type)
+            {
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rNO:
+                    sdBuilder.sd.pointer()!.setStartTagNetEnable(Sd.NetEnable.netEnableNo);
+                    break;
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rIMMEDNET:
+                    sdBuilder.sd.pointer()!.setStartTagNetEnable(Sd.NetEnable.netEnableImmednet);
+                    break;
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rALL:
+                    sdBuilder.sd.pointer()!.setStartTagNetEnable(Sd.NetEnable.netEnableAll);
+                    break;
+            }
+
+            // ENDTAG subsection
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rENDTAG),
+                              parm))
+                return false;
+            // EMPTY
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rEMPTY),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fENDTAGEMPTY,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // UNCLOSED
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rUNCLOSED),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fENDTAGUNCLOSED,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // ATTRIB subsection
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rATTRIB),
+                              parm))
+                return false;
+            // DEFAULT
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rDEFAULT),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fATTRIBDEFAULT,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // OMITNAME
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rOMITNAME),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fATTRIBOMITNAME,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // VALUE
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rVALUE),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fATTRIBVALUE,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // EMPTYNRM
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rEMPTYNRM),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rNO
+                && sdBuilder.sd.pointer()!.startTagNetEnable() == Sd.NetEnable.netEnableImmednet)
+            {
+                message(ParserMessages.immednetRequiresEmptynrm);
+                sdBuilder.valid = false;
+            }
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fEMPTYNRM,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // IMPLYDEF subsection
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rIMPLYDEF),
+                              parm))
+                return false;
+            // ATTLIST
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rATTLIST),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fIMPLYDEFATTLIST,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // DOCTYPE
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rDOCTYPE),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fIMPLYDEFDOCTYPE,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // ELEMENT
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rELEMENT),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rANYOTHER),
+                              parm))
+                return false;
+            switch (parm.type)
+            {
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rNO:
+                    sdBuilder.sd.pointer()!.setImplydefElement(Sd.ImplydefElement.implydefElementNo);
+                    break;
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rYES:
+                    sdBuilder.sd.pointer()!.setImplydefElement(Sd.ImplydefElement.implydefElementYes);
+                    break;
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rANYOTHER:
+                    sdBuilder.sd.pointer()!.setImplydefElement(Sd.ImplydefElement.implydefElementAnyother);
+                    break;
+            }
+
+            // ENTITY
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rENTITY),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fIMPLYDEFENTITY,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+
+            // NOTATION
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNOTATION),
+                              parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fIMPLYDEFNOTATION,
+                                            parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+            booleanFeature++;
+        }
+
+        // LINK section
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rLINK),
+                          parm))
+            return false;
+
+        // SIMPLE
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSIMPLE),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES)
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                return false;
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fSIMPLE, parm.n);
+            numberFeature++;
+        }
+        else
+        {
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fSIMPLE, 0);
+            numberFeature++;
+        }
+
+        // IMPLICIT
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rIMPLICIT),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fIMPLICIT,
+                                        parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        booleanFeature++;
+
+        // EXPLICIT
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rEXPLICIT),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES)
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                return false;
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fEXPLICIT, parm.n);
+            numberFeature++;
+        }
+        else
+        {
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fEXPLICIT, 0);
+            numberFeature++;
+        }
+
+        // OTHER section
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rOTHER),
+                          parm))
+            return false;
+
+        // CONCUR
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rCONCUR),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES)
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                return false;
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fCONCUR, parm.n);
+            numberFeature++;
+        }
+        else
+        {
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fCONCUR, 0);
+            numberFeature++;
+        }
+
+        // SUBDOC
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSUBDOC),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES)
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.number), parm))
+                return false;
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fSUBDOC, parm.n);
+            numberFeature++;
+        }
+        else
+        {
+            sdBuilder.sd.pointer()!.setNumberFeature(Sd.NumberFeature.fSUBDOC, 0);
+            numberFeature++;
+        }
+
+        // FORMAL
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rFORMAL),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fFORMAL,
+                                        parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        booleanFeature++;
+
+        // Check for optional WWW features (URN, KEEPRSRE)
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rURN,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rAPPINFO), parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rAPPINFO)
+            return true;
+        requireWWW(sdBuilder);
+        // URN
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fURN,
+                                        parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        booleanFeature++;
+
+        // KEEPRSRE
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rKEEPRSRE),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                          parm))
+            return false;
+        sdBuilder.sd.pointer()!.setBooleanFeature(Sd.BooleanFeature.fKEEPRSRE,
+                                        parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        booleanFeature++;
+
+        // VALIDITY section
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rVALIDITY),
+                          parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNOASSERT,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rTYPE),
+                          parm))
+            return false;
+        switch (parm.type)
+        {
+            case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rNOASSERT:
+                sdBuilder.sd.pointer()!.setTypeValid(false);
+                break;
+            case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rTYPE:
+                sdBuilder.sd.pointer()!.setTypeValid(true);
+                break;
+        }
+
+        // ENTITIES section
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rENTITIES), parm))
+            return false;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNOASSERT,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rREF),
+                          parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rNOASSERT)
+        {
+            sdBuilder.sd.pointer()!.setIntegrallyStored(false);
+            sdBuilder.sd.pointer()!.setEntityRef(Sd.EntityRef.entityRefAny);
+        }
+        else
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNONE,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rINTERNAL,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rANY),
+                              parm))
+                return false;
+            switch (parm.type)
+            {
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rNONE:
+                    sdBuilder.sd.pointer()!.setEntityRef(Sd.EntityRef.entityRefNone);
+                    break;
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rINTERNAL:
+                    sdBuilder.sd.pointer()!.setEntityRef(Sd.EntityRef.entityRefInternal);
+                    break;
+                case var t when t == SdParam.reservedName + (uint)Sd.ReservedName.rANY:
+                    sdBuilder.sd.pointer()!.setEntityRef(Sd.EntityRef.entityRefAny);
+                    break;
+            }
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rINTEGRAL), parm))
+                return false;
+            if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNO,
+                                                  SdParam.reservedName + (uint)Sd.ReservedName.rYES),
+                              parm))
+                return false;
+            sdBuilder.sd.pointer()!.setIntegrallyStored(parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rYES);
+        }
+        return parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rAPPINFO),
+                            parm);
     }
 
     protected virtual Boolean sdParseAppinfo(SdBuilder sdBuilder, SdParam parm)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException("sdParseAppinfo not yet implemented");
+        Location location = currentLocation();
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rNONE,
+                                              SdParam.minimumLiteral),
+                          parm))
+            return false;
+        AppinfoEvent @event;
+        if (parm.type == SdParam.minimumLiteral)
+            @event = new AppinfoEvent(parm.literalText, location);
+        else
+            @event = new AppinfoEvent(location);
+        eventHandler().appinfo(@event);
+        return true;
     }
 
     protected virtual Boolean sdParseSeealso(SdBuilder sdBuilder, SdParam parm)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException("sdParseSeealso not yet implemented");
+        uint final = sdBuilder.external ? SdParam.eE : SdParam.mdc;
+        if (!parseSdParam(new AllowedSdParams(SdParam.reservedName + (uint)Sd.ReservedName.rSEEALSO, final), parm))
+            return false;
+        if (parm.type == final)
+            return true;
+        requireWWW(sdBuilder);
+        if (!parseSdParam(new AllowedSdParams(SdParam.minimumLiteral,
+                                              SdParam.reservedName + (uint)Sd.ReservedName.rNONE), parm))
+            return false;
+        if (parm.type == SdParam.reservedName + (uint)Sd.ReservedName.rNONE)
+            return parseSdParam(new AllowedSdParams(final), parm);
+        do
+        {
+            if (!parseSdParam(new AllowedSdParams(SdParam.minimumLiteral, final), parm))
+                return false;
+        } while (parm.type != final);
+        return true;
     }
 
     // Additional helper methods from parseInstance.cxx
