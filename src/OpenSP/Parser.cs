@@ -302,20 +302,20 @@ public class Parser : ParserState
     // They will be implemented as the port progresses.
 
     // From parseMode.cxx
-    protected virtual void compileSdModes() { /* TODO */ }
-    protected virtual void compilePrologModes() { /* TODO */ }
-    protected virtual void compileInstanceModes() { /* TODO */ }
-    protected virtual void compileModes(Mode[] modes, int n, Dtd? dtd) { /* TODO */ }
-    protected virtual void compileNormalMap() { /* TODO */ }
-    protected virtual void addNeededShortrefs(Dtd dtd, Syntax syntax) { /* TODO */ }
-    protected virtual Boolean shortrefCanPreemptDelim(StringC sr, StringC d, Boolean dIsSr, Syntax syntax) { return false; }
+    protected virtual void compileSdModes() { throw new NotImplementedException(); }
+    protected virtual void compilePrologModes() { throw new NotImplementedException(); }
+    protected virtual void compileInstanceModes() { throw new NotImplementedException(); }
+    protected virtual void compileModes(Mode[] modes, int n, Dtd? dtd) { throw new NotImplementedException(); }
+    protected virtual void compileNormalMap() { throw new NotImplementedException(); }
+    protected virtual void addNeededShortrefs(Dtd dtd, Syntax syntax) { throw new NotImplementedException(); }
+    protected virtual Boolean shortrefCanPreemptDelim(StringC sr, StringC d, Boolean dIsSr, Syntax syntax) { throw new NotImplementedException(); }
 
     // From parseCommon.cxx
-    protected virtual void doInit() { /* TODO */ }
-    protected virtual void doProlog() { /* TODO */ }
-    protected virtual void doDeclSubset() { /* TODO */ }
-    protected virtual void doInstanceStart() { /* TODO */ }
-    protected virtual void doContent() { /* TODO */ }
+    protected virtual void doInit() { throw new NotImplementedException(); }
+    protected virtual void doProlog() { throw new NotImplementedException(); }
+    protected virtual void doDeclSubset() { throw new NotImplementedException(); }
+    protected virtual void doInstanceStart() { throw new NotImplementedException(); }
+    protected virtual void doContent() { throw new NotImplementedException(); }
 
     // void extendNameToken(size_t maxLength, const MessageType1 &tooLongMessage);
     protected void extendNameToken(nuint maxLength, MessageType1 tooLongMessage)
@@ -357,7 +357,7 @@ public class Parser : ParserState
         ins.endToken(length);
     }
 
-    protected virtual void extendData() { /* TODO */ }
+    protected virtual void extendData() { throw new NotImplementedException(); }
 
     // void extendS();
     protected void extendS()
@@ -370,7 +370,7 @@ public class Parser : ParserState
         ins.endToken(length);
     }
 
-    protected virtual void extendContentS() { /* TODO */ }
+    protected virtual void extendContentS() { throw new NotImplementedException(); }
 
     // Boolean reportNonSgmlCharacter();
     protected Boolean reportNonSgmlCharacter()
@@ -417,20 +417,20 @@ public class Parser : ParserState
     }
 
     // From parseDecl.cxx
-    protected virtual void declSubsetRecover(uint startLevel) { /* TODO */ }
-    protected virtual void prologRecover() { /* TODO */ }
-    protected virtual void skipDeclaration(uint startLevel) { /* TODO */ }
-    protected virtual Boolean parseElementDecl() { return false; }
-    protected virtual Boolean parseAttlistDecl() { return false; }
-    protected virtual Boolean parseNotationDecl() { return false; }
-    protected virtual Boolean parseEntityDecl() { return false; }
-    protected virtual Boolean parseShortrefDecl() { return false; }
-    protected virtual Boolean parseUsemapDecl() { return false; }
-    protected virtual Boolean parseUselinkDecl() { return false; }
-    protected virtual Boolean parseDoctypeDeclStart() { return false; }
-    protected virtual Boolean parseDoctypeDeclEnd(Boolean fake = false) { return false; }
-    protected virtual Boolean parseMarkedSectionDeclStart() { return false; }
-    protected virtual void handleMarkedSectionEnd() { /* TODO */ }
+    protected virtual void declSubsetRecover(uint startLevel) { throw new NotImplementedException(); }
+    protected virtual void prologRecover() { throw new NotImplementedException(); }
+    protected virtual void skipDeclaration(uint startLevel) { throw new NotImplementedException(); }
+    protected virtual Boolean parseElementDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseAttlistDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseNotationDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseEntityDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseShortrefDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseUsemapDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseUselinkDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseDoctypeDeclStart() { throw new NotImplementedException(); }
+    protected virtual Boolean parseDoctypeDeclEnd(Boolean fake = false) { throw new NotImplementedException(); }
+    protected virtual Boolean parseMarkedSectionDeclStart() { throw new NotImplementedException(); }
+    protected virtual void handleMarkedSectionEnd() { throw new NotImplementedException(); }
     // Boolean parseCommentDecl();
     protected Boolean parseCommentDecl()
     {
@@ -497,43 +497,43 @@ public class Parser : ParserState
         if (options().warnEmptyCommentDecl)
             message(ParserMessages.emptyCommentDecl);
     }
-    protected virtual Boolean parseLinktypeDeclStart() { return false; }
-    protected virtual Boolean parseLinktypeDeclEnd() { return false; }
-    protected virtual Boolean parseLinkDecl() { return false; }
-    protected virtual Boolean parseIdlinkDecl() { return false; }
-    protected virtual Boolean parseLinkSet(Boolean idlink) { return false; }
-    protected virtual Boolean parseAfdrDecl() { return false; }
+    protected virtual Boolean parseLinktypeDeclStart() { throw new NotImplementedException(); }
+    protected virtual Boolean parseLinktypeDeclEnd() { throw new NotImplementedException(); }
+    protected virtual Boolean parseLinkDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseIdlinkDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean parseLinkSet(Boolean idlink) { throw new NotImplementedException(); }
+    protected virtual Boolean parseAfdrDecl() { throw new NotImplementedException(); }
 
     // From parseParam.cxx
-    protected virtual Boolean parseParam(AllowedParams allow, uint tok, Param parm) { return false; }
+    protected virtual Boolean parseParam(AllowedParams allow, uint tok, Param parm) { throw new NotImplementedException(); }
     protected virtual Boolean parseExternalId(AllowedParams systemIdAllow, AllowedParams publicIdAllow,
-                                               Boolean optional, uint tok, Param parm, ExternalId id) { return false; }
-    protected virtual Boolean parseMinimumLiteral(Boolean lita, Text text) { return false; }
-    protected virtual Boolean parseAttributeValueLiteral(Boolean lita, Text text) { return false; }
-    protected virtual Boolean parseTokenizedAttributeValueLiteral(Boolean lita, Text text) { return false; }
-    protected virtual Boolean parseSystemIdentifier(Boolean lita, Text text) { return false; }
-    protected virtual Boolean parseParameterLiteral(Boolean lita, Text text) { return false; }
-    protected virtual Boolean parseDataTagParameterLiteral(Boolean lita, Text text) { return false; }
+                                               Boolean optional, uint tok, Param parm, ExternalId id) { throw new NotImplementedException(); }
+    protected virtual Boolean parseMinimumLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
+    protected virtual Boolean parseAttributeValueLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
+    protected virtual Boolean parseTokenizedAttributeValueLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
+    protected virtual Boolean parseSystemIdentifier(Boolean lita, Text text) { throw new NotImplementedException(); }
+    protected virtual Boolean parseParameterLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
+    protected virtual Boolean parseDataTagParameterLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
     protected virtual Boolean parseLiteral(Mode litMode, Mode liteMode, nuint maxLength,
-                                            MessageType1 tooLongMessage, uint flags, Text text) { return false; }
+                                            MessageType1 tooLongMessage, uint flags, Text text) { throw new NotImplementedException(); }
 
     // Character reference parsing stubs - to be implemented
-    protected virtual Boolean parseNumericCharRef(Boolean isHex, ref Char ch, ref Location loc) { return false; }
-    protected virtual Boolean translateNumericCharRef(ref Char ch, ref Boolean isSgmlChar) { isSgmlChar = true; return true; }
-    protected virtual Boolean parseNamedCharRef() { return true; }
+    protected virtual Boolean parseNumericCharRef(Boolean isHex, ref Char ch, ref Location loc) { throw new NotImplementedException(); }
+    protected virtual Boolean translateNumericCharRef(ref Char ch, ref Boolean isSgmlChar) { throw new NotImplementedException(); }
+    protected virtual Boolean parseNamedCharRef() { throw new NotImplementedException(); }
     protected virtual Boolean parseEntityReference(Boolean isParameter, int ignoreLevel,
-                                                   ConstPtr<Entity> entity, Ptr<EntityOrigin> origin) { return false; }
-    protected virtual Boolean parseEntityReferenceNameGroup(ref Boolean ignore) { ignore = false; return true; }
+                                                   ConstPtr<Entity> entity, Ptr<EntityOrigin> origin) { throw new NotImplementedException(); }
+    protected virtual Boolean parseEntityReferenceNameGroup(ref Boolean ignore) { throw new NotImplementedException(); }
 
     // From parseInstance.cxx
-    protected virtual void parsePcdata() { /* TODO */ }
-    protected virtual void parseStartTag() { /* TODO */ }
-    protected virtual void parseEmptyStartTag() { /* TODO */ }
-    protected virtual EndElementEvent? parseEndTag() { return null; }
-    protected virtual void parseEndTagClose() { /* TODO */ }
-    protected virtual void parseEmptyEndTag() { /* TODO */ }
-    protected virtual void parseNullEndTag() { /* TODO */ }
-    protected virtual void endAllElements() { /* TODO */ }
+    protected virtual void parsePcdata() { throw new NotImplementedException(); }
+    protected virtual void parseStartTag() { throw new NotImplementedException(); }
+    protected virtual void parseEmptyStartTag() { throw new NotImplementedException(); }
+    protected virtual EndElementEvent? parseEndTag() { throw new NotImplementedException(); }
+    protected virtual void parseEndTagClose() { throw new NotImplementedException(); }
+    protected virtual void parseEmptyEndTag() { throw new NotImplementedException(); }
+    protected virtual void parseNullEndTag() { throw new NotImplementedException(); }
+    protected virtual void endAllElements() { throw new NotImplementedException(); }
 
     // Boolean parseProcessingInstruction();
     protected Boolean parseProcessingInstruction()
@@ -590,20 +590,20 @@ public class Parser : ParserState
         return true;
     }
 
-    protected virtual void handleShortref(int index) { /* TODO */ }
-    protected virtual void endInstance() { /* TODO */ }
-    protected virtual void checkIdrefs() { /* TODO */ }
-    protected virtual void checkTaglen(Index tagStartIndex) { /* TODO */ }
-    protected virtual void endProlog() { /* TODO */ }
+    protected virtual void handleShortref(int index) { throw new NotImplementedException(); }
+    protected virtual void endInstance() { throw new NotImplementedException(); }
+    protected virtual void checkIdrefs() { throw new NotImplementedException(); }
+    protected virtual void checkTaglen(Index tagStartIndex) { throw new NotImplementedException(); }
+    protected virtual void endProlog() { throw new NotImplementedException(); }
 
     // From parseAttribute.cxx
     protected virtual Boolean parseAttributeSpec(Mode mode, AttributeList atts, out Boolean netEnabling,
                                                   Ptr<AttributeDefinitionList> newAttDefList)
-    { netEnabling = false; return false; }
-    protected virtual Boolean handleAttributeNameToken(Text text, AttributeList atts, ref uint specLength) { return false; }
+    { throw new NotImplementedException(); }
+    protected virtual Boolean handleAttributeNameToken(Text text, AttributeList atts, ref uint specLength) { throw new NotImplementedException(); }
 
     // From parseSd.cxx
-    protected virtual Boolean implySgmlDecl() { return false; }
-    protected virtual Boolean scanForSgmlDecl(CharsetInfo initCharset) { return false; }
-    protected virtual Boolean parseSgmlDecl() { return false; }
+    protected virtual Boolean implySgmlDecl() { throw new NotImplementedException(); }
+    protected virtual Boolean scanForSgmlDecl(CharsetInfo initCharset) { throw new NotImplementedException(); }
+    protected virtual Boolean parseSgmlDecl() { throw new NotImplementedException(); }
 }
