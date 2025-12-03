@@ -302,13 +302,533 @@ public class Parser : ParserState
     // They will be implemented as the port progresses.
 
     // From parseMode.cxx
-    protected virtual void compileSdModes() { throw new NotImplementedException(); }
-    protected virtual void compilePrologModes() { throw new NotImplementedException(); }
-    protected virtual void compileInstanceModes() { throw new NotImplementedException(); }
-    protected virtual void compileModes(Mode[] modes, int n, Dtd? dtd) { throw new NotImplementedException(); }
-    protected virtual void compileNormalMap() { throw new NotImplementedException(); }
-    protected virtual void addNeededShortrefs(Dtd dtd, Syntax syntax) { throw new NotImplementedException(); }
-    protected virtual Boolean shortrefCanPreemptDelim(StringC sr, StringC d, Boolean dIsSr, Syntax syntax) { throw new NotImplementedException(); }
+    private const uint modeUsedInSd = 01;
+    private const uint modeUsedInProlog = 02;
+    private const uint modeUsedInInstance = 04;
+    private const uint modeUsesSr = 010;
+
+    private static readonly (Mode mode, uint flags)[] modeTable_ = new[]
+    {
+        (Mode.grpMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.alitMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.alitaMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.aliteMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.talitMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.talitaMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.taliteMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.mdMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.mdMinusMode, modeUsedInProlog),
+        (Mode.mdPeroMode, modeUsedInProlog),
+        (Mode.sdMode, modeUsedInSd),
+        (Mode.comMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.sdcomMode, modeUsedInSd),
+        (Mode.piMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.refMode, modeUsedInProlog | modeUsedInInstance | modeUsedInSd),
+        (Mode.imsMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.cmsMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.rcmsMode, modeUsedInProlog | modeUsedInInstance),
+        (Mode.proMode, modeUsedInProlog),
+        (Mode.dsMode, modeUsedInProlog),
+        (Mode.dsiMode, modeUsedInProlog),
+        (Mode.plitMode, modeUsedInProlog),
+        (Mode.plitaMode, modeUsedInProlog),
+        (Mode.pliteMode, modeUsedInProlog),
+        (Mode.sdplitMode, modeUsedInSd),
+        (Mode.sdplitaMode, modeUsedInSd),
+        (Mode.grpsufMode, modeUsedInProlog),
+        (Mode.mlitMode, modeUsedInProlog | modeUsedInSd),
+        (Mode.mlitaMode, modeUsedInProlog | modeUsedInSd),
+        (Mode.asMode, modeUsedInProlog),
+        (Mode.piPasMode, modeUsedInProlog),
+        (Mode.slitMode, modeUsedInProlog),
+        (Mode.slitaMode, modeUsedInProlog),
+        (Mode.sdslitMode, modeUsedInSd),
+        (Mode.sdslitaMode, modeUsedInSd),
+        (Mode.cconMode, modeUsedInInstance),
+        (Mode.rcconMode, modeUsedInInstance),
+        (Mode.cconnetMode, modeUsedInInstance),
+        (Mode.rcconnetMode, modeUsedInInstance),
+        (Mode.rcconeMode, modeUsedInInstance),
+        (Mode.tagMode, modeUsedInInstance),
+        (Mode.econMode, modeUsedInInstance | modeUsesSr),
+        (Mode.mconMode, modeUsedInInstance | modeUsesSr),
+        (Mode.econnetMode, modeUsedInInstance | modeUsesSr),
+        (Mode.mconnetMode, modeUsedInInstance | modeUsesSr),
+    };
+
+    // void compileSdModes();
+    protected void compileSdModes()
+    {
+        Mode[] modes = new Mode[ModeConstants.nModes];
+        int n = 0;
+        for (int i = 0; i < modeTable_.Length; i++)
+            if ((modeTable_[i].flags & modeUsedInSd) != 0)
+                modes[n++] = modeTable_[i].mode;
+        compileModes(modes, n, null);
+    }
+
+    // void compilePrologModes();
+    protected void compilePrologModes()
+    {
+        Boolean scopeInstance = sd().scopeInstance();
+        Boolean haveSr = syntax().hasShortrefs();
+        Mode[] modes = new Mode[ModeConstants.nModes];
+        int n = 0;
+        for (int i = 0; i < modeTable_.Length; i++)
+        {
+            if (scopeInstance)
+            {
+                if ((modeTable_[i].flags & modeUsedInProlog) != 0)
+                    modes[n++] = modeTable_[i].mode;
+            }
+            else if (haveSr)
+            {
+                if ((modeTable_[i].flags & (modeUsedInInstance | modeUsedInProlog)) != 0
+                    && (modeTable_[i].flags & modeUsesSr) == 0)
+                    modes[n++] = modeTable_[i].mode;
+            }
+            else
+            {
+                if ((modeTable_[i].flags & (modeUsedInInstance | modeUsedInProlog)) != 0)
+                    modes[n++] = modeTable_[i].mode;
+            }
+        }
+        compileModes(modes, n, null);
+    }
+
+    // void compileInstanceModes();
+    protected void compileInstanceModes()
+    {
+        Boolean scopeInstance = sd().scopeInstance();
+        compileNormalMap();
+        if (!scopeInstance && !syntax().hasShortrefs())
+            return;
+        Mode[] modes = new Mode[ModeConstants.nModes];
+        int n = 0;
+        for (int i = 0; i < modeTable_.Length; i++)
+        {
+            if (scopeInstance)
+            {
+                if ((modeTable_[i].flags & modeUsedInInstance) != 0)
+                    modes[n++] = modeTable_[i].mode;
+            }
+            else
+            {
+                if ((modeTable_[i].flags & modeUsesSr) != 0)
+                    modes[n++] = modeTable_[i].mode;
+            }
+        }
+        compileModes(modes, n, currentDtdPointer().pointer());
+    }
+
+    // void compileModes(const Mode *modes, int n, const Dtd *dtd);
+    protected void compileModes(Mode[] modes, int n, Dtd? dtd)
+    {
+        PackedBoolean[] sets = new PackedBoolean[Syntax.nSet];
+        PackedBoolean[] delims = new PackedBoolean[Syntax.nDelimGeneral];
+        PackedBoolean[] functions = new PackedBoolean[3];
+        int i;
+        Boolean includesShortref = false;
+
+        for (i = 0; i < Syntax.nSet; i++)
+            sets[i] = false;
+        for (i = 0; i < Syntax.nDelimGeneral; i++)
+            delims[i] = false;
+        for (i = 0; i < 3; i++)
+            functions[i] = false;
+
+        for (i = 0; i < n; i++)
+        {
+            ModeInfo iter = new ModeInfo(modes[i], sd());
+            TokenInfo ti = new TokenInfo();
+            while (iter.nextToken(ti))
+            {
+                switch (ti.type)
+                {
+                    case TokenInfo.Type.delimType:
+                        delims[(int)ti.delim1] = true;
+                        break;
+                    case TokenInfo.Type.delimDelimType:
+                        delims[(int)ti.delim1] = true;
+                        delims[(int)ti.delim2] = true;
+                        break;
+                    case TokenInfo.Type.delimSetType:
+                        delims[(int)ti.delim1] = true;
+                        sets[(int)ti.set] = true;
+                        break;
+                    case TokenInfo.Type.setType:
+                        sets[(int)ti.set] = true;
+                        break;
+                    case TokenInfo.Type.functionType:
+                        functions[(int)ti.function] = true;
+                        break;
+                }
+            }
+            if (!includesShortref && iter.includesShortref())
+                includesShortref = true;
+        }
+
+        ISet<Char> chars = new ISet<Char>();
+
+        for (i = 0; i < 3; i++)
+            if (functions[i])
+                chars.add(syntax().standardFunction(i));
+        for (i = 0; i < Syntax.nDelimGeneral; i++)
+            if (delims[i])
+            {
+                StringC str = syntax().delimGeneral(i);
+                for (nuint j = 0; j < str.size(); j++)
+                    chars.add(str[j]);
+            }
+        if (includesShortref && dtd != null)
+        {
+            nuint nsr = dtd.nShortref();
+            for (nuint si = 0; si < nsr; si++)
+            {
+                StringC delim = dtd.shortref(si);
+                nuint len = delim.size();
+                for (nuint j = 0; j < len; j++)
+                    if (delim[j] == sd().execToInternal((sbyte)'B'))
+                        sets[(int)Syntax.Set.blank] = true;
+                    else
+                        chars.add(delim[j]);
+            }
+        }
+
+        ISet<Char>[] csets = new ISet<Char>[Syntax.nSet];
+        int usedSets = 0;
+        for (i = 0; i < Syntax.nSet; i++)
+            if (sets[i])
+                csets[usedSets++] = syntax().charSet(i)!;
+
+        Partition partition = new Partition(chars, csets, usedSets, syntax().generalSubstTable()!);
+
+        String<EquivCode>[] setCodes = new String<EquivCode>[Syntax.nSet];
+        for (i = 0; i < Syntax.nSet; i++)
+            setCodes[i] = new String<EquivCode>();
+
+        int nCodes = 0;
+        for (i = 0; i < Syntax.nSet; i++)
+            if (sets[i])
+                setCodes[i] = partition.setCodes(nCodes++);
+
+        String<EquivCode>[] delimCodes = new String<EquivCode>[Syntax.nDelimGeneral];
+        for (i = 0; i < Syntax.nDelimGeneral; i++)
+        {
+            delimCodes[i] = new String<EquivCode>();
+            if (delims[i])
+            {
+                StringC str = syntax().delimGeneral(i);
+                for (nuint j = 0; j < str.size(); j++)
+                    delimCodes[i].operatorPlusAssign(partition.charCode(str[j]));
+            }
+        }
+
+        String<EquivCode>[] functionCode = new String<EquivCode>[3];
+        for (i = 0; i < 3; i++)
+        {
+            functionCode[i] = new String<EquivCode>();
+            if (functions[i])
+                functionCode[i].operatorPlusAssign(partition.charCode(syntax().standardFunction(i)));
+        }
+
+        Vector<SrInfo> srInfo = new Vector<SrInfo>();
+        int nShortref;
+        if (!includesShortref || dtd == null)
+            nShortref = 0;
+        else
+        {
+            nShortref = (int)dtd.nShortref();
+            srInfo.resize((nuint)nShortref);
+
+            for (i = 0; i < nShortref; i++)
+            {
+                StringC delim = dtd.shortref((nuint)i);
+                SrInfo p = srInfo[(nuint)i];
+                nuint j;
+                for (j = 0; j < delim.size(); j++)
+                {
+                    if (delim[j] == sd().execToInternal((sbyte)'B'))
+                        break;
+                    p.chars.operatorPlusAssign(partition.charCode(delim[j]));
+                }
+                if (j < delim.size())
+                {
+                    p.bSequenceLength = 1;
+                    for (++j; j < delim.size(); j++)
+                    {
+                        if (delim[j] != sd().execToInternal((sbyte)'B'))
+                            break;
+                        p.bSequenceLength += 1;
+                    }
+                    for (; j < delim.size(); j++)
+                        p.chars2.operatorPlusAssign(partition.charCode(delim[j]));
+                }
+                else
+                    p.bSequenceLength = 0;
+            }
+        }
+
+        String<EquivCode> emptyString = new String<EquivCode>();
+        Boolean multicode = syntax().multicode();
+        for (i = 0; i < n; i++)
+        {
+            TrieBuilder tb = new TrieBuilder((int)partition.maxCode() + 1);
+            Vector<Token> ambiguities = new Vector<Token>();
+            Vector<Token> suppressTokens = new Vector<Token>();
+            if (multicode)
+            {
+                suppressTokens.assign((nuint)(partition.maxCode() + 1), 0);
+                suppressTokens[(nuint)partition.eECode()] = Tokens.tokenEe;
+            }
+            tb.recognizeEE(partition.eECode(), Tokens.tokenEe);
+            ModeInfo iter = new ModeInfo(modes[i], sd());
+            TokenInfo ti = new TokenInfo();
+            while (iter.nextToken(ti))
+            {
+                switch (ti.type)
+                {
+                    case TokenInfo.Type.delimType:
+                        if (delimCodes[(int)ti.delim1].size() > 0)
+                            tb.recognize(delimCodes[(int)ti.delim1], ti.token, ti.priority, ambiguities);
+                        break;
+                    case TokenInfo.Type.delimDelimType:
+                        {
+                            String<EquivCode> str = new String<EquivCode>(delimCodes[(int)ti.delim1]);
+                            if (str.size() > 0 && delimCodes[(int)ti.delim2].size() > 0)
+                            {
+                                str.operatorPlusAssign(delimCodes[(int)ti.delim2]);
+                                tb.recognize(str, ti.token, ti.priority, ambiguities);
+                            }
+                        }
+                        break;
+                    case TokenInfo.Type.delimSetType:
+                        if (delimCodes[(int)ti.delim1].size() > 0)
+                            tb.recognize(delimCodes[(int)ti.delim1], setCodes[(int)ti.set], ti.token, ti.priority, ambiguities);
+                        break;
+                    case TokenInfo.Type.setType:
+                        tb.recognize(emptyString, setCodes[(int)ti.set], ti.token, ti.priority, ambiguities);
+                        if (multicode)
+                        {
+                            String<EquivCode> equivCodes = setCodes[(int)ti.set];
+                            for (nuint j = 0; j < equivCodes.size(); j++)
+                                suppressTokens[(nuint)equivCodes[j]] = ti.token;
+                        }
+                        break;
+                    case TokenInfo.Type.functionType:
+                        tb.recognize(functionCode[(int)ti.function], ti.token, ti.priority, ambiguities);
+                        if (multicode)
+                            suppressTokens[(nuint)functionCode[(int)ti.function][0]] = ti.token;
+                        break;
+                }
+            }
+            if (iter.includesShortref())
+            {
+                for (int j = 0; j < nShortref; j++)
+                {
+                    SrInfo p = srInfo[(nuint)j];
+                    if (p.bSequenceLength > 0)
+                        tb.recognizeB(p.chars, p.bSequenceLength,
+                                      syntax().quantity(Syntax.Quantity.qBSEQLEN),
+                                      setCodes[(int)Syntax.Set.blank],
+                                      p.chars2, Tokens.tokenFirstShortref + (uint)j,
+                                      ambiguities);
+                    else
+                        tb.recognize(p.chars, Tokens.tokenFirstShortref + (uint)j,
+                                     Priority.delim, ambiguities);
+                }
+            }
+            setRecognizer(modes[i],
+                          multicode
+                          ? new ConstPtr<Recognizer>(new Recognizer(tb.extractTrie()!, partition.map(), suppressTokens))
+                          : new ConstPtr<Recognizer>(new Recognizer(tb.extractTrie()!, partition.map())));
+            for (nuint j = 0; j < ambiguities.size(); j += 2)
+                message(ParserMessages.lexicalAmbiguity,
+                        new TokenMessageArg(ambiguities[j], modes[i], syntaxPointer(), sdPointer()),
+                        new TokenMessageArg(ambiguities[j + 1], modes[i], syntaxPointer(), sdPointer()));
+        }
+    }
+
+    // void compileNormalMap();
+    protected void compileNormalMap()
+    {
+        XcharMap<PackedBoolean> map = new XcharMap<PackedBoolean>(false);
+        ISetIter<Char> sgmlCharIter = new ISetIter<Char>(syntax().charSet((int)Syntax.Set.sgmlChar)!);
+        Char min, max;
+        while (sgmlCharIter.next(out min, out max) != 0)
+            map.setRange(min, max, true);
+        ModeInfo iter = new ModeInfo(Mode.mconnetMode, sd());
+        TokenInfo ti = new TokenInfo();
+        while (iter.nextToken(ti))
+        {
+            switch (ti.type)
+            {
+                case TokenInfo.Type.delimType:
+                case TokenInfo.Type.delimDelimType:
+                case TokenInfo.Type.delimSetType:
+                    {
+                        StringC delim = syntax().delimGeneral((int)ti.delim1);
+                        if (delim.size() == 0)
+                            break;
+                        Char c = delim[0];
+                        map.setChar(c, false);
+                        StringC str = syntax().generalSubstTable()!.inverse(c);
+                        for (nuint i = 0; i < str.size(); i++)
+                            map.setChar(str[i], false);
+                    }
+                    break;
+                case TokenInfo.Type.setType:
+                    if (ti.token != Tokens.tokenChar)
+                    {
+                        ISetIter<Char> setIter = new ISetIter<Char>(syntax().charSet((int)ti.set)!);
+                        while (setIter.next(out min, out max) != 0)
+                            map.setRange(min, max, false);
+                    }
+                    break;
+                case TokenInfo.Type.functionType:
+                    if (ti.token != Tokens.tokenChar)
+                        map.setChar(syntax().standardFunction((int)ti.function), false);
+                    break;
+            }
+        }
+        int nShortref = (int)currentDtd().nShortref();
+        for (int i = 0; i < nShortref; i++)
+        {
+            Char c = currentDtd().shortref((nuint)i)[0];
+            if (c == sd().execToInternal((sbyte)'B'))
+            {
+                ISetIter<Char> setIter = new ISetIter<Char>(syntax().charSet((int)Syntax.Set.blank)!);
+                while (setIter.next(out min, out max) != 0)
+                    map.setRange(min, max, false);
+            }
+            else
+            {
+                map.setChar(c, false);
+                StringC str = syntax().generalSubstTable()!.inverse(c);
+                for (nuint j = 0; j < str.size(); j++)
+                    map.setChar(str[j], false);
+            }
+        }
+        setNormalMap(map);
+    }
+
+    // void addNeededShortrefs(Dtd &dtd, const Syntax &syntax);
+    protected void addNeededShortrefs(Dtd dtd, Syntax syn)
+    {
+        if (!syn.hasShortrefs())
+            return;
+        PackedBoolean[] delimRelevant = new PackedBoolean[Syntax.nDelimGeneral];
+        nuint i;
+        for (i = 0; i < (nuint)Syntax.nDelimGeneral; i++)
+            delimRelevant[i] = false;
+        ModeInfo iter = new ModeInfo(Mode.mconnetMode, sd());
+        TokenInfo ti = new TokenInfo();
+        while (iter.nextToken(ti))
+        {
+            switch (ti.type)
+            {
+                case TokenInfo.Type.delimType:
+                case TokenInfo.Type.delimDelimType:
+                case TokenInfo.Type.delimSetType:
+                    delimRelevant[(int)ti.delim1] = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        if (syn.isValidShortref(syn.delimGeneral((int)Syntax.DelimGeneral.dPIO)))
+            dtd.addNeededShortref(syn.delimGeneral((int)Syntax.DelimGeneral.dPIO));
+        if (syn.isValidShortref(syn.delimGeneral((int)Syntax.DelimGeneral.dNET)))
+            dtd.addNeededShortref(syn.delimGeneral((int)Syntax.DelimGeneral.dNET));
+
+        nuint nShortrefComplex = (nuint)syn.nDelimShortrefComplex();
+
+        for (i = 0; i < nShortrefComplex; i++)
+        {
+            nuint j;
+            for (j = 0; j < (nuint)Syntax.nDelimGeneral; j++)
+                if (delimRelevant[j]
+                    && shortrefCanPreemptDelim(syn.delimShortrefComplex(i),
+                                               syn.delimGeneral((int)j),
+                                               false,
+                                               syn))
+                {
+                    dtd.addNeededShortref(syn.delimShortrefComplex(i));
+                    break;
+                }
+            for (j = 0; j < dtd.nShortref(); j++)
+                if (shortrefCanPreemptDelim(syn.delimShortrefComplex(i),
+                                            dtd.shortref(j),
+                                            true,
+                                            syn))
+                {
+                    dtd.addNeededShortref(syn.delimShortrefComplex(i));
+                    break;
+                }
+        }
+    }
+
+    // Boolean shortrefCanPreemptDelim(const StringC &sr, const StringC &d, Boolean dIsSr, const Syntax &syntax);
+    protected Boolean shortrefCanPreemptDelim(StringC sr, StringC d, Boolean dIsSr, Syntax syn)
+    {
+        Char letterB = sd().execToInternal((sbyte)'B');
+        for (nuint i = 0; i < sr.size(); i++)
+        {
+            nuint j = 0;
+            nuint k = i;
+            for (;;)
+            {
+                if (j == d.size())
+                    return true;
+                if (k >= sr.size())
+                    break;
+                if (sr[k] == letterB)
+                {
+                    if (dIsSr && d[j] == letterB)
+                    {
+                        j++;
+                        k++;
+                    }
+                    else if (syn.isB((Xchar)d[j]))
+                    {
+                        j++;
+                        k++;
+                        if (k == sr.size() || sr[k] != letterB)
+                        {
+                            while (j < d.size() && syn.isB((Xchar)d[j]))
+                                j++;
+                        }
+                    }
+                    else
+                        break;
+                }
+                else if (dIsSr && d[j] == letterB)
+                {
+                    if (syn.isB((Xchar)sr[k]))
+                    {
+                        ++j;
+                        ++k;
+                        if (j < d.size() && d[j] != letterB)
+                        {
+                            while (k < sr.size() && syn.isB((Xchar)sr[k]))
+                                k++;
+                        }
+                    }
+                    else
+                        break;
+                }
+                else if (d[j] == sr[k])
+                {
+                    j++;
+                    k++;
+                }
+                else
+                    break;
+            }
+        }
+        return false;
+    }
 
     // From parseCommon.cxx
     protected virtual void doInit() { throw new NotImplementedException(); }
