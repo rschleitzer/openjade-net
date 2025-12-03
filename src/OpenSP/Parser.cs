@@ -5331,13 +5331,82 @@ public class Parser : ParserState
     // Boolean parseDataTagGroup(unsigned nestingLevel, unsigned declInputLevel, GroupToken &result);
     protected Boolean parseDataTagGroup(uint nestingLevel, uint declInputLevel, GroupToken result)
     {
-        throw new NotImplementedException();
+        if (nestingLevel - 1 == syntax().grplvl())
+            message(ParserMessages.grplvl, new NumberMessageArg(syntax().grplvl()));
+        uint groupInputLevel = inputLevel();
+        GroupToken gt = new GroupToken();
+        AllowedGroupTokens allowName = new AllowedGroupTokens(GroupToken.Type.name);
+        if (!parseGroupToken(allowName, nestingLevel, declInputLevel, groupInputLevel, gt))
+            return false;
+        ElementType? element = lookupCreateElement(gt.token);
+        GroupConnector gc = new GroupConnector();
+        AllowedGroupConnectors allowSeq = new AllowedGroupConnectors(GroupConnector.Type.seqGC);
+        if (!parseGroupConnector(allowSeq, declInputLevel, groupInputLevel, ref gc))
+            return false;
+        AllowedGroupTokens allowDataTagLiteralDataTagTemplateGroup = new AllowedGroupTokens(
+            GroupToken.Type.dataTagLiteral, GroupToken.Type.dataTagTemplateGroup);
+        if (!parseGroupToken(allowDataTagLiteralDataTagTemplateGroup,
+                             nestingLevel, declInputLevel, groupInputLevel, gt))
+            return false;
+        Vector<Text> templates = new Vector<Text>();
+        if (gt.type == GroupToken.Type.dataTagTemplateGroup)
+            gt.textVector.swap(templates);
+        else
+        {
+            templates.resize(1);
+            gt.text.swap(templates.back());
+        }
+        AllowedGroupConnectors allowSeqDtgc = new AllowedGroupConnectors(
+            GroupConnector.Type.seqGC, GroupConnector.Type.dtgcGC);
+        if (!parseGroupConnector(allowSeqDtgc, declInputLevel, groupInputLevel, ref gc))
+            return false;
+        Vector<Owner<ContentToken>> vec = new Vector<Owner<ContentToken>>();
+        vec.resize(2);
+        vec[1] = new Owner<ContentToken>(new PcdataToken());
+        if (gc.type != GroupConnector.Type.dtgcGC)
+        {
+            AllowedGroupTokens allowDataTagLiteral = new AllowedGroupTokens(GroupToken.Type.dataTagLiteral);
+            if (!parseGroupToken(allowDataTagLiteral, nestingLevel, declInputLevel, groupInputLevel, gt))
+                return false;
+            vec[0] = new Owner<ContentToken>(new DataTagElementToken(element, templates, gt.text));
+            AllowedGroupConnectors allowDtgc = new AllowedGroupConnectors(GroupConnector.Type.dtgcGC);
+            if (!parseGroupConnector(allowDtgc, declInputLevel, groupInputLevel, ref gc))
+                return false;
+        }
+        else
+            vec[0] = new Owner<ContentToken>(new DataTagElementToken(element, templates));
+        ContentToken.OccurrenceIndicator oi = getOccurrenceIndicator(Mode.grpMode);
+        result.contentToken = new Owner<ContentToken>(new DataTagGroup(vec, oi));
+        result.type = GroupToken.Type.dataTagGroup;
+        return true;
     }
 
     // Boolean parseDataTagTemplateGroup(unsigned nestingLevel, unsigned declInputLevel, GroupToken &result);
     protected Boolean parseDataTagTemplateGroup(uint nestingLevel, uint declInputLevel, GroupToken result)
     {
-        throw new NotImplementedException();
+        if (nestingLevel - 1 == syntax().grplvl())
+            message(ParserMessages.grplvl, new NumberMessageArg(syntax().grplvl()));
+        uint groupInputLevel = inputLevel();
+        Vector<Text> vec = result.textVector;
+        for (;;)
+        {
+            GroupToken gt = new GroupToken();
+            AllowedGroupTokens allowDataTagLiteral = new AllowedGroupTokens(GroupToken.Type.dataTagLiteral);
+            if (!parseGroupToken(allowDataTagLiteral, nestingLevel, declInputLevel, groupInputLevel, gt))
+                return false;
+            if (vec.size() == syntax().grpcnt())
+                message(ParserMessages.groupCount, new NumberMessageArg(syntax().grpcnt()));
+            vec.resize(vec.size() + 1);
+            gt.text.swap(vec.back());
+            AllowedGroupConnectors allowOrGrpc = new AllowedGroupConnectors(
+                GroupConnector.Type.orGC, GroupConnector.Type.grpcGC);
+            GroupConnector gc = new GroupConnector();
+            if (!parseGroupConnector(allowOrGrpc, declInputLevel, groupInputLevel, ref gc))
+                return false;
+            if (gc.type == GroupConnector.Type.grpcGC)
+                break;
+        }
+        return true;
     }
 
     // Boolean parseLiteral(Mode litMode, Mode liteMode, size_t maxLength,
@@ -6028,18 +6097,203 @@ public class Parser : ParserState
                        false);
     }
 
+    // Boolean parseTagNameGroup(Boolean &active, Boolean start);
+    protected Boolean parseTagNameGroup(out Boolean active, Boolean start)
+    {
+        active = false;
+        Param parm = new Param();
+        enterTag(start);
+        Boolean ret = parseNameGroup(inputLevel(), parm);
+        leaveTag();
+        if (!ret)
+            return false;
+        for (nuint i = 0; i < parm.nameTokenVector.size(); i++)
+        {
+            Ptr<Dtd> dtd = lookupDtd(parm.nameTokenVector[(int)i].name);
+            if (!dtd.isNull())
+            {
+                instantiateDtd(dtd);
+                if (currentDtdPointer().pointer() == dtd.pointer())
+                    active = true;
+            }
+        }
+        return true;
+    }
+
+    // Boolean skipAttributeSpec();
+    protected Boolean skipAttributeSpec()
+    {
+        AttributeParameterType parm;
+        Boolean netEnabling;
+        if (!parseAttributeParameter(Mode.tagMode, false, out parm, out netEnabling))
+            return false;
+        while (parm != AttributeParameterType.end)
+        {
+            if (parm == AttributeParameterType.name)
+            {
+                nuint nameMarkupIndex = 0;
+                if (currentMarkup() != null)
+                    nameMarkupIndex = currentMarkup()!.size() - 1;
+                if (!parseAttributeParameter(Mode.tagMode, true, out parm, out netEnabling))
+                    return false;
+                if (parm == AttributeParameterType.vi)
+                {
+                    Token token = getToken(Mode.tagMode);
+                    while (token == Tokens.tokenS)
+                    {
+                        if (currentMarkup() != null)
+                            currentMarkup()!.addS(currentChar());
+                        token = getToken(Mode.tagMode);
+                    }
+                    switch (token)
+                    {
+                        case Tokens.tokenUnrecognized:
+                            if (!reportNonSgmlCharacter())
+                                message(ParserMessages.attributeSpecCharacter,
+                                        new StringMessageArg(currentToken()));
+                            return false;
+                        case Tokens.tokenEe:
+                            message(ParserMessages.attributeSpecEntityEnd);
+                            return false;
+                        case Tokens.tokenEtago:
+                        case Tokens.tokenStago:
+                        case Tokens.tokenNestc:
+                        case Tokens.tokenTagc:
+                        case Tokens.tokenDsc:
+                        case Tokens.tokenVi:
+                            message(ParserMessages.attributeValueExpected);
+                            return false;
+                        case Tokens.tokenNameStart:
+                        case Tokens.tokenDigit:
+                        case Tokens.tokenLcUcNmchar:
+                            if (!sd().attributeValueNotLiteral())
+                                message(ParserMessages.attributeValueShorttag);
+                            extendNameToken(syntax().litlen() >= syntax().normsep()
+                                            ? syntax().litlen() - syntax().normsep()
+                                            : 0,
+                                            ParserMessages.attributeValueLength);
+                            if (currentMarkup() != null)
+                                currentMarkup()!.addAttributeValue(currentInput()!);
+                            break;
+                        case Tokens.tokenLit:
+                        case Tokens.tokenLita:
+                            {
+                                Text text = new Text();
+                                if (!parseLiteral(token == Tokens.tokenLita ? Mode.talitaMode : Mode.talitMode,
+                                                  Mode.taliteMode,
+                                                  syntax().litlen(),
+                                                  ParserMessages.tokenizedAttributeValueLength,
+                                                  (currentMarkup() != null ? (uint)literalDelimInfo : 0)
+                                                  | literalNoProcess,
+                                                  text))
+                                    return false;
+                                if (currentMarkup() != null)
+                                    currentMarkup()!.addLiteral(text);
+                            }
+                            break;
+                        default:
+                            // CANNOT_HAPPEN();
+                            break;
+                    }
+                    if (!parseAttributeParameter(Mode.tagMode, false, out parm, out netEnabling))
+                        return false;
+                }
+                else
+                {
+                    if (currentMarkup() != null)
+                        currentMarkup()!.changeToAttributeValue(nameMarkupIndex);
+                    if (!sd().attributeOmitName())
+                        message(ParserMessages.attributeNameShorttag);
+                }
+            }
+            else
+            {
+                // It's a name token.
+                if (!parseAttributeParameter(Mode.tagMode, false, out parm, out netEnabling))
+                    return false;
+                if (!sd().attributeOmitName())
+                    message(ParserMessages.attributeNameShorttag);
+            }
+        }
+        if (netEnabling)
+            message(ParserMessages.startTagGroupNet);
+        return true;
+    }
+
     // void parseGroupStartTag();
     protected void parseGroupStartTag()
     {
-        // Stub implementation - full implementation requires parseTagNameGroup
-        throw new NotImplementedException();
+        InputSource? @in = currentInput();
+        if (startMarkup(eventsWanted().wantInstanceMarkup(), currentLocation()) != null)
+        {
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dSTAGO);
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dGRPO);
+        }
+        Boolean active;
+        if (!parseTagNameGroup(out active, true))
+            return;
+        @in!.startToken();
+        Xchar c = @in.tokenChar(messenger());
+        if (!syntax().isNameStartCharacter(c))
+        {
+            message(ParserMessages.startTagMissingName);
+            return;
+        }
+        if (active)
+        {
+            Boolean netEnabling = false;
+            StartElementEvent? @event = doParseStartTag(ref netEnabling);
+            if (netEnabling)
+                message(ParserMessages.startTagGroupNet);
+            acceptStartTag(@event!.elementType(), @event, netEnabling);
+        }
+        else
+        {
+            @in.discardInitial();
+            extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+            if (currentMarkup() != null)
+                currentMarkup()!.addName(currentInput()!);
+            skipAttributeSpec();
+            if (currentMarkup() != null)
+                eventHandler().ignoredMarkup(new IgnoredMarkupEvent(markupLocation(),
+                                                                     currentMarkup()));
+            noteMarkup();
+        }
     }
 
     // void parseGroupEndTag();
     protected void parseGroupEndTag()
     {
-        // Stub implementation - full implementation requires parseTagNameGroup
-        throw new NotImplementedException();
+        InputSource? @in = currentInput();
+        if (startMarkup(eventsWanted().wantInstanceMarkup(), currentLocation()) != null)
+        {
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dETAGO);
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dGRPO);
+        }
+        Boolean active;
+        if (!parseTagNameGroup(out active, false))
+            return;
+        @in!.startToken();
+        Xchar c = @in.tokenChar(messenger());
+        if (!syntax().isNameStartCharacter(c))
+        {
+            message(ParserMessages.endTagMissingName);
+            return;
+        }
+        if (active)
+            acceptEndTag(doParseEndTag());
+        else
+        {
+            @in.discardInitial();
+            extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+            if (currentMarkup() != null)
+                currentMarkup()!.addName(currentInput()!);
+            parseEndTagClose();
+            if (currentMarkup() != null)
+                eventHandler().ignoredMarkup(new IgnoredMarkupEvent(markupLocation(),
+                                                                     currentMarkup()));
+            noteMarkup();
+        }
     }
     // EndElementEvent *parseEndTag();
     protected EndElementEvent? parseEndTag()

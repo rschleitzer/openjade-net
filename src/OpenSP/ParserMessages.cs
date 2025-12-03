@@ -142,6 +142,12 @@ public static class ParserMessages
         MessageType.Severity.error, null, 143, "character %1 not allowed in attribute specification list");
     public static readonly MessageType2 attsplen = new MessageType2(
         MessageType.Severity.quantityError, null, 144, "normalized length of attribute specification list must not exceed ATTSPLEN (%1); length was %2");
+    public static readonly MessageType0 startTagMissingName = new MessageType0(
+        MessageType.Severity.error, null, 145, "generic identifier specification missing after document type specification in start-tag");
+    public static readonly MessageType0 endTagMissingName = new MessageType0(
+        MessageType.Severity.error, null, 146, "generic identifier specification missing after document type specification in end-tag");
+    public static readonly MessageType0 startTagGroupNet = new MessageType0(
+        MessageType.Severity.error, null, 147, "a NET-enabling start-tag cannot include a document type specification");
 
     // Parser state related messages
     public static readonly MessageType0 pass2Ee = new MessageType0(
