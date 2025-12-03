@@ -336,4 +336,82 @@ public static class ParserMessages
         MessageType.Severity.error, null, 408, "%1 declaration not allowed in LPD subset");
     public static readonly MessageType0 dataMarkedSectionDeclSubset = new MessageType0(
         MessageType.Severity.error, null, 409, "data in marked section in declaration subset");
+
+    // parseDoctypeDecl messages
+    public static readonly MessageType0 multipleDtds = new MessageType0(
+        MessageType.Severity.error, null, 410, "DTDs other than base allowed only if CONCUR YES or EXPLICIT YES");
+    public static readonly MessageType0 dtdAfterLpd = new MessageType0(
+        MessageType.Severity.error, null, 411, "DTD not allowed after an LPD");
+    public static readonly MessageType0 impliedDoctypeConcurLink = new MessageType0(
+        MessageType.Severity.error, null, 412, "can't use #IMPLICIT doctype unless CONCUR NO and LINK EXPLICIT NO");
+    public static readonly MessageType0 sorryImpliedDoctype = new MessageType0(
+        MessageType.Severity.error, null, 413, "Sorry, #IMPLIED doctypes not implemented");
+    public static readonly MessageType1 duplicateDtd = new MessageType1(
+        MessageType.Severity.error, null, 414, "document type %1 already defined");
+    public static readonly MessageType0 noDtdSubset = new MessageType0(
+        MessageType.Severity.error, null, 415, "no internal or external document type declaration subset; will parse without validation");
+    public static readonly MessageType0 omittedProlog = new MessageType0(
+        MessageType.Severity.error, null, 416, "prolog can't be omitted unless CONCUR NO and LINK EXPLICIT NO and either IMPLYDEF ELEMENT YES or IMPLYDEF DOCTYPE YES");
+    public static readonly MessageType0 noDtd = new MessageType0(
+        MessageType.Severity.error, null, 417, "no document type declaration; will parse without validation");
+    public static readonly MessageType1 implyingDtd = new MessageType1(
+        MessageType.Severity.error, null, 418, "no document type declaration; implying %1");
+
+    // checkDtd messages
+    public static readonly MessageType0 documentElementUndefined = new MessageType0(
+        MessageType.Severity.error, null, 420, "DTD did not contain element declaration for document type name");
+    public static readonly MessageType1 dtdUndefinedElement = new MessageType1(
+        MessageType.Severity.warning, null, 421, "generic identifier %1 used in DTD but not defined");
+    public static readonly MessageType2 undefinedShortrefMapDtd = new MessageType2(
+        MessageType.Severity.error, null, 422, "short reference map %1 for element %2 not defined in DTD");
+    public static readonly MessageType2 mapEntityUndefined = new MessageType2(
+        MessageType.Severity.error, null, 423, "entity %1 undefined in short reference map %2");
+    public static readonly MessageType2 mapDefaultEntity = new MessageType2(
+        MessageType.Severity.warning, null, 424, "entity %1 in short reference map %2 uses default entity");
+    public static readonly MessageType1 unusedMap = new MessageType1(
+        MessageType.Severity.warning, null, 425, "short reference map %1 not used");
+    public static readonly MessageType1 unusedParamEntity = new MessageType1(
+        MessageType.Severity.warning, null, 426, "parameter entity %1 defined but not used");
+    public static readonly MessageType1 cannotGenerateSystemIdEntity = new MessageType1(
+        MessageType.Severity.error, null, 427, "cannot generate system identifier for entity %1");
+
+    // parseMarkedSectionDeclStart messages
+    public static readonly MessageType1 markedSectionLevel = new MessageType1(
+        MessageType.Severity.error, null, 430, "number of open marked sections must not exceed TAGLVL (%1)");
+    public static readonly MessageType0 internalSubsetMarkedSection = new MessageType0(
+        MessageType.Severity.warning, null, 431, "marked section in internal DTD subset");
+    public static readonly MessageType0 missingStatusKeyword = new MessageType0(
+        MessageType.Severity.warning, null, 432, "no status keyword");
+    public static readonly MessageType0 rcdataMarkedSection = new MessageType0(
+        MessageType.Severity.warning, null, 433, "RCDATA marked section");
+    public static readonly MessageType0 instanceIgnoreMarkedSection = new MessageType0(
+        MessageType.Severity.warning, null, 434, "ignored marked section in the instance");
+    public static readonly MessageType0 instanceIncludeMarkedSection = new MessageType0(
+        MessageType.Severity.warning, null, 435, "included marked section in the instance");
+    public static readonly MessageType0 tempMarkedSection = new MessageType0(
+        MessageType.Severity.warning, null, 436, "TEMP marked section");
+    public static readonly MessageType0 multipleStatusKeyword = new MessageType0(
+        MessageType.Severity.warning, null, 437, "multiple status keywords");
+    public static readonly MessageType0 parameterEntityNotEnded = new MessageType0(
+        MessageType.Severity.error, null, 438, "a parameter entity referenced in a parameter separator must end in the same declaration");
+    public static readonly MessageType0 instanceStatusKeywordSpecS = new MessageType0(
+        MessageType.Severity.warning, null, 439, "S separator in status keyword specification in document instance");
+
+    // handleMarkedSectionEnd message
+    public static readonly MessageType0 markedSectionEnd = new MessageType0(
+        MessageType.Severity.error, null, 440, "marked section end not in marked section declaration");
+
+    // duplicate DTD/LPD
+    public static readonly MessageType1 duplicateDtdLpd = new MessageType1(
+        MessageType.Severity.error, null, 442, "both document type and link type %1");
+
+    // checkDtd - notation related messages
+    public static readonly MessageType2 parameterEntityNotationUndefined = new MessageType2(
+        MessageType.Severity.error, null, 443, "notation %1 for parameter entity %2 undefined");
+    public static readonly MessageType1 dsEntityNotationUndefined = new MessageType1(
+        MessageType.Severity.error, null, 444, "notation %1 for document type external subset entity undefined");
+    public static readonly MessageType2 entityNotationUndefined = new MessageType2(
+        MessageType.Severity.error, null, 445, "notation %1 for entity %2 undefined");
+    public static readonly MessageType1 attlistNotationUndefined = new MessageType1(
+        MessageType.Severity.error, null, 446, "notation %1 for which an ATTLIST was defined is not defined");
 }

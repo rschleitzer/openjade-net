@@ -14,6 +14,22 @@ public class EntityCatalog : Resource
         public abstract StringC peroDelim();
     }
 
+    // Adapter that wraps OpenSP.Syntax to implement EntityCatalog.Syntax
+    public class SyntaxAdapter : Syntax
+    {
+        private readonly OpenSP.Syntax syntax_;
+
+        public SyntaxAdapter(OpenSP.Syntax syntax)
+        {
+            syntax_ = syntax;
+        }
+
+        public override Boolean namecaseGeneral() => syntax_.namecaseGeneral();
+        public override Boolean namecaseEntity() => syntax_.namecaseEntity();
+        public override SubstTable upperSubstTable() => syntax_.upperSubstTable()!;
+        public override StringC peroDelim() => syntax_.peroDelim();
+    }
+
     // virtual ~EntityCatalog();
     // C# handles cleanup via GC
 

@@ -830,6 +830,18 @@ public class Parser : ParserState
         return false;
     }
 
+    // Notation *lookupCreateNotation(const StringC &name);
+    protected ConstPtr<Notation> lookupCreateNotation(StringC name)
+    {
+        Ptr<Notation> nt = defDtd().lookupNotation(name);
+        if (nt.isNull())
+        {
+            nt = new Ptr<Notation>(new Notation(name, defDtd().namePointer(), defDtd().isBase()));
+            defDtd().insertNotation(nt);
+        }
+        return new ConstPtr<Notation>(nt.pointer());
+    }
+
     // From parseCommon.cxx
     protected virtual void doInit() { throw new NotImplementedException(); }
 
@@ -1738,10 +1750,377 @@ public class Parser : ParserState
         return true;
     }
     protected virtual Boolean parseUselinkDecl() { throw new NotImplementedException(); }
-    protected virtual Boolean parseDoctypeDeclStart() { throw new NotImplementedException(); }
-    protected virtual Boolean parseDoctypeDeclEnd(Boolean fake = false) { throw new NotImplementedException(); }
-    protected virtual Boolean parseMarkedSectionDeclStart() { throw new NotImplementedException(); }
-    protected virtual void handleMarkedSectionEnd() { throw new NotImplementedException(); }
+
+    // Boolean parseDoctypeDeclStart();
+    protected virtual Boolean parseDoctypeDeclStart()
+    {
+        if (hadDtd() && sd().concur() == 0 && sd().explicitLink() == 0)
+            message(ParserMessages.multipleDtds);
+        if (hadLpd())
+            message(ParserMessages.dtdAfterLpd);
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+        AllowedParams allowImpliedName = new AllowedParams(
+            (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rIMPLIED),
+            Param.name);
+        AllowedParams allowName = new AllowedParams(Param.name);
+        if (!parseParam(sd().www() ? allowImpliedName : allowName, declInputLevel, parm))
+            return false;
+        if (parm.type == (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rIMPLIED))
+        {
+            if (sd().concur() > 0 || sd().explicitLink() > 0)
+                message(ParserMessages.impliedDoctypeConcurLink);
+            message(ParserMessages.sorryImpliedDoctype);
+            return false;
+        }
+        StringC name = new StringC();
+        parm.token.swap(name);
+        if (!lookupDtd(name).isNull())
+            message(ParserMessages.duplicateDtd, new StringMessageArg(name));
+        AllowedParams allowPublicSystemDsoMdc = new AllowedParams(
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rPUBLIC),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSYSTEM),
+            Param.dso,
+            Param.mdc);
+        if (!parseParam(allowPublicSystemDsoMdc, declInputLevel, parm))
+            return false;
+        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+        StringC notation = new StringC();
+        EntityDecl.DataType data = EntityDecl.DataType.sgmlText;
+        ExternalId id = new ExternalId();
+        if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rPUBLIC)
+            || parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSYSTEM))
+        {
+            AllowedParams allowSystemIdentifierDsoMdc = new AllowedParams(
+                Param.systemIdentifier,
+                Param.dso, Param.mdc);
+            AllowedParams allowSystemIdentifierDsoMdcData = new AllowedParams(
+                Param.systemIdentifier,
+                Param.dso, Param.mdc,
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSDATA));
+            AllowedParams allowDsoMdcData = new AllowedParams(
+                Param.dso, Param.mdc,
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSDATA),
+                (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNDATA));
+            AllowedParams allowDsoMdc = new AllowedParams(Param.dso, Param.mdc);
+            if (!parseExternalId(sd().www() ? allowSystemIdentifierDsoMdcData : allowSystemIdentifierDsoMdc,
+                                 sd().www() ? allowDsoMdcData : allowDsoMdc,
+                                 true, declInputLevel, parm, id))
+                return false;
+            if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA))
+                data = EntityDecl.DataType.cdata;
+            else if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rSDATA))
+                data = EntityDecl.DataType.sdata;
+            else if (parm.type == (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNDATA))
+                data = EntityDecl.DataType.ndata;
+            else
+                data = EntityDecl.DataType.sgmlText;
+            if (data == EntityDecl.DataType.sgmlText)
+            {
+                Ptr<Entity> tem = new Ptr<Entity>(
+                    new ExternalTextEntity(name, EntityDecl.DeclType.doctype, markupLocation(), id));
+                tem.pointer()!.generateSystemId(this);
+                entity = new ConstPtr<Entity>(tem.pointer());
+            }
+            else
+            {
+                // external subset uses some DTD notation
+                AllowedParams allowNameOnly = new AllowedParams(Param.name);
+                if (!parseParam(allowNameOnly, declInputLevel, parm))
+                    return false;
+                parm.token.swap(notation);
+                AllowedParams allowDsoMdcOnly = new AllowedParams(Param.dso, Param.mdc);
+                if (!parseParam(allowDsoMdcOnly, declInputLevel, parm))
+                    return false;
+            }
+        }
+        else
+        {
+            // no external subset specified
+            if (sd().implydefDoctype())
+            {
+                // FIXME this fails for #IMPLIED, since name isn't yet known
+                Ptr<Entity> tem = new Ptr<Entity>(
+                    new ExternalTextEntity(name, EntityDecl.DeclType.doctype, markupLocation(), id));
+                tem.pointer()!.generateSystemId(this);
+                entity = new ConstPtr<Entity>(tem.pointer());
+            }
+            else if (parm.type == Param.mdc)
+            {
+                if (sd().implydefElement() == Sd.ImplydefElement.implydefElementNo)
+                {
+                    message(ParserMessages.noDtdSubset);
+                    enableImplydef();
+                }
+            }
+        }
+        // Discard mdc or dso
+        if (currentMarkup() != null)
+            currentMarkup()!.resize(currentMarkup()!.size() - 1);
+        eventHandler().startDtd(new StartDtdEvent(name, entity, parm.type == Param.dso,
+                                                   markupLocation(),
+                                                   currentMarkup()));
+        startDtd(name);
+        if (notation.size() > 0)
+        {
+            // FIXME this case has the wrong entity in the event
+            // this should be fixed by moving startDtd() call and this code up
+            ConstPtr<Notation> nt = lookupCreateNotation(notation);
+
+            AttributeList attrs = new AttributeList(nt.pointer()!.attributeDef());
+            attrs.finish(this);
+            Ptr<Entity> tem = new Ptr<Entity>(
+                new ExternalDataEntity(name, data, markupLocation(), id, nt, attrs,
+                                        EntityDecl.DeclType.doctype));
+            tem.pointer()!.generateSystemId(this);
+            // FIXME This is a hack; we need the entity to have the doctype name to
+            // have generateSystemId() work properly, but have an empty name to add
+            // it as a parameter entity, which is needed to check the notation
+            StringC entname = new StringC();
+            tem.pointer()!.setName(entname);
+            defDtd().insertEntity(tem);
+            entity = new ConstPtr<Entity>(tem.pointer());
+        }
+        if (parm.type == Param.mdc)
+        {
+            // unget the mdc
+            currentInput()!.ungetToken();
+            if (entity.isNull())
+            {
+                parseDoctypeDeclEnd();
+                return true;
+            }
+            // reference the entity
+            Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>(EntityOrigin.make(internalAllocator(), entity, currentLocation()));
+            entity.pointer()!.dsReference(this, origin);
+            if (inputLevel() == 1)
+            {
+                // reference failed
+                parseDoctypeDeclEnd();
+                return true;
+            }
+        }
+        else if (!entity.isNull())
+            setDsEntity(entity);
+        setPhase(Phase.declSubsetPhase);
+        return true;
+    }
+
+    // Boolean parseDoctypeDeclEnd(Boolean fake = 0);
+    protected virtual Boolean parseDoctypeDeclEnd(Boolean fake = false)
+    {
+        checkDtd(defDtd());
+        Ptr<Dtd> tem = defDtdPointer();
+        endDtd();
+        if (fake)
+        {
+            startMarkup(eventsWanted().wantPrologMarkup(), currentLocation());
+            // if (currentMarkup() != null)
+            //     currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDC);
+        }
+        else
+        {
+            startMarkup(eventsWanted().wantPrologMarkup(), currentLocation());
+            Param parm = new Param();
+            AllowedParams allowMdc = new AllowedParams(Param.mdc);
+            // End DTD before parsing final param so parameter entity reference
+            // not allowed between ] and >.
+            if (!parseParam(allowMdc, inputLevel(), parm))
+                return false;
+        }
+        eventHandler().endDtd(new EndDtdEvent(new ConstPtr<Dtd>(tem.pointer()),
+                                               markupLocation(),
+                                               currentMarkup()));
+        return true;
+    }
+
+    // Boolean parseMarkedSectionDeclStart();
+    protected virtual Boolean parseMarkedSectionDeclStart()
+    {
+        if (markedSectionLevel() == syntax().taglvl())
+            message(ParserMessages.markedSectionLevel,
+                    new NumberMessageArg(syntax().taglvl()));
+        if (!inInstance()
+            && options().warnInternalSubsetMarkedSection
+            && inputLevel() == 1)
+            message(ParserMessages.internalSubsetMarkedSection);
+        if (markedSectionSpecialLevel() > 0)
+        {
+            startMarkedSection(markupLocation());
+            if (inInstance()
+                ? eventsWanted().wantMarkedSections()
+                : eventsWanted().wantPrologMarkup())
+                eventHandler().ignoredChars(new IgnoredCharsEvent(currentInput()!.currentTokenStart(),
+                                                                   currentInput()!.currentTokenLength(),
+                                                                   currentLocation(),
+                                                                   false));
+            return true;
+        }
+        Boolean discardMarkup;
+        if (startMarkup(inInstance()
+                        ? eventsWanted().wantMarkedSections()
+                        : eventsWanted().wantPrologMarkup(),
+                        currentLocation()) != null)
+        {
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDO);
+            currentMarkup()!.addDelim(Syntax.DelimGeneral.dDSO);
+            discardMarkup = false;
+        }
+        else if (options().warnInstanceStatusKeywordSpecS && inInstance())
+        {
+            startMarkup(true, currentLocation());
+            discardMarkup = true;
+        }
+        else
+            discardMarkup = false;
+        uint declInputLevel = inputLevel();
+        AllowedParams allowStatusDso = new AllowedParams(
+            Param.dso,
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rRCDATA),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rIGNORE),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rINCLUDE),
+            (byte)(Param.reservedName + (byte)Syntax.ReservedName.rTEMP));
+        Param parm = new Param();
+        MarkedSectionEvent.Status status = MarkedSectionEvent.Status.include;
+        if (!parseParam(allowStatusDso, declInputLevel, parm))
+            return false;
+        if (options().warnMissingStatusKeyword && parm.type == Param.dso)
+            message(ParserMessages.missingStatusKeyword);
+        while (parm.type != Param.dso)
+        {
+            byte typeCDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA);
+            byte typeRCDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rRCDATA);
+            byte typeIGNORE = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rIGNORE);
+            byte typeINCLUDE = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rINCLUDE);
+            byte typeTEMP = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rTEMP);
+            if (parm.type == typeCDATA)
+            {
+                if (status < MarkedSectionEvent.Status.cdata)
+                    status = MarkedSectionEvent.Status.cdata;
+            }
+            else if (parm.type == typeRCDATA)
+            {
+                if (status < MarkedSectionEvent.Status.rcdata)
+                    status = MarkedSectionEvent.Status.rcdata;
+                if (options().warnRcdataMarkedSection)
+                    message(ParserMessages.rcdataMarkedSection);
+            }
+            else if (parm.type == typeIGNORE)
+            {
+                if (status < MarkedSectionEvent.Status.ignore)
+                    status = MarkedSectionEvent.Status.ignore;
+                if (inInstance() && options().warnInstanceIgnoreMarkedSection)
+                    message(ParserMessages.instanceIgnoreMarkedSection);
+            }
+            else if (parm.type == typeINCLUDE)
+            {
+                if (inInstance() && options().warnInstanceIncludeMarkedSection)
+                    message(ParserMessages.instanceIncludeMarkedSection);
+            }
+            else if (parm.type == typeTEMP)
+            {
+                if (options().warnTempMarkedSection)
+                    message(ParserMessages.tempMarkedSection);
+            }
+            if (!parseParam(allowStatusDso, declInputLevel, parm))
+                return false;
+            if (options().warnMultipleStatusKeyword && parm.type != Param.dso)
+                message(ParserMessages.multipleStatusKeyword);
+        }
+        // FIXME this disallows
+        // <!entity % e "include [ stuff ">
+        // ...
+        // <![ %e; ]]>
+        // which I think is legal.
+
+        if (inputLevel() > declInputLevel)
+            message(ParserMessages.parameterEntityNotEnded);
+        switch (status)
+        {
+            case MarkedSectionEvent.Status.include:
+                startMarkedSection(markupLocation());
+                break;
+            case MarkedSectionEvent.Status.cdata:
+                startSpecialMarkedSection(Mode.cmsMode, markupLocation());
+                break;
+            case MarkedSectionEvent.Status.rcdata:
+                startSpecialMarkedSection(Mode.rcmsMode, markupLocation());
+                break;
+            case MarkedSectionEvent.Status.ignore:
+                startSpecialMarkedSection(Mode.imsMode, markupLocation());
+                break;
+        }
+        if (currentMarkup() != null)
+        {
+            if (options().warnInstanceStatusKeywordSpecS && inInstance())
+            {
+                Location loc = new Location(markupLocation());
+                for (MarkupIter iter = new MarkupIter(currentMarkup()!); iter.valid(); iter.advance(ref loc, syntaxPointer()))
+                {
+                    if (iter.type() == Markup.Type.s)
+                    {
+                        setNextLocation(loc);
+                        message(ParserMessages.instanceStatusKeywordSpecS);
+                    }
+                }
+                if (discardMarkup)
+                    startMarkup(false, markupLocation());
+            }
+            eventHandler().markedSectionStart(new MarkedSectionStartEvent(status,
+                                                                           markupLocation(),
+                                                                           currentMarkup()));
+        }
+        return true;
+    }
+
+    // void handleMarkedSectionEnd();
+    protected virtual void handleMarkedSectionEnd()
+    {
+        if (markedSectionLevel() == 0)
+            message(ParserMessages.markedSectionEnd);
+        else
+        {
+            if (inInstance()
+                ? eventsWanted().wantMarkedSections()
+                : eventsWanted().wantPrologMarkup())
+            {
+                if (markedSectionSpecialLevel() > 1)
+                    eventHandler().ignoredChars(new IgnoredCharsEvent(currentInput()!.currentTokenStart(),
+                                                                       currentInput()!.currentTokenLength(),
+                                                                       currentLocation(),
+                                                                       false));
+                else
+                {
+                    MarkedSectionEvent.Status status;
+                    switch (currentMode())
+                    {
+                        case Mode.cmsMode:
+                            status = MarkedSectionEvent.Status.cdata;
+                            break;
+                        case Mode.rcmsMode:
+                            status = MarkedSectionEvent.Status.rcdata;
+                            break;
+                        case Mode.imsMode:
+                            status = MarkedSectionEvent.Status.ignore;
+                            break;
+                        default:
+                            status = MarkedSectionEvent.Status.include;
+                            break;
+                    }
+                    startMarkup(true, currentLocation());
+                    currentMarkup()!.addDelim(Syntax.DelimGeneral.dMSC);
+                    currentMarkup()!.addDelim(Syntax.DelimGeneral.dMDC);
+                    eventHandler().markedSectionEnd(new MarkedSectionEndEvent(status,
+                                                                               markupLocation(),
+                                                                               currentMarkup()));
+                }
+            }
+            endMarkedSection();
+        }
+    }
     // Boolean parseCommentDecl();
     protected Boolean parseCommentDecl()
     {
@@ -2856,10 +3235,289 @@ public class Parser : ParserState
     { throw new NotImplementedException(); }
     protected virtual Boolean handleAttributeNameToken(Text text, AttributeList atts, ref uint specLength) { throw new NotImplementedException(); }
 
-    // Helper methods from parseDecl.cxx (stubs)
+    // Helper methods from parseDecl.cxx
+
+    // Boolean lookingAtStartTag(StringC &gi);
     protected virtual Boolean lookingAtStartTag(StringC gi) { throw new NotImplementedException(); }
-    protected virtual void implyDtd(StringC gi) { throw new NotImplementedException(); }
-    protected virtual void checkDtd(Dtd dtd) { throw new NotImplementedException(); }
+
+    // void implyDtd(const StringC &gi);
+    protected virtual void implyDtd(StringC gi)
+    {
+        startMarkup(eventsWanted().wantPrologMarkup(), currentLocation());
+        if (sd().concur() > 0 || sd().explicitLink() > 0
+            || (sd().implydefElement() == Sd.ImplydefElement.implydefElementNo
+                && !sd().implydefDoctype()))
+            message(ParserMessages.omittedProlog);
+
+        if ((sd().implydefElement() != Sd.ImplydefElement.implydefElementNo) && !sd().implydefDoctype())
+        {
+            eventHandler().startDtd(new StartDtdEvent(gi, new ConstPtr<Entity>(), false,
+                                                       markupLocation(),
+                                                       currentMarkup()));
+            startDtd(gi);
+            parseDoctypeDeclEnd(true);
+            return;
+        }
+        ExternalId id = new ExternalId();
+        // The null location indicates that this is a fake entity.
+        Entity tem = new ExternalTextEntity(gi, EntityDecl.DeclType.doctype, new Location(), id);
+        ConstPtr<Entity> entity = new ConstPtr<Entity>(tem);
+        if (sd().implydefDoctype())
+            tem.generateSystemId(this);
+        else
+        {
+            // Don't use Entity.generateSystemId because we don't want an error
+            // if it fails.
+            StringC str = new StringC();
+            if (!entityCatalog().lookup(entity.pointer()!, new EntityCatalog.SyntaxAdapter(syntax()), sd().internalCharset(),
+                                         (Messenger)this, str))
+            {
+                message(ParserMessages.noDtd);
+                enableImplydef();
+                eventHandler().startDtd(new StartDtdEvent(gi, new ConstPtr<Entity>(), false,
+                                                           markupLocation(),
+                                                           currentMarkup()));
+                startDtd(gi);
+                parseDoctypeDeclEnd(true);
+                return;
+            }
+            id.setEffectiveSystem(str);
+            entity = new ConstPtr<Entity>(new ExternalTextEntity(gi,
+                                                                  EntityDecl.DeclType.doctype,
+                                                                  new Location(),
+                                                                  id));
+            StringC declStr = new StringC();
+            declStr.operatorPlusAssign(syntax().delimGeneral((int)Syntax.DelimGeneral.dMDO));
+            declStr.operatorPlusAssign(syntax().reservedName(Syntax.ReservedName.rDOCTYPE));
+            Char[] spaceChar = new Char[] { syntax().space() };
+            declStr.append(spaceChar, 1);
+            declStr.operatorPlusAssign(gi);
+            declStr.append(spaceChar, 1);
+            declStr.operatorPlusAssign(syntax().reservedName(Syntax.ReservedName.rSYSTEM));
+            declStr.operatorPlusAssign(syntax().delimGeneral((int)Syntax.DelimGeneral.dMDC));
+            message(ParserMessages.implyingDtd, new StringMessageArg(declStr));
+        }
+        Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>(EntityOrigin.make(internalAllocator(), entity, currentLocation()));
+        eventHandler().startDtd(new StartDtdEvent(gi, entity, false,
+                                                   markupLocation(),
+                                                   currentMarkup()));
+        startDtd(gi);
+        entity.pointer()!.dsReference(this, origin);
+        if (inputLevel() == 1)
+            parseDoctypeDeclEnd(true);
+        else
+            setPhase(Phase.declSubsetPhase);
+    }
+
+    // void checkDtd(Dtd &dtd);
+    protected virtual void checkDtd(Dtd dtd)
+    {
+        if (dtd.isBase())
+            addNeededShortrefs(dtd, instanceSyntax());
+        if (sd().www() || !options().errorAfdr)
+            addCommonAttributes(dtd);
+        NamedTableIter<ElementType> elementIter = dtd.elementTypeIter();
+        ElementType? p;
+        ConstPtr<ElementDefinition> def = new ConstPtr<ElementDefinition>();
+        int i = 0;
+        while ((p = elementIter.next()) != null)
+        {
+            if (p.definition() == null)
+            {
+                if (p.name() == dtd.name())
+                {
+                    if (validate() && (implydefElement() == Sd.ImplydefElement.implydefElementNo))
+                        message(ParserMessages.documentElementUndefined);
+                }
+                else if (options().warnUndefinedElement)
+                    message(ParserMessages.dtdUndefinedElement, new StringMessageArg(p.name()));
+                if (def.isNull())
+                    def = new ConstPtr<ElementDefinition>(new ElementDefinition(currentLocation(),
+                                                                                  nuint.MaxValue,
+                                                                                  (byte)ElementDefinition.OmitFlags.omitEnd,
+                                                                                  ElementDefinition.DeclaredContent.any,
+                                                                                  (implydefElement() != Sd.ImplydefElement.implydefElementAnyother)));
+                p.setElementDefinition(def, (nuint)(i++));
+            }
+            ShortReferenceMap? map = p.map();
+            if (map != null && map != ContentState.theEmptyMap && !map.defined())
+            {
+                if (validate())
+                    message(ParserMessages.undefinedShortrefMapDtd,
+                            new StringMessageArg(map.name()),
+                            new StringMessageArg(p.name()));
+                p.setMap(null);
+            }
+        }
+        NamedTableIter<ShortReferenceMap> mapIter = dtd.shortReferenceMapIter();
+        nuint nShortref = dtd.nShortref();
+        for (; ; )
+        {
+            ShortReferenceMap? map = mapIter.next();
+            if (map == null)
+                break;
+            Vector<ConstPtr<Entity>> entityMap = new Vector<ConstPtr<Entity>>(nShortref);
+            for (nuint j = 0; j < nShortref; j++)
+            {
+                StringC? entityName = map.entityName(j);
+                if (entityName != null)
+                {
+                    ConstPtr<Entity> entity
+                        = lookupEntity(false, entityName, map.defLocation(), false);
+                    if (entity.isNull())
+                    {
+                        setNextLocation(map.defLocation());
+                        message(ParserMessages.mapEntityUndefined,
+                                new StringMessageArg(entityName),
+                                new StringMessageArg(map.name()));
+                    }
+                    else
+                    {
+                        if (entity.pointer()!.defaulted() && options().warnDefaultEntityReference)
+                        {
+                            setNextLocation(map.defLocation());
+                            message(ParserMessages.mapDefaultEntity,
+                                    new StringMessageArg(entityName),
+                                    new StringMessageArg(map.name()));
+                        }
+                        entityMap[j] = entity;
+                    }
+                }
+            }
+            map.setEntityMap(entityMap);
+            if (options().warnUnusedMap && !map.used())
+            {
+                setNextLocation(map.defLocation());
+                message(ParserMessages.unusedMap, new StringMessageArg(map.name()));
+            }
+        }
+        if (options().warnUnusedParam)
+        {
+            ConstNamedResourceTableIter<Entity> entityIter = dtd.parameterEntityIterConst();
+            for (; ; )
+            {
+                ConstPtr<Entity> entity = entityIter.next();
+                if (entity.isNull())
+                    break;
+                if (!entity.pointer()!.used() && !maybeStatusKeyword(entity.pointer()!))
+                {
+                    setNextLocation(entity.pointer()!.defLocation());
+                    message(ParserMessages.unusedParamEntity,
+                            new StringMessageArg(entity.pointer()!.name()));
+                }
+            }
+        }
+        ConstNamedResourceTableIter<Entity> gEntityIter = dtd.generalEntityIterConst();
+        ConstNamedResourceTableIter<Entity> pEntityIter = dtd.parameterEntityIterConst();
+        for (i = 0; i < (sd().www() ? 2 : 1); i++)
+        {
+            for (; ; )
+            {
+                ConstPtr<Entity> entity = (i == 0) ? gEntityIter.next() : pEntityIter.next();
+                if (entity.isNull())
+                    break;
+                ExternalDataEntity? external = entity.pointer()!.asExternalDataEntity();
+                if (external != null)
+                {
+                    Notation? notation = external.notation() as Notation;
+                    if (notation != null && !notation.defined())
+                    {
+                        if (sd().implydefNotation())
+                        {
+                            ExternalId id = new ExternalId();
+                            notation.setExternalId(id, new Location());
+                            notation.generateSystemId(this);
+                        }
+                        else if (validate())
+                        {
+                            setNextLocation(external.defLocation());
+                            switch (external.declType())
+                            {
+                                case EntityDecl.DeclType.parameterEntity:
+                                    message(ParserMessages.parameterEntityNotationUndefined,
+                                            new StringMessageArg(notation.name()),
+                                            new StringMessageArg(external.name()));
+                                    break;
+                                case EntityDecl.DeclType.doctype:
+                                    message(ParserMessages.dsEntityNotationUndefined,
+                                            new StringMessageArg(notation.name()));
+                                    break;
+                                default:
+                                    message(ParserMessages.entityNotationUndefined,
+                                            new StringMessageArg(notation.name()),
+                                            new StringMessageArg(external.name()));
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        NamedResourceTableIter<Notation> notationIter = dtd.notationIter();
+        for (; ; )
+        {
+            Ptr<Notation> notation = notationIter.next();
+            if (notation.isNull())
+                break;
+            if (!notation.pointer()!.defined() && !notation.pointer()!.attributeDef().isNull())
+            {
+                if (sd().implydefNotation())
+                {
+                    ExternalId id = new ExternalId();
+                    notation.pointer()!.setExternalId(id, new Location());
+                    notation.pointer()!.generateSystemId(this);
+                }
+                else if (validate())
+                    message(ParserMessages.attlistNotationUndefined,
+                            new StringMessageArg(notation.pointer()!.name()));
+            }
+        }
+    }
+
+    // Boolean maybeStatusKeyword(const Entity &entity);
+    protected Boolean maybeStatusKeyword(Entity entity)
+    {
+        InternalEntity? @internal = entity.asInternalEntity();
+        if (@internal == null)
+            return false;
+        StringC text = @internal.@string();
+        Syntax.ReservedName[] statusKeywords = new Syntax.ReservedName[]
+        {
+            Syntax.ReservedName.rINCLUDE, Syntax.ReservedName.rIGNORE
+        };
+        foreach (var keyword in statusKeywords)
+        {
+            StringC keywordStr = instanceSyntax().reservedName(keyword);
+            nuint j = 0;
+            while (j < text.size() && instanceSyntax().isS((Xchar)text[j]))
+                j++;
+            nuint k = 0;
+            while (j < text.size()
+                   && k < keywordStr.size()
+                   && (instanceSyntax().generalSubstTable()![text[j]]
+                       == keywordStr[k]))
+            {
+                j++;
+                k++;
+            }
+            if (k == keywordStr.size())
+            {
+                while (j < text.size() && instanceSyntax().isS((Xchar)text[j]))
+                    j++;
+                if (j == text.size())
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    // void addCommonAttributes(Dtd &dtd);
+    protected void addCommonAttributes(Dtd dtd)
+    {
+        // Simplified implementation - full implementation is complex
+        // This handles the #ALL and #IMPLICIT element/notation attribute definitions
+        // For now, just a stub that does nothing
+    }
 
     // From parseSd.cxx
     protected virtual Boolean implySgmlDecl() { throw new NotImplementedException(); }
