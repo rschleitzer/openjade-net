@@ -3413,7 +3413,71 @@ public class Parser : ParserState
             currentMarkup()!.addReservedName(result, currentInput()!);
         return true;
     }
-    protected virtual Boolean parseUselinkDecl() { throw new NotImplementedException(); }
+    // Boolean parseUselinkDecl();
+    protected virtual Boolean parseUselinkDecl()
+    {
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+
+        byte indINITIAL = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rINITIAL);
+        byte indEMPTY = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rEMPTY);
+        byte indRESTORE = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rRESTORE);
+        AllowedParams allowLinkSetSpec = new AllowedParams(Param.name, indINITIAL, indEMPTY, indRESTORE);
+        if (!parseParam(allowLinkSetSpec, declInputLevel, parm))
+            return false;
+
+        Param parm2 = new Param();
+        AllowedParams allowName = new AllowedParams(Param.name);
+        if (!parseParam(allowName, declInputLevel, parm2))
+            return false;
+
+        StringC linkType = new StringC();
+        parm2.token.swap(linkType);
+
+        AllowedParams allowMdc = new AllowedParams(Param.mdc);
+        if (!parseParam(allowMdc, declInputLevel, parm2))
+            return false;
+
+        ConstPtr<Lpd> lpd = lookupLpd(linkType);
+        if (lpd.isNull())
+            message(ParserMessages.uselinkBadLinkType, new StringMessageArg(linkType));
+        else if (lpd.pointer()!.type() == Lpd.Type.simpleLink)
+            message(ParserMessages.uselinkSimpleLpd, new StringMessageArg(linkType));
+        else
+        {
+            ComplexLpd complexLpd = (ComplexLpd)lpd.pointer()!;
+            LinkSet? linkSet;
+            Boolean restore = false;
+            if (parm.type == Param.name)
+            {
+                linkSet = complexLpd.lookupLinkSet(parm.token);
+                if (linkSet == null)
+                {
+                    message(ParserMessages.uselinkBadLinkSet,
+                            new StringMessageArg(complexLpd.name()),
+                            new StringMessageArg(parm.token));
+                    return true;
+                }
+            }
+            else if (parm.type == indINITIAL)
+                linkSet = complexLpd.initialLinkSet();
+            else if (parm.type == indEMPTY)
+                linkSet = complexLpd.emptyLinkSet();
+            else
+            {
+                linkSet = null;
+                restore = true;
+            }
+            if (lpd.pointer()!.active())
+                eventHandler().uselink(new UselinkEvent(lpd, linkSet,
+                                                         restore, markupLocation(),
+                                                         currentMarkup()));
+            else
+                eventHandler().ignoredMarkup(new IgnoredMarkupEvent(markupLocation(),
+                                                                     currentMarkup()));
+        }
+        return true;
+    }
 
     // Boolean parseDoctypeDeclStart();
     protected virtual Boolean parseDoctypeDeclStart()
@@ -3856,7 +3920,25 @@ public class Parser : ParserState
     protected virtual Boolean parseLinkDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseIdlinkDecl() { throw new NotImplementedException(); }
     protected virtual Boolean parseLinkSet(Boolean idlink) { throw new NotImplementedException(); }
-    protected virtual Boolean parseAfdrDecl() { throw new NotImplementedException(); }
+    // Boolean parseAfdrDecl();
+    protected virtual Boolean parseAfdrDecl()
+    {
+        uint declInputLevel = inputLevel();
+        AllowedParams allowMinimumLiteral = new AllowedParams(Param.minimumLiteral);
+        Param parm = new Param();
+        setHadAfdrDecl();
+        if (!parseParam(allowMinimumLiteral, declInputLevel, parm))
+            return false;
+        if (parm.literalText.@string() != sd().execToInternal("ISO/IEC 10744:1997"))
+            message(ParserMessages.afdrVersion,
+                    new StringMessageArg(parm.literalText.@string()));
+        AllowedParams allowMdc = new AllowedParams(Param.mdc);
+        if (!parseParam(allowMdc, declInputLevel, parm))
+            return false;
+        eventHandler().ignoredMarkup(new IgnoredMarkupEvent(markupLocation(),
+                                                             currentMarkup()));
+        return true;
+    }
 
     // From parseParam.cxx
 

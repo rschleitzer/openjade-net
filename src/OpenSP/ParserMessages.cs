@@ -668,4 +668,16 @@ public static class ParserMessages
         MessageType.Severity.error, null, 101, "short reference map in DTD must specify associated element type");
     public static readonly MessageType0 usemapAssociatedElementTypeInstance = new MessageType0(
         MessageType.Severity.error, null, 102, "short reference map in document instance cannot specify associated element type");
+
+    // parseUselinkDecl messages
+    public static readonly MessageType1 uselinkBadLinkType = new MessageType1(
+        MessageType.Severity.error, null, 306, "no link type %1");
+    public static readonly MessageType1 uselinkSimpleLpd = new MessageType1(
+        MessageType.Severity.error, null, 305, "link set use declaration for simple link process");
+    public static readonly MessageType2 uselinkBadLinkSet = new MessageType2(
+        MessageType.Severity.error, null, 304, "link type %1 does not have a link set %2");
+
+    // parseAfdrDecl messages
+    public static readonly MessageType1 afdrVersion = new MessageType1(
+        MessageType.Severity.error, null, 347, "minimum data of AFDR declaration must be \"ISO/IEC 10744:1997\" not %1");
 }
