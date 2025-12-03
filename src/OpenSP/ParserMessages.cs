@@ -905,4 +905,8 @@ public static class ParserMessages
         MessageType.Severity.error, null, 573, "%1 is not a valid short reference delimiter because it has more than one B sequence");
     public static readonly MessageType1 blankAdjacentBSequence = new MessageType1(
         MessageType.Severity.error, null, 574, "%1 is not a valid short reference delimiter because it is adjacent to a character that can occur in a blank sequence");
+    public static readonly MessageType2 delimiterLength = new MessageType2(
+        MessageType.Severity.error, null, 575, "length of delimiter %1 exceeds NAMELEN (%2)");
+    public static readonly MessageType2 reservedNameLength = new MessageType2(
+        MessageType.Severity.warning, null, 576, "length of reserved name %1 exceeds NAMELEN (%2)");
 }

@@ -8676,15 +8676,44 @@ public class Parser : ParserState
     // void checkSyntaxNames(const Syntax &syntax);
     protected void checkSyntaxNames(Syntax syntax)
     {
-        // TODO: Implement syntax name checking
-        // This validates that syntax names are consistent and properly defined
+        HashTableIter<Char> iter = syntax.functionIter();
+        StringC? name;
+        Char c;
+        while (iter.next(out name, out c))
+        {
+            if (name != null)
+            {
+                for (nuint i = 1; i < name.size(); i++)
+                    if (!syntax.isNameCharacter((Xchar)name[i]))
+                    {
+                        message(ParserMessages.reservedNameSyntax, new StringMessageArg(name));
+                        break;
+                    }
+            }
+        }
     }
 
     // void checkSyntaxNamelen(const Syntax &syntax);
     protected void checkSyntaxNamelen(Syntax syntax)
     {
-        // TODO: Implement syntax name length checking
-        // This validates NAMELEN quantity against defined names
+        nuint namelen = syntax.namelen();
+        int i;
+        for (i = 0; i < Syntax.nDelimGeneral; i++)
+            if (syntax.delimGeneral(i).size() > namelen)
+                message(ParserMessages.delimiterLength,
+                        new StringMessageArg(syntax.delimGeneral(i)),
+                        new NumberMessageArg(namelen));
+        for (i = 0; i < syntax.nDelimShortrefComplex(); i++)
+            if (syntax.delimShortrefComplex((nuint)i).size() > namelen)
+                message(ParserMessages.delimiterLength,
+                        new StringMessageArg(syntax.delimShortrefComplex((nuint)i)),
+                        new NumberMessageArg(namelen));
+        for (i = 0; i < Syntax.nNames; i++)
+            if (syntax.reservedName((Syntax.ReservedName)i).size() > namelen
+                && options().warnSgmlDecl)
+                message(ParserMessages.reservedNameLength,
+                        new StringMessageArg(syntax.reservedName((Syntax.ReservedName)i)),
+                        new NumberMessageArg(namelen));
     }
 
     // Boolean sdParseExplicitSyntax(SdBuilder &sdBuilder, SdParam &parm);

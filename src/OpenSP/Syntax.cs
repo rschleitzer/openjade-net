@@ -940,6 +940,12 @@ public class Syntax : Resource
         return false;
     }
 
+    // HashTableIter<StringC,Char> functionIter() const;
+    public HashTableIter<Char> functionIter()
+    {
+        return new HashTableIter<Char>(functionTable_);
+    }
+
     // Boolean charFunctionName(Char c, const StringC *&name) const;
     public Boolean charFunctionName(Char c, out StringC? name)
     {
