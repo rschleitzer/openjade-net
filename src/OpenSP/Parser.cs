@@ -316,12 +316,76 @@ public class Parser : ParserState
     protected virtual void doDeclSubset() { /* TODO */ }
     protected virtual void doInstanceStart() { /* TODO */ }
     protected virtual void doContent() { /* TODO */ }
-    protected virtual void extendNameToken(nuint length, MessageType1 msg) { /* TODO */ }
-    protected virtual void extendNumber(nuint length, MessageType1 msg) { /* TODO */ }
-    protected virtual void extendHexNumber() { /* TODO */ }
+
+    // void extendNameToken(size_t maxLength, const MessageType1 &tooLongMessage);
+    protected void extendNameToken(nuint maxLength, MessageType1 tooLongMessage)
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        nuint length = ins.currentTokenLength();
+        Syntax syn = syntax();
+        while (syn.isNameCharacter(ins.tokenChar(messenger())))
+            length++;
+        if (length > maxLength)
+            message(tooLongMessage, new NumberMessageArg(maxLength));
+        ins.endToken(length);
+    }
+
+    // void extendNumber(size_t maxLength, const MessageType1 &tooLongMessage);
+    protected void extendNumber(nuint maxLength, MessageType1 tooLongMessage)
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        nuint length = ins.currentTokenLength();
+        while (syntax().isDigit(ins.tokenChar(messenger())))
+            length++;
+        if (length > maxLength)
+            message(tooLongMessage, new NumberMessageArg(maxLength));
+        ins.endToken(length);
+    }
+
+    // void extendHexNumber();
+    protected void extendHexNumber()
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        nuint length = ins.currentTokenLength();
+        while (syntax().isHexDigit(ins.tokenChar(messenger())))
+            length++;
+        if (length > syntax().namelen())
+            message(ParserMessages.hexNumberLength, new NumberMessageArg(syntax().namelen()));
+        ins.endToken(length);
+    }
+
     protected virtual void extendData() { /* TODO */ }
-    protected virtual void extendS() { /* TODO */ }
+
+    // void extendS();
+    protected void extendS()
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return;
+        nuint length = ins.currentTokenLength();
+        while (syntax().isS(ins.tokenChar(messenger())))
+            length++;
+        ins.endToken(length);
+    }
+
     protected virtual void extendContentS() { /* TODO */ }
+
+    // Boolean reportNonSgmlCharacter();
+    protected Boolean reportNonSgmlCharacter()
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return false;
+        // In scanSuppress mode the non-SGML character will have been read.
+        Xchar c = ins.currentTokenLength() > 0 ? (Xchar)currentChar() : getChar();
+        if (!syntax().isSgmlChar(c))
+        {
+            message(ParserMessages.nonSgmlCharacter, new NumberMessageArg((Char)c));
+            return true;
+        }
+        return false;
+    }
 
     // From parseDecl.cxx
     protected virtual void declSubsetRecover(uint startLevel) { /* TODO */ }
