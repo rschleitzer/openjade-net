@@ -2094,7 +2094,673 @@ public class Parser : ParserState
                 message(ParserMessages.conrefEmpty, new StringMessageArg(e.name()));
         }
     }
-    protected virtual Boolean parseAttlistDecl() { throw new NotImplementedException(); }
+    // Boolean parseAttlistDecl();
+    protected virtual Boolean parseAttlistDecl()
+    {
+        uint declInputLevel = inputLevel();
+        Param parm = new Param();
+        nuint attcnt = 0;
+        nuint idIndex = nuint.MaxValue;
+        nuint notationIndex = nuint.MaxValue;
+        Boolean anyCurrent = false;
+
+        Boolean isNotation;
+        Vector<IAttributed?> attributed = new Vector<IAttributed?>();
+        if (!parseAttributed(declInputLevel, parm, attributed, out isNotation))
+            return false;
+
+        Vector<AttributeDefinition?> defs = new Vector<AttributeDefinition?>();
+        AllowedParams allowNameMdc = new AllowedParams(Param.name, Param.mdc);
+        AllowedParams allowName = new AllowedParams(Param.name);
+        if (!parseParam(sd().www() ? allowNameMdc : allowName, declInputLevel, parm))
+            return false;
+
+        while (parm.type != Param.mdc)
+        {
+            StringC attributeName = new StringC();
+            StringC origAttributeName = new StringC();
+            parm.token.swap(attributeName);
+            parm.origToken.swap(origAttributeName);
+            attcnt++;
+            Boolean duplicate = false;
+            nuint i;
+            for (i = 0; i < defs.size(); i++)
+            {
+                if (defs[i]!.name() == attributeName)
+                {
+                    message(ParserMessages.duplicateAttributeDef,
+                            new StringMessageArg(attributeName));
+                    duplicate = true;
+                    break;
+                }
+            }
+
+            Owner<DeclaredValue> declaredValue = new Owner<DeclaredValue>();
+            if (!parseDeclaredValue(declInputLevel, isNotation, parm, declaredValue))
+                return false;
+
+            if (!duplicate)
+            {
+                if (declaredValue.pointer()!.isId())
+                {
+                    if (idIndex != nuint.MaxValue)
+                        message(ParserMessages.multipleIdAttributes,
+                                new StringMessageArg(defs[idIndex]!.name()));
+                    idIndex = defs.size();
+                }
+                else if (declaredValue.pointer()!.isNotation())
+                {
+                    if (notationIndex != nuint.MaxValue)
+                        message(ParserMessages.multipleNotationAttributes,
+                                new StringMessageArg(defs[notationIndex]!.name()));
+                    notationIndex = defs.size();
+                }
+            }
+
+            Vector<StringC>? tokensPtr = declaredValue.pointer()!.getTokens();
+            if (tokensPtr != null)
+            {
+                nuint nTokens = tokensPtr.size();
+                if (!sd().www())
+                {
+                    for (i = 0; i < nTokens; i++)
+                    {
+                        for (nuint j = 0; j < defs.size(); j++)
+                        {
+                            if (defs[j]!.containsToken(tokensPtr[i]))
+                            {
+                                message(ParserMessages.duplicateAttributeToken,
+                                        new StringMessageArg(tokensPtr[i]));
+                                break;
+                            }
+                        }
+                    }
+                }
+                attcnt += nTokens;
+            }
+
+            Owner<AttributeDefinition> def = new Owner<AttributeDefinition>();
+            if (!parseDefaultValue(declInputLevel, isNotation, parm, attributeName,
+                                   declaredValue, def, ref anyCurrent))
+                return false;
+
+            if (haveDefLpd() && defLpd().type() == Lpd.Type.simpleLink && !def.pointer()!.isFixed())
+                message(ParserMessages.simpleLinkFixedAttribute);
+
+            def.pointer()!.setOrigName(origAttributeName);
+            if (!duplicate)
+            {
+                defs.resize(defs.size() + 1);
+                defs[defs.size() - 1] = def.extract();
+            }
+
+            AllowedParams allowNameMdcLoop = new AllowedParams(Param.name, Param.mdc);
+            if (!parseParam(allowNameMdcLoop, declInputLevel, parm))
+                return false;
+        }
+
+        if (attcnt > syntax().attcnt())
+            message(ParserMessages.attcnt,
+                    new NumberMessageArg(attcnt),
+                    new NumberMessageArg(syntax().attcnt()));
+
+        if (haveDefLpd() && !isNotation)
+        {
+            if (defLpd().type() == Lpd.Type.simpleLink)
+            {
+                for (nuint i = 0; i < attributed.size(); i++)
+                {
+                    ElementType? e = attributed[i] as ElementType;
+                    if (e != null)
+                    {
+                        if (e.name() == defLpd().sourceDtd().pointer()!.name())
+                        {
+                            SimpleLpd lpd = (SimpleLpd)defLpd();
+                            if (lpd.attributeDef().isNull())
+                                lpd.setAttributeDef(new Ptr<AttributeDefinitionList>(
+                                    new AttributeDefinitionList(defs, 0)));
+                            else
+                                message(ParserMessages.duplicateAttlistElement,
+                                        new StringMessageArg(e.name()));
+                        }
+                        else
+                            message(ParserMessages.simpleLinkAttlistElement,
+                                    new StringMessageArg(e.name()));
+                    }
+                }
+            }
+            else
+            {
+                Ptr<AttributeDefinitionList> adl = new Ptr<AttributeDefinitionList>(
+                    new AttributeDefinitionList(defs,
+                                                defComplexLpd().allocAttributeDefinitionListIndex()));
+                for (nuint i = 0; i < attributed.size(); i++)
+                {
+                    ElementType? e = attributed[i] as ElementType;
+                    if (e != null)
+                    {
+                        if (defComplexLpd().attributeDef(e).isNull())
+                            defComplexLpd().setAttributeDef(e, new ConstPtr<AttributeDefinitionList>(adl.pointer()));
+                        else
+                            message(ParserMessages.duplicateAttlistElement,
+                                    new StringMessageArg(e.name()));
+                    }
+                }
+            }
+        }
+        else
+        {
+            Ptr<AttributeDefinitionList> adl = new Ptr<AttributeDefinitionList>(
+                new AttributeDefinitionList(defs,
+                                            defDtd().allocAttributeDefinitionListIndex(),
+                                            anyCurrent,
+                                            idIndex,
+                                            notationIndex));
+            for (nuint i = 0; i < attributed.size(); i++)
+            {
+                if (attributed[i]!.attributeDef().isNull())
+                {
+                    attributed[i]!.setAttributeDef(new Ptr<AttributeDefinitionList>(adl.pointer()));
+                    if (!isNotation)
+                    {
+                        ElementType? e = attributed[i] as ElementType;
+                        if (e != null && e.definition() != null)
+                            checkElementAttribute(e);
+                    }
+                }
+                else if (options().errorAfdr && !sd().www())
+                {
+                    if (isNotation)
+                        message(ParserMessages.duplicateAttlistNotation,
+                                new StringMessageArg(((Notation)attributed[i]!).name()));
+                    else
+                        message(ParserMessages.duplicateAttlistElement,
+                                new StringMessageArg(((ElementType)attributed[i]!).name()));
+                }
+                else
+                {
+                    if (!hadAfdrDecl() && !sd().www())
+                    {
+                        message(ParserMessages.missingAfdrDecl);
+                        setHadAfdrDecl();
+                    }
+                    AttributeDefinitionList? curAdl;
+                    {
+                        // Use block to make sure temporary gets destroyed.
+                        curAdl = attributed[i]!.attributeDef().pointer();
+                    }
+                    nuint oldSize = curAdl!.size();
+                    if (curAdl.count() != 1)
+                    {
+                        Vector<AttributeDefinition?> copy = new Vector<AttributeDefinition?>(oldSize);
+                        for (nuint j = 0; j < oldSize; j++)
+                            copy[j] = curAdl.def(j)?.copy();
+                        Ptr<AttributeDefinitionList> adlCopy = new Ptr<AttributeDefinitionList>(
+                            new AttributeDefinitionList(copy,
+                                                        defDtd().allocAttributeDefinitionListIndex(),
+                                                        curAdl.anyCurrent(),
+                                                        curAdl.idIndex(),
+                                                        curAdl.notationIndex()));
+                        attributed[i]!.setAttributeDef(adlCopy);
+                        curAdl = adlCopy.pointer();
+                    }
+                    for (nuint j = 0; j < adl.pointer()!.size(); j++)
+                    {
+                        uint index;
+                        if (!curAdl!.attributeIndex(adl.pointer()!.def(j)!.name(), out index))
+                        {
+                            nuint checkIndex = curAdl.idIndex();
+                            if (checkIndex != nuint.MaxValue && adl.pointer()!.def(j)!.isId())
+                                message(ParserMessages.multipleIdAttributes,
+                                        new StringMessageArg(curAdl.def(checkIndex)!.name()));
+                            checkIndex = curAdl.notationIndex();
+                            if (checkIndex != nuint.MaxValue && adl.pointer()!.def(j)!.isNotation())
+                                message(ParserMessages.multipleNotationAttributes,
+                                        new StringMessageArg(curAdl.def(checkIndex)!.name()));
+                            curAdl.append(adl.pointer()!.def(j)?.copy());
+                        }
+                        else
+                        {
+                            Boolean tem;
+                            if (curAdl.def(index)!.isSpecified(out tem))
+                                message(ParserMessages.specifiedAttributeRedeclared,
+                                        new StringMessageArg(adl.pointer()!.def(j)!.name()));
+                        }
+                    }
+                    if (!isNotation)
+                    {
+                        ElementType? e = attributed[i] as ElementType;
+                        if (e != null && e.definition() != null)
+                            checkElementAttribute(e, oldSize);
+                    }
+                }
+            }
+        }
+
+        if (currentMarkup() != null)
+        {
+            if (isNotation)
+            {
+                Vector<ConstPtr<Notation>> v = new Vector<ConstPtr<Notation>>(attributed.size());
+                for (nuint i = 0; i < attributed.size(); i++)
+                    v[i] = new ConstPtr<Notation>((Notation?)attributed[i]);
+                eventHandler().attlistNotationDecl(new AttlistNotationDeclEvent(v,
+                                                                                 markupLocation(),
+                                                                                 currentMarkup()));
+            }
+            else
+            {
+                Vector<ElementType?> v = new Vector<ElementType?>(attributed.size());
+                for (nuint i = 0; i < attributed.size(); i++)
+                    v[i] = attributed[i] as ElementType;
+                if (haveDefLpd())
+                    eventHandler().linkAttlistDecl(new LinkAttlistDeclEvent(v,
+                                                                             new ConstPtr<Lpd>(defLpdPointer().pointer()),
+                                                                             markupLocation(),
+                                                                             currentMarkup()));
+                else
+                    eventHandler().attlistDecl(new AttlistDeclEvent(v,
+                                                                     currentDtdPointer(),
+                                                                     markupLocation(),
+                                                                     currentMarkup()));
+            }
+        }
+
+        if (isNotation)
+        {
+            NamedResourceTableIter<Entity> entityIter = defDtd().generalEntityIter();
+            for (;;)
+            {
+                Ptr<Entity> entity = new Ptr<Entity>(entityIter.next());
+                if (entity.isNull())
+                    break;
+                ExternalDataEntity? external = entity.pointer()!.asExternalDataEntity();
+                if (external != null)
+                {
+                    Notation? entityNotation = external.notation();
+                    for (nuint i = 0; i < attributed.size(); i++)
+                    {
+                        if (attributed[i] == entityNotation)
+                        {
+                            Notation? attrNotation = attributed[i] as Notation;
+                            AttributeList attributes = new AttributeList(attrNotation!.attributeDef());
+                            attributes.finish(this);
+                            external.setNotation(new ConstPtr<Notation>(attrNotation), attributes);
+                        }
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    // Boolean parseAttributed(unsigned declInputLevel, Param &parm,
+    //                         Vector<Attributed *> &attributed, Boolean &isNotation);
+    protected Boolean parseAttributed(uint declInputLevel, Param parm,
+                                       Vector<IAttributed?> attributed, out Boolean isNotation)
+    {
+        byte indNOTATION = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rNOTATION);
+        byte indALL = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rALL);
+        byte indIMPLICIT = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rIMPLICIT);
+
+        AllowedParams allowNameGroupNotation = new AllowedParams(Param.name, Param.nameGroup, indNOTATION);
+        AllowedParams allowNameGroupNotationAll = new AllowedParams(Param.name, Param.nameGroup,
+                                                                     indNOTATION, indALL, indIMPLICIT);
+
+        if (!parseParam(haveDefLpd() ? allowNameGroupNotation : allowNameGroupNotationAll,
+                       declInputLevel, parm))
+        {
+            isNotation = false;
+            return false;
+        }
+
+        if (parm.type == indNOTATION)
+        {
+            if (options().warnDataAttributes)
+                message(ParserMessages.dataAttributes);
+            isNotation = true;
+            AllowedParams allowNameNameGroup = new AllowedParams(Param.name, Param.nameGroup);
+            AllowedParams allowNameGroupAll = new AllowedParams(Param.name, Param.nameGroup, indALL, indIMPLICIT);
+            if (!parseParam(haveDefLpd() ? allowNameNameGroup : allowNameGroupAll,
+                           declInputLevel, parm))
+                return false;
+            if (parm.type == Param.nameGroup)
+            {
+                attributed.resize(parm.nameTokenVector.size());
+                for (nuint i = 0; i < attributed.size(); i++)
+                    attributed[i] = lookupCreateNotation(parm.nameTokenVector[(int)i].name).pointer();
+            }
+            else
+            {
+                if (parm.type != Param.name && !hadAfdrDecl() && !sd().www())
+                {
+                    message(ParserMessages.missingAfdrDecl);
+                    setHadAfdrDecl();
+                }
+                attributed.resize(1);
+                attributed[0] = lookupCreateNotation(parm.type == Param.name
+                                                     ? parm.token
+                                                     : syntax().rniReservedName((Syntax.ReservedName)(parm.type - Param.indicatedReservedName))).pointer();
+            }
+        }
+        else
+        {
+            isNotation = false;
+            if (parm.type == Param.nameGroup)
+            {
+                if (options().warnAttlistGroupDecl)
+                    message(ParserMessages.attlistGroupDecl);
+                attributed.resize(parm.nameTokenVector.size());
+                for (nuint i = 0; i < attributed.size(); i++)
+                    attributed[i] = lookupCreateElement(parm.nameTokenVector[(int)i].name);
+            }
+            else
+            {
+                if (parm.type != Param.name && !hadAfdrDecl() && !sd().www())
+                {
+                    message(ParserMessages.missingAfdrDecl);
+                    setHadAfdrDecl();
+                }
+                attributed.resize(1);
+                attributed[0] = lookupCreateElement(parm.type == Param.name
+                                                    ? parm.token
+                                                    : syntax().rniReservedName((Syntax.ReservedName)(parm.type - Param.indicatedReservedName)));
+            }
+        }
+        return true;
+    }
+
+    // Boolean parseDeclaredValue(unsigned declInputLevel, Boolean isNotation,
+    //                            Param &parm, Owner<DeclaredValue> &declaredValue);
+    protected Boolean parseDeclaredValue(uint declInputLevel, Boolean isNotation, Param parm,
+                                          Owner<DeclaredValue> declaredValue)
+    {
+        byte rCDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rCDATA);
+        byte rENTITY = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rENTITY);
+        byte rENTITIES = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rENTITIES);
+        byte rID = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rID);
+        byte rIDREF = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rIDREF);
+        byte rIDREFS = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rIDREFS);
+        byte rNAME = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNAME);
+        byte rNAMES = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNAMES);
+        byte rNMTOKEN = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNMTOKEN);
+        byte rNMTOKENS = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNMTOKENS);
+        byte rNUMBER = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNUMBER);
+        byte rNUMBERS = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNUMBERS);
+        byte rNUTOKEN = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNUTOKEN);
+        byte rNUTOKENS = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNUTOKENS);
+        byte rNOTATION = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rNOTATION);
+        byte rDATA = (byte)(Param.reservedName + (byte)Syntax.ReservedName.rDATA);
+
+        byte[] declaredValues = new byte[]
+        {
+            rCDATA, rENTITY, rENTITIES, rID, rIDREF, rIDREFS,
+            rNAME, rNAMES, rNMTOKEN, rNMTOKENS, rNUMBER, rNUMBERS,
+            rNUTOKEN, rNUTOKENS, rNOTATION, Param.nameTokenGroup, rDATA
+        };
+
+        AllowedParams allowDeclaredValue = new AllowedParams(declaredValues, declaredValues.Length - 1);
+        AllowedParams allowDeclaredValueData = new AllowedParams(declaredValues, declaredValues.Length);
+
+        if (!parseParam(sd().www() ? allowDeclaredValueData : allowDeclaredValue,
+                       declInputLevel, parm))
+            return false;
+
+        const int asDataAttribute = 0x01;
+        const int asLinkAttribute = 0x02;
+        int allowedFlags = asDataAttribute | asLinkAttribute;
+
+        if (parm.type == rCDATA)
+        {
+            declaredValue.operatorAssign(new CdataDeclaredValue());
+        }
+        else if (parm.type == rENTITY)
+        {
+            declaredValue.operatorAssign(new EntityDeclaredValue(false));
+            allowedFlags = asLinkAttribute;
+        }
+        else if (parm.type == rENTITIES)
+        {
+            declaredValue.operatorAssign(new EntityDeclaredValue(true));
+            allowedFlags = asLinkAttribute;
+        }
+        else if (parm.type == rID)
+        {
+            declaredValue.operatorAssign(new IdDeclaredValue());
+            allowedFlags = 0;
+        }
+        else if (parm.type == rIDREF)
+        {
+            declaredValue.operatorAssign(new IdrefDeclaredValue(false));
+            allowedFlags = 0;
+        }
+        else if (parm.type == rIDREFS)
+        {
+            declaredValue.operatorAssign(new IdrefDeclaredValue(true));
+            allowedFlags = 0;
+        }
+        else if (parm.type == rNAME)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.name, false));
+            if (options().warnNameDeclaredValue)
+                message(ParserMessages.nameDeclaredValue);
+        }
+        else if (parm.type == rNAMES)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.name, true));
+            if (options().warnNameDeclaredValue)
+                message(ParserMessages.nameDeclaredValue);
+        }
+        else if (parm.type == rNMTOKEN)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.nameToken, false));
+        }
+        else if (parm.type == rNMTOKENS)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.nameToken, true));
+        }
+        else if (parm.type == rNUMBER)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.number, false));
+            if (options().warnNumberDeclaredValue)
+                message(ParserMessages.numberDeclaredValue);
+        }
+        else if (parm.type == rNUMBERS)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.number, true));
+            if (options().warnNumberDeclaredValue)
+                message(ParserMessages.numberDeclaredValue);
+        }
+        else if (parm.type == rNUTOKEN)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.numberToken, false));
+            if (options().warnNutokenDeclaredValue)
+                message(ParserMessages.nutokenDeclaredValue);
+        }
+        else if (parm.type == rNUTOKENS)
+        {
+            declaredValue.operatorAssign(new TokenizedDeclaredValue(TokenizedDeclaredValue.TokenType.numberToken, true));
+            if (options().warnNutokenDeclaredValue)
+                message(ParserMessages.nutokenDeclaredValue);
+        }
+        else if (parm.type == rNOTATION)
+        {
+            AllowedParams allowNameGroup = new AllowedParams(Param.nameGroup);
+            if (!parseParam(allowNameGroup, declInputLevel, parm))
+                return false;
+            Vector<StringC> group = new Vector<StringC>(parm.nameTokenVector.size());
+            for (nuint i = 0; i < group.size(); i++)
+                parm.nameTokenVector[(int)i].name.swap(group[i]);
+            declaredValue.operatorAssign(new NotationDeclaredValue(group));
+            allowedFlags = 0;
+        }
+        else if (parm.type == Param.nameTokenGroup)
+        {
+            Vector<StringC> group = new Vector<StringC>(parm.nameTokenVector.size());
+            Vector<StringC> origGroup = new Vector<StringC>(parm.nameTokenVector.size());
+            for (nuint i = 0; i < group.size(); i++)
+            {
+                parm.nameTokenVector[(int)i].name.swap(group[i]);
+                parm.nameTokenVector[(int)i].origName.swap(origGroup[i]);
+            }
+            GroupDeclaredValue grpVal = new NameTokenGroupDeclaredValue(group);
+            grpVal.setOrigAllowedValues(origGroup);
+            declaredValue.operatorAssign(grpVal);
+        }
+        else if (parm.type == rDATA)
+        {
+            AllowedParams allowName = new AllowedParams(Param.name);
+            if (!parseParam(allowName, declInputLevel, parm))
+                return false;
+            Ptr<Notation> notation = new Ptr<Notation>(lookupCreateNotation(parm.token).pointer());
+            AllowedParams allowDsoSilent = new AllowedParams(Param.dso, Param.silent);
+            AttributeList attributes = new AttributeList(notation.pointer()!.attributeDef());
+            if (parseParam(allowDsoSilent, declInputLevel, parm)
+                && parm.type == Param.dso)
+            {
+                if (attributes.size() == 0 && !sd().www())
+                    message(ParserMessages.notationNoAttributes,
+                            new StringMessageArg(notation.pointer()!.name()));
+                Boolean netEnabling;
+                Ptr<AttributeDefinitionList> newAttDef = new Ptr<AttributeDefinitionList>();
+                if (!parseAttributeSpec(Mode.asMode, attributes, out netEnabling, newAttDef))
+                    return false;
+                if (!newAttDef.isNull())
+                {
+                    newAttDef.pointer()!.setIndex(defDtd().allocAttributeDefinitionListIndex());
+                    notation.pointer()!.setAttributeDef(newAttDef);
+                }
+                if (attributes.nSpec() == 0)
+                    message(ParserMessages.emptyDataAttributeSpec);
+            }
+            else
+            {
+                attributes.finish(this);
+                // unget the first token of the default value
+                currentInput()!.ungetToken();
+            }
+            ConstPtr<Notation> nt = new ConstPtr<Notation>(notation.pointer());
+            declaredValue.operatorAssign(new DataDeclaredValue(nt, attributes));
+        }
+        else
+        {
+            // CANNOT_HAPPEN()
+            throw new InvalidOperationException("Unexpected parameter type in parseDeclaredValue");
+        }
+
+        if (isNotation)
+        {
+            if ((allowedFlags & asDataAttribute) == 0)
+                message(ParserMessages.dataAttributeDeclaredValue);
+        }
+        else if (haveDefLpd() && !isNotation && (allowedFlags & asLinkAttribute) == 0)
+            message(ParserMessages.linkAttributeDeclaredValue);
+
+        return true;
+    }
+
+    // Boolean parseDefaultValue(unsigned declInputLevel, Boolean isNotation, Param &parm,
+    //                           const StringC &attributeName, Owner<DeclaredValue> &declaredValue,
+    //                           Owner<AttributeDefinition> &def, Boolean &anyCurrent);
+    protected Boolean parseDefaultValue(uint declInputLevel, Boolean isNotation, Param parm,
+                                         StringC attributeName, Owner<DeclaredValue> declaredValue,
+                                         Owner<AttributeDefinition> def, ref Boolean anyCurrent)
+    {
+        byte indFIXED = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rFIXED);
+        byte indREQUIRED = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rREQUIRED);
+        byte indCURRENT = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rCURRENT);
+        byte indCONREF = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rCONREF);
+        byte indIMPLIED = (byte)(Param.indicatedReservedName + (byte)Syntax.ReservedName.rIMPLIED);
+
+        AllowedParams allowDefaultValue = new AllowedParams(indFIXED, indREQUIRED, indCURRENT,
+                                                             indCONREF, indIMPLIED,
+                                                             Param.attributeValue, Param.attributeValueLiteral);
+        AllowedParams allowTokenDefaultValue = new AllowedParams(indFIXED, indREQUIRED, indCURRENT,
+                                                                  indCONREF, indIMPLIED,
+                                                                  Param.attributeValue, Param.tokenizedAttributeValueLiteral);
+
+        if (!parseParam(declaredValue.pointer()!.tokenized() ? allowTokenDefaultValue : allowDefaultValue,
+                       declInputLevel, parm))
+            return false;
+
+        if (parm.type == indFIXED)
+        {
+            AllowedParams allowValue = new AllowedParams(Param.attributeValue, Param.attributeValueLiteral);
+            AllowedParams allowTokenValue = new AllowedParams(Param.attributeValue, Param.tokenizedAttributeValueLiteral);
+            if (!parseParam(declaredValue.pointer()!.tokenized() ? allowTokenValue : allowValue,
+                           declInputLevel, parm))
+                return false;
+            uint specLength = 0;
+            AttributeValue? value = declaredValue.pointer()!.makeValue(parm.literalText, this,
+                                                                        attributeName, ref specLength);
+            if (declaredValue.pointer()!.isId())
+                message(ParserMessages.idDeclaredValue);
+            def.operatorAssign(new FixedAttributeDefinition(attributeName, declaredValue.extract(), value));
+        }
+        else if (parm.type == Param.attributeValue)
+        {
+            if (options().warnAttributeValueNotLiteral)
+                message(ParserMessages.attributeValueNotLiteral);
+            // fall through to common handling with attributeValueLiteral
+            uint specLength = 0;
+            AttributeValue? value = declaredValue.pointer()!.makeValue(parm.literalText, this,
+                                                                        attributeName, ref specLength);
+            if (declaredValue.pointer()!.isId())
+                message(ParserMessages.idDeclaredValue);
+            def.operatorAssign(new DefaultAttributeDefinition(attributeName, declaredValue.extract(), value));
+        }
+        else if (parm.type == Param.attributeValueLiteral || parm.type == Param.tokenizedAttributeValueLiteral)
+        {
+            uint specLength = 0;
+            AttributeValue? value = declaredValue.pointer()!.makeValue(parm.literalText, this,
+                                                                        attributeName, ref specLength);
+            if (declaredValue.pointer()!.isId())
+                message(ParserMessages.idDeclaredValue);
+            def.operatorAssign(new DefaultAttributeDefinition(attributeName, declaredValue.extract(), value));
+        }
+        else if (parm.type == indREQUIRED)
+        {
+            def.operatorAssign(new RequiredAttributeDefinition(attributeName, declaredValue.extract()));
+        }
+        else if (parm.type == indCURRENT)
+        {
+            anyCurrent = true;
+            if (declaredValue.pointer()!.isId())
+                message(ParserMessages.idDeclaredValue);
+            def.operatorAssign(new CurrentAttributeDefinition(attributeName, declaredValue.extract(),
+                                                               defDtd().allocCurrentAttributeIndex()));
+            if (isNotation)
+                message(ParserMessages.dataAttributeDefaultValue);
+            else if (haveDefLpd())
+                message(ParserMessages.linkAttributeDefaultValue);
+            else if (options().warnCurrent)
+                message(ParserMessages.currentAttribute);
+        }
+        else if (parm.type == indCONREF)
+        {
+            if (declaredValue.pointer()!.isId())
+                message(ParserMessages.idDeclaredValue);
+            if (declaredValue.pointer()!.isNotation())
+                message(ParserMessages.notationConref);
+            def.operatorAssign(new ConrefAttributeDefinition(attributeName, declaredValue.extract()));
+            if (isNotation)
+                message(ParserMessages.dataAttributeDefaultValue);
+            else if (haveDefLpd())
+                message(ParserMessages.linkAttributeDefaultValue);
+            else if (options().warnConref)
+                message(ParserMessages.conrefAttribute);
+        }
+        else if (parm.type == indIMPLIED)
+        {
+            def.operatorAssign(new ImpliedAttributeDefinition(attributeName, declaredValue.extract()));
+        }
+        else
+        {
+            // CANNOT_HAPPEN()
+            throw new InvalidOperationException("Unexpected parameter type in parseDefaultValue");
+        }
+        return true;
+    }
 
     // Boolean parseNotationDecl();
     protected virtual Boolean parseNotationDecl()

@@ -592,4 +592,60 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 92, "duplicate declaration of parameter entity %1");
     public static readonly MessageType1 defaultedEntityDefined = new MessageType1(
         MessageType.Severity.warning, null, 334, "earlier reference to entity %1 used default entity");
+
+    // parseAttlistDecl messages
+    public static readonly MessageType1 duplicateAttributeDef = new MessageType1(
+        MessageType.Severity.warning, null, 120, "duplicate definition of attribute %1");
+    public static readonly MessageType1 multipleIdAttributes = new MessageType1(
+        MessageType.Severity.error, null, 238, "the attribute definition list already declared attribute %1 as the ID attribute");
+    public static readonly MessageType1 multipleNotationAttributes = new MessageType1(
+        MessageType.Severity.error, null, 239, "the attribute definition list already declared attribute %1 as the NOTATION attribute");
+    public static readonly MessageType1 duplicateAttributeToken = new MessageType1(
+        MessageType.Severity.error, null, 240, "token %1 occurs more than once in attribute definition list");
+    public static readonly MessageType0 simpleLinkFixedAttribute = new MessageType0(
+        MessageType.Severity.error, null, 290, "only fixed attributes can be defined in simple LPD");
+    public static readonly MessageType2 attcnt = new MessageType2(
+        MessageType.Severity.quantityError, null, 236, "number of attribute names and name tokens (%1) exceeds ATTCNT (%2)");
+    public static readonly MessageType1 duplicateAttlistElement = new MessageType1(
+        MessageType.Severity.error, null, 67, "duplicate attribute definition list for element %1");
+    public static readonly MessageType1 simpleLinkAttlistElement = new MessageType1(
+        MessageType.Severity.error, null, 285, "attributes can only be defined for base document element (not %1) in simple link declaration subset");
+    public static readonly MessageType1 duplicateAttlistNotation = new MessageType1(
+        MessageType.Severity.error, null, 66, "duplicate attribute definition list for notation %1");
+    public static readonly MessageType0 missingAfdrDecl = new MessageType0(
+        MessageType.Severity.error, null, 348, "AFDR declaration required before use of AFDR extensions");
+    public static readonly MessageType1 specifiedAttributeRedeclared = new MessageType1(
+        MessageType.Severity.error, null, 445, "attribute %1 can't be redeclared");
+    public static readonly MessageType0 dataAttributes = new MessageType0(
+        MessageType.Severity.warning, null, 379, "attribute definition list declaration for notation");
+    public static readonly MessageType0 attlistGroupDecl = new MessageType0(
+        MessageType.Severity.warning, null, 388, "attribute definition list declaration for group of element types");
+
+    // parseDeclaredValue messages
+    public static readonly MessageType0 nameDeclaredValue = new MessageType0(
+        MessageType.Severity.warning, null, 365, "NAME or NAMES declared value");
+    public static readonly MessageType0 numberDeclaredValue = new MessageType0(
+        MessageType.Severity.warning, null, 364, "NUMBER or NUMBERS declared value");
+    public static readonly MessageType0 nutokenDeclaredValue = new MessageType0(
+        MessageType.Severity.warning, null, 366, "NUTOKEN or NUTOKENS declared value");
+    public static readonly MessageType0 dataAttributeDeclaredValue = new MessageType0(
+        MessageType.Severity.error, null, 234, "declared value of data attribute cannot be ENTITY, ENTITIES, ID, IDREF, IDREFS or NOTATION");
+    public static readonly MessageType0 linkAttributeDeclaredValue = new MessageType0(
+        MessageType.Severity.error, null, 289, "declared value of link attribute cannot be ID, IDREF, IDREFS or NOTATION");
+
+    // parseDefaultValue messages
+    public static readonly MessageType0 idDeclaredValue = new MessageType0(
+        MessageType.Severity.error, null, 237, "if the declared value is ID the default value must be IMPLIED or REQUIRED");
+    public static readonly MessageType0 attributeValueNotLiteral = new MessageType0(
+        MessageType.Severity.warning, null, 385, "attribute value not a literal");
+    public static readonly MessageType0 dataAttributeDefaultValue = new MessageType0(
+        MessageType.Severity.error, null, 235, "default value of data attribute cannot be CONREF or CURRENT");
+    public static readonly MessageType0 linkAttributeDefaultValue = new MessageType0(
+        MessageType.Severity.error, null, 288, "default value of link attribute cannot be CURRENT or CONREF");
+    public static readonly MessageType0 currentAttribute = new MessageType0(
+        MessageType.Severity.warning, null, 368, "CURRENT attribute");
+    public static readonly MessageType0 notationConref = new MessageType0(
+        MessageType.Severity.warning, null, 450, "if the declared value is NOTATION a default value of CONREF is useless");
+    public static readonly MessageType0 conrefAttribute = new MessageType0(
+        MessageType.Severity.warning, null, 367, "CONREF attribute");
 }
