@@ -1034,15 +1034,527 @@ public class Parser : ParserState
     protected virtual Boolean parseSystemIdentifier(Boolean lita, Text text) { throw new NotImplementedException(); }
     protected virtual Boolean parseParameterLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
     protected virtual Boolean parseDataTagParameterLiteral(Boolean lita, Text text) { throw new NotImplementedException(); }
-    protected virtual Boolean parseLiteral(Mode litMode, Mode liteMode, nuint maxLength,
-                                            MessageType1 tooLongMessage, uint flags, Text text) { throw new NotImplementedException(); }
+    // Boolean parseLiteral(Mode litMode, Mode liteMode, size_t maxLength,
+    //                       const MessageType1 &tooLongMessage, unsigned flags, Text &text);
+    protected Boolean parseLiteral(Mode litMode, Mode liteMode, nuint maxLength,
+                                   MessageType1 tooLongMessage, uint flags, Text text)
+    {
+        uint startLevel = inputLevel();
+        Mode currentMode = litMode;
+        // If the literal gets to be longer than this, then we assume
+        // that the closing delimiter has been omitted if we're at the end
+        // of a line and at the starting input level.
+        nuint reallyMaxLength = (maxLength > nuint.MaxValue / 2
+                                 ? nuint.MaxValue
+                                 : maxLength * 2);
+        text.clear();
+        Location startLoc = currentLocation();
+        if ((flags & literalDelimInfo) != 0)
+            text.addStartDelim(currentLocation());
+        for (;;)
+        {
+            Token token = getToken(currentMode);
+            switch (token)
+            {
+                case Tokens.tokenEe:
+                    if (inputLevel() == startLevel)
+                    {
+                        message(ParserMessages.literalLevel);
+                        return false;
+                    }
+                    text.addEntityEnd(currentLocation());
+                    popInputStack();
+                    if (inputLevel() == startLevel)
+                        currentMode = litMode;
+                    break;
+                case Tokens.tokenUnrecognized:
+                    if (reportNonSgmlCharacter())
+                        break;
+                    message(ParserMessages.literalMinimumData,
+                            new StringMessageArg(currentToken()));
+                    break;
+                case Tokens.tokenRs:
+                    text.ignoreChar(currentChar(), currentLocation());
+                    break;
+                case Tokens.tokenRe:
+                    if (text.size() > reallyMaxLength && inputLevel() == startLevel)
+                    {
+                        // guess that the closing delimiter has been omitted
+                        setNextLocation(startLoc);
+                        message(ParserMessages.literalClosingDelimiter);
+                        return false;
+                    }
+                    goto case Tokens.tokenSepchar;
+                case Tokens.tokenSepchar:
+                    if ((flags & literalSingleSpace) != 0
+                        && (text.size() == 0 || text.lastChar() == syntax().space()))
+                        text.ignoreChar(currentChar(), currentLocation());
+                    else
+                        text.addChar(syntax().space(),
+                                     new Location(new ReplacementOrigin(currentLocation(),
+                                                                        currentChar()),
+                                                  0));
+                    break;
+                case Tokens.tokenSpace:
+                    if ((flags & literalSingleSpace) != 0
+                        && (text.size() == 0 || text.lastChar() == syntax().space()))
+                        text.ignoreChar(currentChar(), currentLocation());
+                    else
+                        text.addChar(currentChar(), currentLocation());
+                    break;
+                case Tokens.tokenCroDigit:
+                case Tokens.tokenHcroHexDigit:
+                    {
+                        Char c = 0;
+                        Location loc = new Location();
+                        if (!parseNumericCharRef(token == Tokens.tokenHcroHexDigit, ref c, ref loc))
+                            return false;
+                        Boolean isSgmlChar = false;
+                        if (!translateNumericCharRef(ref c, ref isSgmlChar))
+                            break;
+                        if (!isSgmlChar)
+                        {
+                            if ((flags & literalNonSgml) != 0)
+                                text.addNonSgmlChar(c, loc);
+                            else
+                                message(ParserMessages.numericCharRefLiteralNonSgml,
+                                        new NumberMessageArg(c));
+                            break;
+                        }
+                        if ((flags & literalDataTag) != 0)
+                        {
+                            if (!syntax().isSgmlChar((Xchar)c))
+                                message(ParserMessages.dataTagPatternNonSgml);
+                            else if (syntax().charSet((int)Syntax.Set.functionChar)!.contains(c))
+                                message(ParserMessages.dataTagPatternFunction);
+                        }
+                        if ((flags & literalSingleSpace) != 0
+                            && c == syntax().space()
+                            && (text.size() == 0 || text.lastChar() == syntax().space()))
+                            text.ignoreChar(c, loc);
+                        else
+                            text.addChar(c, loc);
+                    }
+                    break;
+                case Tokens.tokenCroNameStart:
+                    if (!parseNamedCharRef())
+                        return false;
+                    break;
+                case Tokens.tokenEroGrpo:
+                    message(inInstance() ? ParserMessages.eroGrpoStartTag : ParserMessages.eroGrpoProlog);
+                    break;
+                case Tokens.tokenLit:
+                case Tokens.tokenLita:
+                    if ((flags & literalDelimInfo) != 0)
+                        text.addEndDelim(currentLocation(), token == Tokens.tokenLita);
+                    goto done;
+                case Tokens.tokenPeroNameStart:
+                    if (options().warnInternalSubsetLiteralParamEntityRef
+                        && inputLevel() == 1)
+                        message(ParserMessages.internalSubsetLiteralParamEntityRef);
+                    goto case Tokens.tokenEroNameStart;
+                case Tokens.tokenEroNameStart:
+                    {
+                        ConstPtr<Entity> entity = new ConstPtr<Entity>();
+                        Ptr<EntityOrigin> origin = new Ptr<EntityOrigin>();
+                        if (!parseEntityReference(token == Tokens.tokenPeroNameStart,
+                                                  (flags & literalNoProcess) != 0 ? 2 : 0,
+                                                  entity, origin))
+                            return false;
+                        if (!entity.isNull())
+                            entity.pointer()!.litReference(text, this, origin,
+                                                          (flags & literalSingleSpace) != 0);
+                        if (inputLevel() > startLevel)
+                            currentMode = liteMode;
+                    }
+                    break;
+                case Tokens.tokenPeroGrpo:
+                    message(ParserMessages.peroGrpoProlog);
+                    break;
+                case Tokens.tokenCharDelim:
+                    message(ParserMessages.dataCharDelim,
+                            new StringMessageArg(new StringC(currentInput()!.currentTokenStart(),
+                                                             currentInput()!.currentTokenLength())));
+                    goto case Tokens.tokenChar;
+                case Tokens.tokenChar:
+                    if (text.size() > reallyMaxLength && inputLevel() == startLevel
+                        && currentChar() == syntax().standardFunction((int)Syntax.StandardFunction.fRE))
+                    {
+                        // guess that the closing delimiter has been omitted
+                        setNextLocation(startLoc);
+                        message(ParserMessages.literalClosingDelimiter);
+                        return false;
+                    }
+                    text.addChar(currentChar(), currentLocation());
+                    break;
+            }
+        }
+    done:
+        if ((flags & literalSingleSpace) != 0
+            && text.size() > 0
+            && text.lastChar() == syntax().space())
+            text.ignoreLastChar();
+        if (text.size() > maxLength)
+        {
+            switch (litMode)
+            {
+                case Mode.alitMode:
+                case Mode.alitaMode:
+                case Mode.talitMode:
+                case Mode.talitaMode:
+                    if (AttributeValue.handleAsUnterminated(text, this))
+                        return false;
+                    break;
+                default:
+                    break;
+            }
+            message(tooLongMessage, new NumberMessageArg(maxLength));
+        }
+        return true;
+    }
 
-    // Character reference parsing stubs - to be implemented
-    protected virtual Boolean parseNumericCharRef(Boolean isHex, ref Char ch, ref Location loc) { throw new NotImplementedException(); }
-    protected virtual Boolean translateNumericCharRef(ref Char ch, ref Boolean isSgmlChar) { throw new NotImplementedException(); }
-    protected virtual Boolean parseNamedCharRef() { throw new NotImplementedException(); }
-    protected virtual Boolean parseEntityReference(Boolean isParameter, int ignoreLevel,
-                                                   ConstPtr<Entity> entity, Ptr<EntityOrigin> origin) { throw new NotImplementedException(); }
+    // Boolean parseNumericCharRef(Boolean isHex, Char &ch, Location &loc);
+    protected Boolean parseNumericCharRef(Boolean isHex, ref Char ch, ref Location loc)
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return false;
+        Location startLocation = currentLocation();
+        ins.discardInitial();
+        Boolean valid = true;
+        Char c = 0;
+        if (isHex)
+        {
+            extendHexNumber();
+            Char[]? lim = ins.currentTokenEnd();
+            Char[]? start = ins.currentTokenStart();
+            if (start != null && lim != null)
+            {
+                nuint startIdx = 0;
+                nuint limIdx = ins.currentTokenLength();
+                for (nuint p = startIdx; p < limIdx; p++)
+                {
+                    int val = sd().hexDigitWeight(start[p]);
+                    if (c <= Constant.charMax / 16 && (c *= 16) <= Constant.charMax - (uint)val)
+                        c += (uint)val;
+                    else
+                    {
+                        message(ParserMessages.characterNumber, new StringMessageArg(currentToken()));
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+        }
+        else
+        {
+            extendNumber(syntax().namelen(), ParserMessages.numberLength);
+            Char[]? lim = ins.currentTokenEnd();
+            Char[]? start = ins.currentTokenStart();
+            if (start != null && lim != null)
+            {
+                nuint startIdx = 0;
+                nuint limIdx = ins.currentTokenLength();
+                for (nuint p = startIdx; p < limIdx; p++)
+                {
+                    int val = sd().digitWeight(start[p]);
+                    if (c <= Constant.charMax / 10 && (c *= 10) <= Constant.charMax - (uint)val)
+                        c += (uint)val;
+                    else
+                    {
+                        message(ParserMessages.characterNumber, new StringMessageArg(currentToken()));
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+        }
+        if (valid && !sd().docCharsetDecl().charDeclared(c))
+        {
+            valid = false;
+            message(ParserMessages.characterNumber, new StringMessageArg(currentToken()));
+        }
+        Owner<Markup> markupPtr = new Owner<Markup>();
+        if (wantMarkup())
+        {
+            markupPtr = new Owner<Markup>(new Markup());
+            markupPtr.pointer()!.addDelim(isHex ? Syntax.DelimGeneral.dHCRO : Syntax.DelimGeneral.dCRO);
+            markupPtr.pointer()!.addNumber(ins);
+            switch (getToken(Mode.refMode))
+            {
+                case Tokens.tokenRefc:
+                    markupPtr.pointer()!.addDelim(Syntax.DelimGeneral.dREFC);
+                    break;
+                case Tokens.tokenRe:
+                    markupPtr.pointer()!.addRefEndRe();
+                    if (options().warnRefc)
+                        message(ParserMessages.refc);
+                    break;
+                default:
+                    if (options().warnRefc)
+                        message(ParserMessages.refc);
+                    break;
+            }
+        }
+        else if (options().warnRefc)
+        {
+            if (getToken(Mode.refMode) != Tokens.tokenRefc)
+                message(ParserMessages.refc);
+        }
+        else
+            getToken(Mode.refMode);
+        if (valid)
+        {
+            ch = c;
+            loc = new Location(new NumericCharRefOrigin(startLocation,
+                                                        currentLocation().index()
+                                                        + (Index)ins.currentTokenLength()
+                                                        - startLocation.index(),
+                                                        markupPtr),
+                               0);
+        }
+        return valid;
+    }
+    // Boolean translateNumericCharRef(Char &ch, Boolean &isSgmlChar);
+    // Translate a character number in the document character set
+    // into the internal character set.
+    // If it's a non-SGML char (ie described as UNUSED in SGML declaration),
+    // return true and set isSgmlChar to false.
+    protected Boolean translateNumericCharRef(ref Char ch, ref Boolean isSgmlChar)
+    {
+        if (sd().internalCharsetIsDocCharset())
+        {
+            if (options().warnNonSgmlCharRef && !syntax().isSgmlChar((Xchar)ch))
+                message(ParserMessages.nonSgmlCharRef);
+            isSgmlChar = true;
+            return true;
+        }
+        UnivChar univChar;
+        if (!sd().docCharset().descToUniv(ch, out univChar))
+        {
+            PublicId? pubid;
+            CharsetDeclRange.Type type;
+            Number n;
+            StringC desc = new StringC();
+            if (sd().docCharsetDecl().getCharInfo(ch, out pubid, out type, out n, desc))
+            {
+                if (type == CharsetDeclRange.Type.unused)
+                {
+                    if (options().warnNonSgmlCharRef)
+                        message(ParserMessages.nonSgmlCharRef);
+                    isSgmlChar = false;
+                    return true;
+                }
+            }
+            else
+            {
+                // CANNOT_HAPPEN();
+            }
+            if (type == CharsetDeclRange.Type.@string)
+                message(ParserMessages.numericCharRefUnknownDesc,
+                        new NumberMessageArg(ch),
+                        new StringMessageArg(desc));
+            else
+                message(ParserMessages.numericCharRefUnknownBase,
+                        new NumberMessageArg(ch),
+                        new NumberMessageArg(n),
+                        new StringMessageArg(pubid?.@string() ?? new StringC()));
+        }
+        else
+        {
+            WideChar resultChar;
+            ISet<WideChar> resultChars = new ISet<WideChar>();
+            switch (sd().internalCharset().univToDesc(univChar,
+                                                      out resultChar,
+                                                      resultChars))
+            {
+                case 1:
+                    if (resultChar <= Constant.charMax)
+                    {
+                        isSgmlChar = true;
+                        ch = (Char)resultChar;
+                        return true;
+                    }
+                    goto case 2;
+                case 2:
+                    message(ParserMessages.numericCharRefBadInternal,
+                            new NumberMessageArg(ch));
+                    break;
+                default:
+                    message(ParserMessages.numericCharRefNoInternal,
+                            new NumberMessageArg(ch));
+                    break;
+            }
+        }
+        return false;
+    }
+    // Boolean parseNamedCharRef();
+    protected Boolean parseNamedCharRef()
+    {
+        if (options().warnNamedCharRef)
+            message(ParserMessages.namedCharRef);
+        InputSource? ins = currentInput();
+        if (ins == null) return false;
+        Index startIndex = currentLocation().index();
+        ins.discardInitial();
+        extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        Char c = 0;
+        Boolean valid;
+        StringC name = new StringC();
+        getCurrentToken(syntax().generalSubstTable(), name);
+        if (!syntax().lookupFunctionChar(name, out c))
+        {
+            message(ParserMessages.functionName, new StringMessageArg(name));
+            valid = false;
+        }
+        else
+        {
+            valid = true;
+            if (wantMarkup())
+                getCurrentToken(name);  // the original name
+        }
+        NamedCharRef.RefEndType refEndType;
+        switch (getToken(Mode.refMode))
+        {
+            case Tokens.tokenRefc:
+                refEndType = NamedCharRef.RefEndType.endRefc;
+                break;
+            case Tokens.tokenRe:
+                refEndType = NamedCharRef.RefEndType.endRE;
+                if (options().warnRefc)
+                    message(ParserMessages.refc);
+                break;
+            default:
+                refEndType = NamedCharRef.RefEndType.endOmitted;
+                if (options().warnRefc)
+                    message(ParserMessages.refc);
+                break;
+        }
+        ins.startToken();
+        if (valid)
+            ins.pushCharRef(c, new NamedCharRef(startIndex, refEndType, name));
+        return true;
+    }
+    // Boolean parseEntityReference(Boolean isParameter, int ignoreLevel,
+    //                               ConstPtr<Entity> &entity, Ptr<EntityOrigin> &origin);
+    // ignoreLevel: 0 means don't ignore;
+    // 1 means parse name group and ignore if inactive
+    // 2 means ignore
+    protected Boolean parseEntityReference(Boolean isParameter, int ignoreLevel,
+                                           ConstPtr<Entity> entity, Ptr<EntityOrigin> origin)
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return false;
+        Location startLocation = ins.currentLocation();
+        Owner<Markup> markupPtr = new Owner<Markup>();
+        if (wantMarkup())
+        {
+            markupPtr = new Owner<Markup>(new Markup());
+            markupPtr.pointer()!.addDelim(isParameter ? Syntax.DelimGeneral.dPERO : Syntax.DelimGeneral.dERO);
+        }
+        if (ignoreLevel == 1)
+        {
+            Markup savedMarkup = new Markup();
+            Markup? savedCurrentMarkup = currentMarkup();
+            if (savedCurrentMarkup != null)
+                savedCurrentMarkup.swap(savedMarkup);
+            Location savedMarkupLocation = markupLocation();
+            startMarkup(markupPtr.pointer() != null, startLocation);
+            if (markupPtr.pointer() != null)
+            {
+                markupPtr.pointer()!.addDelim(Syntax.DelimGeneral.dGRPO);
+                markupPtr.pointer()!.swap(currentMarkup()!);
+            }
+            Boolean ignore = false;
+            if (!parseEntityReferenceNameGroup(ref ignore))
+                return false;
+            if (markupPtr.pointer() != null)
+                currentMarkup()!.swap(markupPtr.pointer()!);
+            startMarkup(savedCurrentMarkup != null, savedMarkupLocation);
+            if (savedCurrentMarkup != null)
+                savedMarkup.swap(currentMarkup()!);
+            if (!ignore)
+                ignoreLevel = 0;
+            ins.startToken();
+            Xchar c = ins.tokenChar(messenger());
+            if (!syntax().isNameStartCharacter(c))
+            {
+                message(ParserMessages.entityReferenceMissingName);
+                return false;
+            }
+        }
+        ins.discardInitial();
+        if (isParameter)
+            extendNameToken(syntax().penamelen(), ParserMessages.parameterEntityNameLength);
+        else
+            extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        StringC name = nameBuffer();
+        getCurrentToken(syntax().entitySubstTable(), name);
+        if (ignoreLevel != 0)
+            entity.operatorAssign(new IgnoredEntity(name,
+                                                    isParameter
+                                                    ? Entity.DeclType.parameterEntity
+                                                    : Entity.DeclType.generalEntity));
+        else
+        {
+            entity.operatorAssign(lookupEntity(isParameter, name, startLocation, true));
+            if (entity.isNull())
+            {
+                if (haveApplicableDtd())
+                {
+                    if (!isParameter)
+                    {
+                        entity.operatorAssign(createUndefinedEntity(name, startLocation));
+                        if (!sd().implydefEntity())
+                            message(ParserMessages.entityUndefined, new StringMessageArg(name));
+                    }
+                    else
+                        message(ParserMessages.parameterEntityUndefined,
+                                new StringMessageArg(name));
+                }
+                else
+                    message(ParserMessages.entityApplicableDtd);
+            }
+            else if (entity.pointer()!.defaulted() && options().warnDefaultEntityReference)
+                message(ParserMessages.defaultEntityReference, new StringMessageArg(name));
+        }
+        if (markupPtr.pointer() != null)
+        {
+            markupPtr.pointer()!.addName(ins);
+            switch (getToken(Mode.refMode))
+            {
+                case Tokens.tokenRefc:
+                    markupPtr.pointer()!.addDelim(Syntax.DelimGeneral.dREFC);
+                    break;
+                case Tokens.tokenRe:
+                    markupPtr.pointer()!.addRefEndRe();
+                    if (options().warnRefc)
+                        message(ParserMessages.refc);
+                    break;
+                default:
+                    if (options().warnRefc)
+                        message(ParserMessages.refc);
+                    break;
+            }
+        }
+        else if (options().warnRefc)
+        {
+            if (getToken(Mode.refMode) != Tokens.tokenRefc)
+                message(ParserMessages.refc);
+        }
+        else
+            getToken(Mode.refMode);
+        if (!entity.isNull())
+            origin.operatorAssign(EntityOrigin.make(internalAllocator(),
+                                                    entity,
+                                                    startLocation,
+                                                    currentLocation().index()
+                                                    + (Index)ins.currentTokenLength()
+                                                    - startLocation.index(),
+                                                    markupPtr));
+        else
+            origin.clear();
+        return true;
+    }
     protected virtual Boolean parseEntityReferenceNameGroup(ref Boolean ignore) { throw new NotImplementedException(); }
 
     // From parseInstance.cxx
