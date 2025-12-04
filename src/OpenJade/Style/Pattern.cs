@@ -113,17 +113,50 @@ public class Pattern
 
     private static bool matchAncestors1(System.Collections.Generic.List<Element> ancestors, NodePtr node, MatchContext context, int index)
     {
-        throw new NotImplementedException();
+        Element r = ancestors[index];
+        NodePtr tem = new NodePtr(node);
+        // Match minimum required repetitions
+        for (uint i = 0; i < r.minRepeat(); i++)
+        {
+            if (!tem || !r.matches(tem, context))
+                return false;
+            NodePtr parent = new NodePtr();
+            if (tem.node!.getParent(ref parent) != AccessResult.accessOK)
+                tem.clear();
+            else
+                tem.assign(parent);
+        }
+        // Try to match rest of pattern
+        uint count = r.minRepeat();
+        for (;;)
+        {
+            int nextIndex = index + 1;
+            if (nextIndex >= ancestors.Count)
+                return true; // All ancestors matched
+            if (matchAncestors1(ancestors, tem, context, nextIndex))
+                return true;
+            // Try matching more repetitions if allowed
+            if (count >= r.maxRepeat())
+                return false;
+            if (!tem || !r.matches(tem, context))
+                return false;
+            NodePtr parent = new NodePtr();
+            if (tem.node!.getParent(ref parent) != AccessResult.accessOK)
+                tem.clear();
+            else
+                tem.assign(parent);
+            count++;
+        }
     }
 
     // Match context for pattern matching
     public class MatchContext : SdataMapper
     {
-        protected List<StringC> classAttributeNames_ = new List<StringC>();
-        protected List<StringC> idAttributeNames_ = new List<StringC>();
+        protected System.Collections.Generic.List<StringC> classAttributeNames_ = new System.Collections.Generic.List<StringC>();
+        protected System.Collections.Generic.List<StringC> idAttributeNames_ = new System.Collections.Generic.List<StringC>();
 
-        public List<StringC> classAttributeNames() { return classAttributeNames_; }
-        public List<StringC> idAttributeNames() { return idAttributeNames_; }
+        public System.Collections.Generic.List<StringC> classAttributeNames() { return classAttributeNames_; }
+        public System.Collections.Generic.List<StringC> idAttributeNames() { return idAttributeNames_; }
     }
 
     // Base class for pattern qualifiers
@@ -135,7 +168,28 @@ public class Pattern
 
         protected static bool matchAttribute(StringC name, StringC value, NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            NamedNodeListPtr atts = new NamedNodeListPtr();
+            if (nd.node!.getAttributes(ref atts) != AccessResult.accessOK)
+                return false;
+            NodePtr att = new NodePtr();
+            if (atts.list!.namedNode(new GroveString(name.data(), name.size()), ref att) != AccessResult.accessOK)
+                return false;
+            if (att.node!.getImplied(out bool implied) == AccessResult.accessOK && implied)
+                return false;
+            GroveString tokens = new GroveString();
+            if (att.node!.tokens(ref tokens) == AccessResult.accessOK)
+            {
+                if (tokens.size() != value.size())
+                    return false;
+                // Compare token values
+                for (nuint i = 0; i < tokens.size(); i++)
+                {
+                    if (tokens.data()![i] != value.data()![i])
+                        return false;
+                }
+                return true;
+            }
+            return false;
         }
     }
 
@@ -151,7 +205,13 @@ public class Pattern
 
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            var idAtts = context.idAttributeNames();
+            foreach (var idAtt in idAtts)
+            {
+                if (matchAttribute(idAtt, id_, nd, context))
+                    return true;
+            }
+            return false;
         }
 
         public override void contributeSpecificity(int[] spec)
@@ -172,7 +232,13 @@ public class Pattern
 
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            var classAtts = context.classAttributeNames();
+            foreach (var classAtt in classAtts)
+            {
+                if (matchAttribute(classAtt, class_, nd, context))
+                    return true;
+            }
+            return false;
         }
 
         public override void contributeSpecificity(int[] spec)
@@ -193,7 +259,15 @@ public class Pattern
 
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            NamedNodeListPtr atts = new NamedNodeListPtr();
+            if (nd.node!.getAttributes(ref atts) != AccessResult.accessOK)
+                return false;
+            NodePtr att = new NodePtr();
+            if (atts.list!.namedNode(new GroveString(name_.data(), name_.size()), ref att) != AccessResult.accessOK)
+                return false;
+            if (att.node!.getImplied(out bool implied) == AccessResult.accessOK && implied)
+                return false;
+            return true;
         }
 
         public override void contributeSpecificity(int[] spec)
@@ -214,7 +288,15 @@ public class Pattern
 
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            NamedNodeListPtr atts = new NamedNodeListPtr();
+            if (nd.node!.getAttributes(ref atts) != AccessResult.accessOK)
+                return true; // No attributes = missing
+            NodePtr att = new NodePtr();
+            if (atts.list!.namedNode(new GroveString(name_.data(), name_.size()), ref att) != AccessResult.accessOK)
+                return true; // Attribute not found = missing
+            if (att.node!.getImplied(out bool implied2) == AccessResult.accessOK && implied2)
+                return true; // Implied = missing
+            return false;
         }
 
         public override void contributeSpecificity(int[] spec)
@@ -260,7 +342,25 @@ public class Pattern
     {
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            GroveString ndType = new GroveString();
+            nd.getGi(ndType);
+            NodePtr tem = new NodePtr();
+            if (nd.node!.firstSibling(ref tem) != AccessResult.accessOK)
+                return true; // Must be document element
+            while (tem.node != nd.node)
+            {
+                GroveString temType = new GroveString();
+                if (tem.getGi(temType) == AccessResult.accessOK)
+                {
+                    if (temType.size() == ndType.size() && sameString(temType, ndType))
+                        return false;
+                }
+                NodePtr next = new NodePtr();
+                if (tem.node!.nextSibling(ref next) != AccessResult.accessOK)
+                    break;
+                tem.assign(next);
+            }
+            return true;
         }
     }
 
@@ -269,7 +369,25 @@ public class Pattern
     {
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            GroveString ndType = new GroveString();
+            nd.getGi(ndType);
+            NodePtr tem = new NodePtr();
+            if (nd.node!.nextSibling(ref tem) != AccessResult.accessOK)
+                return true; // No next sibling = last
+            do
+            {
+                GroveString temType = new GroveString();
+                if (tem.getGi(temType) == AccessResult.accessOK)
+                {
+                    if (temType.size() == ndType.size() && sameString(temType, ndType))
+                        return false;
+                }
+                NodePtr next = new NodePtr();
+                if (tem.node!.nextSibling(ref next) != AccessResult.accessOK)
+                    break;
+                tem.assign(next);
+            } while (true);
+            return true;
         }
     }
 
@@ -278,7 +396,10 @@ public class Pattern
     {
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            NodePtr tem = new NodePtr();
+            if (nd.node!.firstSibling(ref tem) != AccessResult.accessOK)
+                return true;
+            return tem.node == nd.node;
         }
     }
 
@@ -287,8 +408,21 @@ public class Pattern
     {
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            NodePtr tem = new NodePtr();
+            return nd.node!.nextSibling(ref tem) != AccessResult.accessOK;
         }
+    }
+
+    private static bool sameString(GroveString a, GroveString b)
+    {
+        if (a.size() != b.size())
+            return false;
+        for (nuint i = 0; i < a.size(); i++)
+        {
+            if (a.data()![i] != b.data()![i])
+                return false;
+        }
+        return true;
     }
 
     // Only qualifier base class
@@ -305,7 +439,29 @@ public class Pattern
     {
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            GroveString ndType = new GroveString();
+            nd.getGi(ndType);
+            // Check for any sibling with same type
+            NodePtr tem = new NodePtr();
+            if (nd.node!.firstSibling(ref tem) != AccessResult.accessOK)
+                return true; // Document element
+            while (tem.node != null)
+            {
+                if (tem.node != nd.node)
+                {
+                    GroveString temType = new GroveString();
+                    if (tem.getGi(temType) == AccessResult.accessOK)
+                    {
+                        if (temType.size() == ndType.size() && sameString(temType, ndType))
+                            return false;
+                    }
+                }
+                NodePtr next = new NodePtr();
+                if (tem.node!.nextSibling(ref next) != AccessResult.accessOK)
+                    break;
+                tem.assign(next);
+            }
+            return true;
         }
     }
 
@@ -314,7 +470,15 @@ public class Pattern
     {
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            NodePtr tem = new NodePtr();
+            // First of any
+            if (nd.node!.firstSibling(ref tem) != AccessResult.accessOK)
+                return true;
+            if (tem.node != nd.node)
+                return false;
+            // Last of any
+            NodePtr next = new NodePtr();
+            return nd.node!.nextSibling(ref next) != AccessResult.accessOK;
         }
     }
 
@@ -384,7 +548,27 @@ public class Pattern
 
         public bool matches(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            // Match GI if specified
+            if (gi_.size() > 0)
+            {
+                GroveString ndGi = new GroveString();
+                if (nd.getGi(ndGi) != AccessResult.accessOK)
+                    return false;
+                if (ndGi.size() != gi_.size())
+                    return false;
+                for (nuint i = 0; i < gi_.size(); i++)
+                {
+                    if (ndGi.data()![i] != gi_.data()![i])
+                        return false;
+                }
+            }
+            // Check all qualifiers
+            foreach (var q in qualifiers_)
+            {
+                if (!q.satisfies(nd, context))
+                    return false;
+            }
+            return true;
         }
 
         public void contributeSpecificity(int[] spec)
@@ -446,7 +630,34 @@ public class Pattern
 
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
-            throw new NotImplementedException();
+            if (children_.Count == 0)
+                return true;
+            NodePtr child = new NodePtr();
+            if (nd.node!.firstChild(ref child) != AccessResult.accessOK)
+                return false;
+            // Build list of elements to match
+            var toMatch = new System.Collections.Generic.List<Element>(children_);
+            do
+            {
+                int j = 0;
+                for (int i = 0; i < toMatch.Count; i++)
+                {
+                    if (!toMatch[i].matches(child, context))
+                    {
+                        if (j != i)
+                            toMatch[j] = toMatch[i];
+                        j++;
+                    }
+                }
+                if (j == 0)
+                    return true; // All matched
+                toMatch.RemoveRange(j, toMatch.Count - j);
+                NodePtr next = new NodePtr();
+                if (child.node!.nextChunkSibling(ref next) != AccessResult.accessOK)
+                    break;
+                child.assign(next);
+            } while (true);
+            return false;
         }
 
         public override void contributeSpecificity(int[] spec)
