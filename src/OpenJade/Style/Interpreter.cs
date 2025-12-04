@@ -19,6 +19,10 @@ public class Interpreter : IInterpreter
     private FalseObj falseObj_ = new FalseObj();
     private int unitsPerInch_ = 72000; // Default: 1000 units per point
 
+    // Symbol and identifier tables
+    private Dictionary<string, SymbolObj> symbolTable_ = new();
+    private Dictionary<string, Identifier> identTable_ = new();
+
     public Interpreter()
     {
     }
@@ -43,7 +47,7 @@ public class Interpreter : IInterpreter
 
     public IntegerObj makeInteger(long n)
     {
-        throw new NotImplementedException();
+        return new IntegerObj(n);
     }
 
     public RealObj makeReal(double n)
@@ -53,7 +57,7 @@ public class Interpreter : IInterpreter
 
     public CharObj makeChar(Char c)
     {
-        throw new NotImplementedException();
+        return new CharObj(c);
     }
 
     public StringObj makeString(StringC str)
@@ -66,14 +70,32 @@ public class Interpreter : IInterpreter
         return new PairObj(car, cdr);
     }
 
-    public SymbolObj makeSymbol(StringC name)
+    public SymbolObj makeSymbol(StringC str)
     {
-        throw new NotImplementedException();
+        string key = str.ToString();
+        if (symbolTable_.TryGetValue(key, out SymbolObj? sym))
+            return sym;
+        StringObj strObj = new StringObj(str);
+        makePermanent(strObj);
+        sym = new SymbolObj(strObj);
+        makePermanent(sym);
+        symbolTable_[key] = sym;
+        return sym;
     }
 
-    public KeywordObj makeKeyword(Identifier? ident)
+    public Identifier lookup(StringC str)
     {
-        throw new NotImplementedException();
+        string key = str.ToString();
+        if (identTable_.TryGetValue(key, out Identifier? ident))
+            return ident;
+        ident = new Identifier(str);
+        identTable_[key] = ident;
+        return ident;
+    }
+
+    public KeywordObj makeKeyword(StringC str)
+    {
+        return new KeywordObj(lookup(str));
     }
 
     public VectorObj makeVector(System.Collections.Generic.List<ELObj?> elems)
@@ -91,9 +113,16 @@ public class Interpreter : IInterpreter
         return new QuantityObj(val, dim);
     }
 
-    public void message(MessageType type, Location loc, string text)
+    public void message(MessageType.Severity severity, Location loc, string text)
     {
-        throw new NotImplementedException();
+        string typeStr = severity switch
+        {
+            MessageType.Severity.warning => "warning",
+            MessageType.Severity.error => "error",
+            MessageType.Severity.info => "info",
+            _ => "message"
+        };
+        Console.Error.WriteLine($"{typeStr}: {text}");
     }
 
     // Processing mode support

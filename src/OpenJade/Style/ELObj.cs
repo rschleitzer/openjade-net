@@ -12,7 +12,71 @@ using Boolean = System.Boolean;
 public interface IInterpreter { }
 public interface IEvalContext { }
 
-public class Unit { }
+public class Unit : Named
+{
+    private long exact_ = 0;
+    private double inexact_ = 0.0;
+    private bool isDefined_ = false;
+    private bool isExact_ = false;
+    private uint defPart_ = 0;
+    private Location defLoc_ = new Location();
+
+    public Unit() : base(new StringC()) { }
+    public Unit(StringC name) : base(name) { }
+
+    public void setValue(long val)
+    {
+        exact_ = val;
+        isDefined_ = true;
+        isExact_ = true;
+    }
+
+    public void setValue(double val)
+    {
+        inexact_ = val;
+        isDefined_ = true;
+        isExact_ = false;
+    }
+
+    public bool defined(ref uint part, ref Location loc)
+    {
+        if (!isDefined_)
+            return false;
+        part = defPart_;
+        loc = defLoc_;
+        return true;
+    }
+
+    public ELObj? resolveQuantity(bool force, Interpreter interp, long val, int valExp)
+    {
+        if (!isDefined_)
+            return null;
+        if (isExact_)
+        {
+            // Scale val by exact_
+            double x = val;
+            while (valExp > 0) { x *= 10.0; valExp--; }
+            while (valExp < 0) { x /= 10.0; valExp++; }
+            return new LengthObj((long)(x * exact_));
+        }
+        else
+        {
+            double x = val;
+            while (valExp > 0) { x *= 10.0; valExp--; }
+            while (valExp < 0) { x /= 10.0; valExp++; }
+            return new LengthObj((long)(x * inexact_));
+        }
+    }
+
+    public ELObj? resolveQuantity(bool force, Interpreter interp, double val, int unitExp)
+    {
+        if (!isDefined_)
+            return null;
+        double factor = isExact_ ? exact_ : inexact_;
+        while (unitExp > 0) { factor *= factor; unitExp--; }
+        return new QuantityObj(val * factor, unitExp);
+    }
+}
 
 // Base class for all expression language objects
 public class ELObj : Collector.Object
@@ -887,7 +951,16 @@ public class UnresolvedQuantityObj : ELObj
 
     public override ELObj? resolveQuantities(bool force, Interpreter interp, Location loc)
     {
-        throw new NotImplementedException();
+        if (unit_ == null)
+            return interp.makeError();
+        uint part = 0;
+        Location defLoc = new Location();
+        if (!unit_.defined(ref part, ref defLoc))
+        {
+            interp.message(MessageType.Severity.error, loc, $"undefined quantity: {unit_.name()}");
+            return interp.makeError();
+        }
+        return unit_.resolveQuantity(force, interp, val_, unitExp_);
     }
 }
 
@@ -906,7 +979,16 @@ public class UnresolvedLengthObj : ELObj
 
     public override ELObj? resolveQuantities(bool force, Interpreter interp, Location loc)
     {
-        throw new NotImplementedException();
+        if (unit_ == null)
+            return interp.makeError();
+        uint part = 0;
+        Location defLoc = new Location();
+        if (!unit_.defined(ref part, ref defLoc))
+        {
+            interp.message(MessageType.Severity.error, loc, $"undefined quantity: {unit_.name()}");
+            return interp.makeError();
+        }
+        return unit_.resolveQuantity(force, interp, val_, valExp_);
     }
 }
 

@@ -19,42 +19,73 @@ public class ProcessingMode : Named
 
     public const int nRuleType = 2;
 
-    private List<Rule>[] rootRules_;
-    private List<ElementRule>[] elementRules_;
-    private List<GroveRules> groveRules_;
+    private System.Collections.Generic.List<Rule>[] rootRules_;
+    private System.Collections.Generic.List<ElementRule>[] elementRules_;
+    private System.Collections.Generic.List<GroveRules> groveRules_;
     private ProcessingMode? initial_; // null for initial mode
     private bool defined_;
 
     public ProcessingMode(StringC name, ProcessingMode? initial = null)
         : base(name)
     {
-        rootRules_ = new List<Rule>[nRuleType];
-        elementRules_ = new List<ElementRule>[nRuleType];
+        rootRules_ = new System.Collections.Generic.List<Rule>[nRuleType];
+        elementRules_ = new System.Collections.Generic.List<ElementRule>[nRuleType];
         for (int i = 0; i < nRuleType; i++)
         {
-            rootRules_[i] = new List<Rule>();
-            elementRules_[i] = new List<ElementRule>();
+            rootRules_[i] = new System.Collections.Generic.List<Rule>();
+            elementRules_[i] = new System.Collections.Generic.List<ElementRule>();
         }
-        groveRules_ = new List<GroveRules>();
+        groveRules_ = new System.Collections.Generic.List<GroveRules>();
         initial_ = initial;
         defined_ = false;
     }
 
-    public void addRule(bool matchesRoot, List<Pattern> patterns, Expression expr,
+    public void addRule(bool matchesRoot, System.Collections.Generic.List<Pattern> patterns, Expression expr,
                         RuleType ruleType, Location loc, Interpreter interp)
     {
-        throw new NotImplementedException();
+        // Create action for the rule
+        Ptr<Action> action = new Ptr<Action>(new Action(0, expr, loc));
+
+        // Add element rules for each pattern
+        for (int i = 0; i < patterns.Count; i++)
+            elementRules_[(int)ruleType].Add(new ElementRule(action, patterns[i]));
+
+        // If matches root, add to root rules
+        if (!matchesRoot)
+            return;
+        var rules = rootRules_[(int)ruleType];
+        rules.Add(new Rule(action));
+        // Sort by specificity (bubble sort last element into place)
+        for (int i = rules.Count - 1; i > 0; i--)
+        {
+            int cmp = rules[i - 1].compareSpecificity(rules[i]);
+            if (cmp <= 0)
+                break;
+            rules[i].swap(rules[i - 1]);
+        }
     }
 
     public Rule? findMatch(NodePtr nd, Pattern.MatchContext context, Messenger mgr,
                            ref Specificity specificity)
     {
-        throw new NotImplementedException();
+        GroveString gi = new GroveString();
+        if (nd.getGi(gi) == AccessResult.accessOK)
+            return findElementMatch(new StringC(gi.data(), gi.size()), nd, context, mgr, ref specificity);
+        NodePtr tem = new NodePtr();
+        if (nd.getOrigin(ref tem) != AccessResult.accessOK)
+            return findRootMatch(nd, context, mgr, ref specificity);
+        return null;
     }
 
     public void compile(Interpreter interp)
     {
-        throw new NotImplementedException();
+        for (int i = 0; i < nRuleType; i++)
+        {
+            foreach (var rule in rootRules_[i])
+                rule.action().compile(interp, (RuleType)i);
+            foreach (var rule in elementRules_[i])
+                rule.action().compile(interp, (RuleType)i);
+        }
     }
 
     public bool defined() { return defined_; }
@@ -64,25 +95,99 @@ public class ProcessingMode : Named
                                    Pattern.MatchContext context, Messenger mgr,
                                    ref Specificity specificity)
     {
-        throw new NotImplementedException();
+        GroveRules gr = groveRulesForNode(nd, mgr);
+
+        // First try element-specific rules
+        string giKey = gi.ToString();
+        for (int ruleType = (int)specificity.ruleType; ruleType < nRuleType; ruleType++)
+        {
+            if (gr.elementTable.TryGetValue(giKey, out ElementRules? er))
+            {
+                var vec = er.rules[ruleType];
+                if (vec.Count > 0)
+                {
+                    elementRuleAdvance(nd, context, mgr, ref specificity, vec);
+                    if (specificity.nextRuleIndex < (nuint)vec.Count)
+                    {
+                        specificity.ruleType = (RuleType)ruleType;
+                        return vec[(int)specificity.nextRuleIndex];
+                    }
+                }
+            }
+
+            // Try other rules (wildcard patterns)
+            var otherVec = gr.otherRules[ruleType];
+            if (otherVec.Count > 0)
+            {
+                elementRuleAdvance(nd, context, mgr, ref specificity, otherVec);
+                if (specificity.nextRuleIndex < (nuint)otherVec.Count)
+                {
+                    specificity.ruleType = (RuleType)ruleType;
+                    return otherVec[(int)specificity.nextRuleIndex];
+                }
+            }
+            specificity.nextRuleIndex = 0;
+        }
+
+        // Fall through to initial mode if we have one
+        if (initial_ != null)
+        {
+            specificity.toInitial = true;
+            return initial_.findElementMatch(gi, nd, context, mgr, ref specificity);
+        }
+        return null;
     }
 
     private Rule? findRootMatch(NodePtr nd, Pattern.MatchContext context, Messenger mgr,
                                 ref Specificity specificity)
     {
-        throw new NotImplementedException();
+        for (int ruleType = (int)specificity.ruleType; ruleType < nRuleType; ruleType++)
+        {
+            var rules = rootRules_[ruleType];
+            if (rules.Count > 0)
+            {
+                specificity.ruleType = (RuleType)ruleType;
+                return rules[0];
+            }
+        }
+
+        // Fall through to initial mode if we have one
+        if (initial_ != null)
+        {
+            specificity.toInitial = true;
+            return initial_.findRootMatch(nd, context, mgr, ref specificity);
+        }
+        return null;
     }
 
     private GroveRules groveRulesForNode(NodePtr nd, Messenger mgr)
     {
-        throw new NotImplementedException();
+        uint groveIndex = nd.groveIndex();
+        // Ensure we have enough GroveRules
+        while (groveRules_.Count <= groveIndex)
+            groveRules_.Add(new GroveRules());
+
+        GroveRules gr = groveRules_[(int)groveIndex];
+        if (!gr.built)
+            gr.build(elementRules_, nd, mgr);
+        return gr;
     }
 
     private static void elementRuleAdvance(NodePtr nd, Pattern.MatchContext context,
                                            Messenger mgr, ref Specificity specificity,
-                                           List<ElementRule> vec)
+                                           System.Collections.Generic.List<ElementRule> vec)
     {
-        throw new NotImplementedException();
+        // Find next matching rule starting from specificity.nextRuleIndex
+        for (nuint i = specificity.nextRuleIndex; i < (nuint)vec.Count; i++)
+        {
+            if (vec[(int)i].pattern.matches(nd, context))
+            {
+                specificity.nextRuleIndex = i;
+                return;
+            }
+        }
+        // No match found
+        specificity.nextRuleIndex = (nuint)vec.Count;
     }
 
     // Specificity of a pattern match
@@ -134,7 +239,11 @@ public class ProcessingMode : Named
 
         public void compile(Interpreter interp, RuleType ruleType)
         {
-            throw new NotImplementedException();
+            if (expr_ == null)
+                return;
+            insn_ = expr_.compile(interp);
+            // For construction rules, we could pre-evaluate constant sosofos
+            // For now, just compile the expression
         }
 
         public void get(out InsnPtr? insn, out SosofoObj? sosofo)
@@ -211,15 +320,15 @@ public class ProcessingMode : Named
     // Rules for elements by name
     public class ElementRules : Named
     {
-        public List<ElementRule>[] rules;
+        public System.Collections.Generic.List<ElementRule>[] rules;
 
         public ElementRules(StringC name)
             : base(name)
         {
-            rules = new List<ElementRule>[nRuleType];
+            rules = new System.Collections.Generic.List<ElementRule>[nRuleType];
             for (int i = 0; i < nRuleType; i++)
             {
-                rules[i] = new List<ElementRule>();
+                rules[i] = new System.Collections.Generic.List<ElementRule>();
             }
         }
     }
@@ -228,28 +337,64 @@ public class ProcessingMode : Named
     public class GroveRules
     {
         public bool built;
-        public Dictionary<StringC, ElementRules> elementTable;
-        public List<ElementRule>[] otherRules;
+        public Dictionary<string, ElementRules> elementTable;
+        public System.Collections.Generic.List<ElementRule>[] otherRules;
 
         public GroveRules()
         {
             built = false;
-            elementTable = new Dictionary<StringC, ElementRules>();
-            otherRules = new List<ElementRule>[nRuleType];
+            elementTable = new Dictionary<string, ElementRules>();
+            otherRules = new System.Collections.Generic.List<ElementRule>[nRuleType];
             for (int i = 0; i < nRuleType; i++)
             {
-                otherRules[i] = new List<ElementRule>();
+                otherRules[i] = new System.Collections.Generic.List<ElementRule>();
             }
         }
 
-        public void build(List<ElementRule>? rules, NodePtr nd, Messenger mgr)
+        public void build(System.Collections.Generic.List<ElementRule>[] rules, NodePtr nd, Messenger mgr)
         {
-            throw new NotImplementedException();
+            built = true;
+            for (int ruleType = 0; ruleType < nRuleType; ruleType++)
+            {
+                foreach (var rule in rules[ruleType])
+                {
+                    StringC gi;
+                    if (rule.pattern.mustHaveGi(out gi))
+                    {
+                        // Rule requires specific GI
+                        string key = gi.ToString();
+                        if (!elementTable.TryGetValue(key, out ElementRules? er))
+                        {
+                            er = new ElementRules(gi);
+                            elementTable[key] = er;
+                        }
+                        er.rules[ruleType].Add(rule);
+                    }
+                    else
+                    {
+                        // Wildcard rule
+                        otherRules[ruleType].Add(rule);
+                    }
+                }
+                // Sort rules by specificity
+                foreach (var er in elementTable.Values)
+                    sortRules(er.rules[ruleType]);
+                sortRules(otherRules[ruleType]);
+            }
         }
 
-        public static void sortRules(List<ElementRule> v)
+        public static void sortRules(System.Collections.Generic.List<ElementRule> v)
         {
-            throw new NotImplementedException();
+            // Simple insertion sort by specificity
+            for (int i = 1; i < v.Count; i++)
+            {
+                for (int j = i; j > 0; j--)
+                {
+                    if (v[j - 1].compareSpecificity(v[j]) <= 0)
+                        break;
+                    v[j].swap(v[j - 1]);
+                }
+            }
         }
     }
 }
@@ -316,7 +461,24 @@ public abstract class Expression
     public abstract ELObj? evaluate(VM vm);
     public virtual InsnPtr compile(Interpreter interp)
     {
-        throw new NotImplementedException();
+        // Default: create instruction that evaluates this expression
+        return new InsnPtr(new EvalExprInsn(this));
+    }
+}
+
+// Instruction that evaluates an expression
+public class EvalExprInsn : Insn
+{
+    private Expression expr_;
+
+    public EvalExprInsn(Expression expr)
+    {
+        expr_ = expr;
+    }
+
+    public override ELObj? execute(VM vm)
+    {
+        return expr_.evaluate(vm);
     }
 }
 

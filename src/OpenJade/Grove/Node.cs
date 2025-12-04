@@ -1455,6 +1455,20 @@ public class NodePtr
         return node.groveIndex();
     }
 
+    public AccessResult getGi(GroveString str)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getGi(ref str);
+    }
+
+    public AccessResult getOrigin(ref NodePtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getOrigin(ref ptr);
+    }
+
     private void addRef() { if (node != null) node.addRef(); }
     private void release() { if (node != null) node.release(); }
 }
