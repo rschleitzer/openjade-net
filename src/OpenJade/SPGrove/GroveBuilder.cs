@@ -27,24 +27,38 @@ public abstract class Chunk
 
     public virtual AccessResult setNodePtrFirst(ref NodePtr ptr, ElementNode? node)
     {
-        throw new NotImplementedException();
+        return setNodePtrFirst(ref ptr, (BaseNode?)node);
     }
 
     public virtual AccessResult setNodePtrFirst(ref NodePtr ptr, DataNode? node)
     {
-        throw new NotImplementedException();
+        return setNodePtrFirst(ref ptr, (BaseNode?)node);
     }
 
     public abstract Chunk? after();
 
     public virtual AccessResult getFollowing(GroveImpl grove, out Chunk? chunk, out uint nNodes)
     {
-        throw new NotImplementedException();
+        chunk = null;
+        nNodes = 0;
+        var p = after();
+        while (p == grove.completeLimit())
+            if (!grove.waitForMoreNodes())
+                return AccessResult.accessTimeout;
+        if (p?.origin != origin)
+            return AccessResult.accessNull;
+        nNodes = 1;
+        chunk = p;
+        return AccessResult.accessOK;
     }
 
     public virtual AccessResult getFirstSibling(GroveImpl grove, out Chunk? chunk)
     {
-        throw new NotImplementedException();
+        chunk = null;
+        if (origin == grove.root())
+            return AccessResult.accessNotInClass;
+        chunk = origin?.after();
+        return AccessResult.accessOK;
     }
 
     public virtual StringC? id()
@@ -65,12 +79,14 @@ public class LocChunk : Chunk
 
     public override AccessResult setNodePtrFirst(ref NodePtr ptr, BaseNode? node)
     {
-        throw new NotImplementedException();
+        // LocChunk is abstract - derived classes should implement
+        return AccessResult.accessNull;
     }
 
     public override Chunk? after()
     {
-        throw new NotImplementedException();
+        // LocChunk is abstract - derived classes should implement
+        return null;
     }
 }
 
@@ -182,35 +198,47 @@ public class ElementChunk : ParentChunk
 public class LocOriginChunk : Chunk
 {
     private Origin? locOrigin;
+    private Chunk? nextChunk_;
 
     public LocOriginChunk(Origin? lo)
     {
         locOrigin = lo;
     }
 
+    public void setNextChunk(Chunk? next)
+    {
+        nextChunk_ = next;
+    }
+
     public override AccessResult setNodePtrFirst(ref NodePtr ptr, BaseNode? node)
     {
-        throw new NotImplementedException();
+        // Delegate to the chunk after this one
+        return nextChunk_?.setNodePtrFirst(ref ptr, node) ?? AccessResult.accessNull;
     }
 
     public override AccessResult setNodePtrFirst(ref NodePtr ptr, ElementNode? node)
     {
-        throw new NotImplementedException();
+        return nextChunk_?.setNodePtrFirst(ref ptr, node) ?? AccessResult.accessNull;
     }
 
     public override AccessResult setNodePtrFirst(ref NodePtr ptr, DataNode? node)
     {
-        throw new NotImplementedException();
+        return nextChunk_?.setNodePtrFirst(ref ptr, node) ?? AccessResult.accessNull;
     }
 
     public override Chunk? after()
     {
-        throw new NotImplementedException();
+        return nextChunk_;
     }
 
     public override AccessResult getFollowing(GroveImpl grove, out Chunk? chunk, out uint nNodes)
     {
-        throw new NotImplementedException();
+        chunk = null;
+        nNodes = 0;
+        var ret = base.getFollowing(grove, out chunk, out nNodes);
+        if (ret == AccessResult.accessOK)
+            nNodes = 0;
+        return ret;
     }
 
     public override Boolean getLocOrigin(out Origin? origin)
@@ -3040,28 +3068,55 @@ public class ElementTypeNode : BaseNode
 
 public class ModelGroupNode : BaseNode
 {
+    protected ElementType? elementType_;
+    protected ModelGroup? modelGroup_;
+    protected ModelGroupNode? parentModelGroupNode_;
+
     public ModelGroupNode(GroveImpl grove) : base(grove)
     {
     }
 
+    public ModelGroupNode(GroveImpl grove, ElementType elementType, ModelGroup modelGroup, ModelGroupNode? parent = null)
+        : base(grove)
+    {
+        elementType_ = elementType;
+        modelGroup_ = modelGroup;
+        parentModelGroupNode_ = parent;
+    }
+
+    public ModelGroup? modelGroup() { return modelGroup_; }
+
     public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
     {
-        throw new NotImplementedException();
+        name = parentModelGroupNode_ == null
+            ? ComponentName.Id.idModelGroup
+            : ComponentName.Id.idContentTokens;
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getConnector(out Connector.Enum connector)
     {
-        throw new NotImplementedException();
+        connector = Connector.Enum.seq;
+        if (modelGroup_ == null)
+            return AccessResult.accessNull;
+        // TODO: Map modelGroup_.connector() to enum when ModelGroup is implemented
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getOccurIndicator(out OccurIndicator.Enum indicator)
     {
-        throw new NotImplementedException();
+        indicator = OccurIndicator.Enum.opt;
+        if (modelGroup_ == null)
+            return AccessResult.accessNull;
+        // TODO: Map modelGroup_.occurrenceIndicator() to enum
+        return AccessResult.accessNull;
     }
 
     public override AccessResult getContentTokens(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        // TODO: Implement ContentTokenNodeList
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public override void accept(NodeVisitor visitor)
@@ -3078,39 +3133,78 @@ public class ModelGroupNode : BaseNode
 
     public override bool same2(ModelGroupNode? node)
     {
-        throw new NotImplementedException();
+        return node != null && modelGroup_ == node.modelGroup_;
+    }
+
+    public override uint hash()
+    {
+        return (uint)(modelGroup_?.GetHashCode() ?? 0);
     }
 
     public override AccessResult children(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        return getContentTokens(ref ptr);
     }
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        var ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
 public class ElementTokenNode : BaseNode
 {
+    protected ElementType? elementType_;
+    protected ElementToken? elementToken_;
+    protected ModelGroupNode? parentModelGroupNode_;
+
     public ElementTokenNode(GroveImpl grove) : base(grove)
     {
     }
 
+    public ElementTokenNode(GroveImpl grove, ElementType elementType, ElementToken elementToken, ModelGroupNode? parent = null)
+        : base(grove)
+    {
+        elementType_ = elementType;
+        elementToken_ = elementToken;
+        parentModelGroupNode_ = parent;
+    }
+
+    public ElementToken? elementToken() { return elementToken_; }
+
     public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
     {
-        throw new NotImplementedException();
+        name = ComponentName.Id.idContentTokens;
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getGi(ref GroveString str)
     {
-        throw new NotImplementedException();
+        if (elementToken_ == null || elementToken_.elementType() == null)
+            return AccessResult.accessNull;
+        setString(ref str, elementToken_.elementType()!.name());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getOccurIndicator(out OccurIndicator.Enum indicator)
     {
-        throw new NotImplementedException();
+        indicator = OccurIndicator.Enum.opt;
+        if (elementToken_ == null)
+            return AccessResult.accessNull;
+        // TODO: Map elementToken_.occurrenceIndicator() to enum
+        return AccessResult.accessNull;
     }
 
     public override void accept(NodeVisitor visitor)
@@ -3127,29 +3221,62 @@ public class ElementTokenNode : BaseNode
 
     public override bool same2(ElementTokenNode? node)
     {
-        throw new NotImplementedException();
+        return node != null && elementToken_ == node.elementToken_;
+    }
+
+    public override uint hash()
+    {
+        return (uint)(elementToken_?.GetHashCode() ?? 0);
     }
 
     public override AccessResult children(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        var ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
 public class PcdataTokenNode : BaseNode
 {
+    protected ElementType? elementType_;
+    protected PcdataToken? pcdataToken_;
+    protected ModelGroupNode? parentModelGroupNode_;
+
     public PcdataTokenNode(GroveImpl grove) : base(grove)
     {
     }
 
+    public PcdataTokenNode(GroveImpl grove, ElementType elementType, PcdataToken pcdataToken, ModelGroupNode? parent = null)
+        : base(grove)
+    {
+        elementType_ = elementType;
+        pcdataToken_ = pcdataToken;
+        parentModelGroupNode_ = parent;
+    }
+
+    public PcdataToken? pcdataToken() { return pcdataToken_; }
+
     public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
     {
-        throw new NotImplementedException();
+        name = ComponentName.Id.idContentTokens;
+        return AccessResult.accessOK;
     }
 
     public override void accept(NodeVisitor visitor)
@@ -3166,21 +3293,39 @@ public class PcdataTokenNode : BaseNode
 
     public override bool same2(PcdataTokenNode? node)
     {
-        throw new NotImplementedException();
+        return node != null && pcdataToken_ == node.pcdataToken_;
+    }
+
+    public override uint hash()
+    {
+        return (uint)(pcdataToken_?.GetHashCode() ?? 0);
     }
 
     public override AccessResult children(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        var ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
-public class AttributeDefNode : BaseNode
+public abstract class AttributeDefNode : BaseNode
 {
     protected nuint attIndex_;
 
@@ -3189,9 +3334,15 @@ public class AttributeDefNode : BaseNode
         attIndex_ = attIndex;
     }
 
+    // Abstract methods that derived classes must implement
+    public abstract AttributeDefinitionList? attDefList();
+    public abstract Node makeOriginNode(GroveImpl grove, nuint attIndex);
+    public abstract object? attributeOriginId();
+
     public override AccessResult getOrigin(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(makeOriginNode(grove(), attIndex_));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
@@ -3202,37 +3353,52 @@ public class AttributeDefNode : BaseNode
 
     public override AccessResult getName(ref GroveString str)
     {
-        throw new NotImplementedException();
+        var defList = attDefList();
+        if (defList == null)
+            return AccessResult.accessNull;
+        var def = defList.def(attIndex_);
+        if (def == null)
+            return AccessResult.accessNull;
+        setString(ref str, def.name());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getDeclValueType(out DeclValueType.Enum type)
     {
-        throw new NotImplementedException();
+        type = DeclValueType.Enum.cdata;
+        // TODO: Implement full getDeclValueType
+        return AccessResult.accessNull;
     }
 
     public override AccessResult getDefaultValueType(out DefaultValueType.Enum type)
     {
-        throw new NotImplementedException();
+        type = DefaultValueType.Enum.implied;
+        // TODO: Implement full getDefaultValueType
+        return AccessResult.accessNull;
     }
 
     public override AccessResult getTokens(ref GroveStringListPtr ptr)
     {
-        throw new NotImplementedException();
+        // TODO: Implement getTokens
+        return AccessResult.accessNull;
     }
 
     public override AccessResult getCurrentAttributeIndex(out long index)
     {
-        throw new NotImplementedException();
+        index = (long)attIndex_;
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getCurrentGroup(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        // TODO: Implement getCurrentGroup
+        return AccessResult.accessNull;
     }
 
     public override AccessResult getDefaultValue(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        // TODO: Implement getDefaultValue
+        return AccessResult.accessNull;
     }
 
     public override void accept(NodeVisitor visitor)
@@ -3249,22 +3415,38 @@ public class AttributeDefNode : BaseNode
 
     public override bool same2(AttributeDefNode? node)
     {
-        throw new NotImplementedException();
+        if (node == null)
+            return false;
+        return attributeOriginId() == node.attributeOriginId() && attIndex_ == node.attIndex_;
     }
 
     public override uint hash()
     {
-        throw new NotImplementedException();
+        uint n = (uint)(attributeOriginId()?.GetHashCode() ?? 0);
+        return secondHash(n + (uint)attIndex_);
     }
 
     public override AccessResult children(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        var ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
