@@ -367,7 +367,19 @@ public class InternalCdataEntity : InternalDataEntity
 
     public override Boolean isCharacterData()
     {
-        return true;
+        return @string().size() > 0;
+    }
+
+    // void normalReference(ParserState &, const Ptr<EntityOrigin> &, Boolean) const;
+    protected override void normalReference(ParserState parser, Ptr<EntityOrigin> origin, Boolean generateEvent)
+    {
+        checkRef(parser);
+        checkEntlvl(parser);
+        if (@string().size() > 0)
+        {
+            parser.noteData();
+            parser.eventHandler().data(new CdataEntityEvent(this, new ConstPtr<Origin>(origin.pointer())));
+        }
     }
 }
 
@@ -397,6 +409,15 @@ public class InternalSdataEntity : InternalDataEntity
     public override Boolean isCharacterData()
     {
         return true;
+    }
+
+    // void normalReference(ParserState &, const Ptr<EntityOrigin> &, Boolean) const;
+    protected override void normalReference(ParserState parser, Ptr<EntityOrigin> origin, Boolean generateEvent)
+    {
+        checkRef(parser);
+        checkEntlvl(parser);
+        parser.noteData();
+        parser.eventHandler().sdataEntity(new SdataEntityEvent(this, new ConstPtr<Origin>(origin.pointer())));
     }
 }
 
