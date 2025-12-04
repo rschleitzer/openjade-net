@@ -81,6 +81,14 @@ public abstract class InputSource : Link
         return start_;
     }
 
+    // Returns the index within currentTokenStart() where the token begins
+    // In C++, currentTokenStart() returns a pointer already at the right offset;
+    // in C# we need to use array + index separately
+    public nuint currentTokenStartIndex()
+    {
+        return startIndex_;
+    }
+
     // size_t currentTokenLength() const;
     public nuint currentTokenLength()
     {
@@ -215,6 +223,30 @@ public abstract class InputSource : Link
         return curIndex_;
     }
 
+    // Advance curIndex_ by 1 (for ExternalInputSource record processing)
+    protected void advanceCur()
+    {
+        curIndex_++;
+    }
+
+    // Initialize buffer pointers without adjusting indices (for ExternalInputSource)
+    protected void initializeBuffer(Char[] buf)
+    {
+        cur_ = buf;
+        start_ = buf;
+        end_ = buf;
+        // Don't change curIndex_, startIndex_, or endIndex_ - they're already 0
+    }
+
+    // Update buffer pointer after reallocation (preserves indices)
+    protected void updateBufferPointer(Char[] buf)
+    {
+        cur_ = buf;
+        start_ = buf;
+        end_ = buf;
+        // Indices stay the same since data was copied to same positions
+    }
+
     // const Char *start();
     protected nuint startIdx()
     {
@@ -237,14 +269,14 @@ public abstract class InputSource : Link
     protected void changeBuffer(Char[]? newBase, Char[]? oldBase)
     {
         // In C#, we just update the array references
+        // The caller should set endIndex_ via advanceEnd after calling this
         nuint offset = curIndex_ - startIndex_;
         cur_ = newBase;
         start_ = newBase;
         end_ = newBase;
         curIndex_ = offset;
         startIndex_ = 0;
-        if (newBase != null)
-            endIndex_ = (nuint)newBase.Length;
+        // Don't set endIndex_ here - caller should use advanceEnd to set the actual data limit
     }
 
     // void advanceEnd(const Char *newEnd);

@@ -239,6 +239,15 @@ public class CharMap<T>
         }
     }
 
+    // Copy constructor
+    public CharMap(CharMap<T> other)
+    {
+        for (int i = 0; i < 256; i++)
+            lo_[i] = other.lo_[i];
+        for (int i = 0; i < CharMapBits.planes; i++)
+            values_[i] = new CharMapPlane<T>(other.values_[i]);
+    }
+
     // T operator[](Char) const;
     public T this[Char c]
     {

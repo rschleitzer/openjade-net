@@ -320,7 +320,9 @@ public class ParserState : ContentState
     // void endDtd();
     public void endDtd()
     {
-        dtd_.push_back(defDtd_);
+        // In C++, push_back copies the Ptr (value semantics)
+        // In C#, Ptr is a reference type, so we need to create an explicit copy
+        dtd_.push_back(new Ptr<Dtd>(defDtd_));
         defDtd_.clear();
         currentDtd_.clear();
         currentDtdConst_.clear();
@@ -810,10 +812,11 @@ public class ParserState : ContentState
         if (ins == null) return;
         Char[]? p = ins.currentTokenStart();
         if (p == null) return;
+        nuint startIdx = ins.currentTokenStartIndex();
         nuint count = ins.currentTokenLength();
         str.resize(count);
         for (nuint i = 0; i < count; i++)
-            str[i] = subst != null ? subst[p[i]] : p[i];
+            str[i] = subst != null ? subst[p[startIdx + i]] : p[startIdx + i];
     }
 
     // void queueMessage(MessageEvent *event);
@@ -1112,8 +1115,12 @@ public class ParserState : ContentState
     // Char currentChar() const;
     public Char currentChar()
     {
-        Char[]? start = currentInput()?.currentTokenStart();
-        return start != null ? start[0] : 0;
+        InputSource? ins = currentInput();
+        if (ins == null) return 0;
+        Char[]? start = ins.currentTokenStart();
+        if (start == null) return 0;
+        nuint startIdx = ins.currentTokenStartIndex();
+        return start[startIdx];
     }
 
     // StringC currentToken() const;
@@ -1123,7 +1130,13 @@ public class ParserState : ContentState
         if (ins == null) return new StringC();
         Char[]? start = ins.currentTokenStart();
         if (start == null) return new StringC();
-        return new StringC(start, ins.currentTokenLength());
+        nuint startIdx = ins.currentTokenStartIndex();
+        nuint length = ins.currentTokenLength();
+        // Copy the token portion to a new array
+        Char[] tokenData = new Char[length];
+        for (nuint i = 0; i < length; i++)
+            tokenData[i] = start[startIdx + i];
+        return new StringC(tokenData, length);
     }
 
     // void getCurrentToken(StringC &str) const;
@@ -1133,7 +1146,24 @@ public class ParserState : ContentState
         if (ins == null) return;
         Char[]? start = ins.currentTokenStart();
         if (start == null) return;
-        str.assign(start, ins.currentTokenLength());
+        nuint startIdx = ins.currentTokenStartIndex();
+        str.assign(start, startIdx, ins.currentTokenLength());
+    }
+
+    // Helper to get the current token data as an array (for event constructors)
+    public Char[]? getCurrentTokenData()
+    {
+        InputSource? ins = currentInput();
+        if (ins == null) return null;
+        Char[]? start = ins.currentTokenStart();
+        if (start == null) return null;
+        nuint startIdx = ins.currentTokenStartIndex();
+        nuint length = ins.currentTokenLength();
+        if (length == 0) return Array.Empty<Char>();
+        Char[] result = new Char[length];
+        for (nuint i = 0; i < length; i++)
+            result[i] = start[startIdx + i];
+        return result;
     }
 
     // void setRecognizer(Mode mode, ConstPtr<Recognizer> p);

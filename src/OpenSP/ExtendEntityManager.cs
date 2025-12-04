@@ -489,6 +489,11 @@ internal class ExternalInfoImpl : ExternalInfo
             int i;
             for (i = 0; i < (int)position_.size() && off >= position_[(nuint)i].endOffset; i++)
                 ;
+            // Clamp i to valid range before accessing position_
+            if (i >= (int)position_.size())
+                i = (int)position_.size() - 1;
+            if (i < 0)
+                return false;
             // Back up to find a valid id
             for (; i >= 0 && position_[(nuint)i].id.size() == 0; i--)
                 if (i == 0)
@@ -710,19 +715,77 @@ internal class EntityManagerImpl : ExtendEntityManager
                                           Messenger mgr,
                                           ParsedSystemId parsedSysid)
     {
-        // Simplified FSI parsing - just create a single storage object spec
-        parsedSysid.resize(parsedSysid.size() + 1);
-        StorageObjectSpec sos = parsedSysid.back();
-        sos.specId.assign(str.data()!, str.size());
-        sos.storageManager = guessStorageType(str, docCharset);
-        if (sos.storageManager == null)
+        // Parse FSI (Formal System Identifier) format: <StorageType>specId
+        nuint pos = 0;
+
+        while (pos < str.size())
         {
-            if (defLoc != null && defLoc.storageObjectSpec?.storageManager?.inheritable() == true)
-                sos.storageManager = defLoc.storageObjectSpec.storageManager;
+            // Skip whitespace
+            while (pos < str.size() && (str[pos] == ' ' || str[pos] == '\t'))
+                pos++;
+
+            if (pos >= str.size())
+                break;
+
+            parsedSysid.resize(parsedSysid.size() + 1);
+            StorageObjectSpec sos = parsedSysid.back();
+
+            // Check if this is an FSI starting with '<'
+            if (str[pos] == '<')
+            {
+                pos++; // skip '<'
+
+                // Extract storage type name
+                nuint typeStart = pos;
+                while (pos < str.size() && str[pos] != '>' && str[pos] != ' ')
+                    pos++;
+
+                // Find registered storage manager by type
+                StringC typeName = new StringC();
+                for (nuint i = typeStart; i < pos; i++)
+                    typeName.operatorPlusAssign(str[i]);
+
+                sos.storageManager = lookupStorageType(typeName, docCharset);
+
+                // Skip any attributes until '>'
+                while (pos < str.size() && str[pos] != '>')
+                    pos++;
+
+                if (pos < str.size())
+                    pos++; // skip '>'
+
+                // Extract spec ID (everything after '>' until end or next '<')
+                nuint specStart = pos;
+                while (pos < str.size() && str[pos] != '<')
+                    pos++;
+
+                // Assign spec ID
+                if (pos > specStart)
+                {
+                    Char[] specData = new Char[pos - specStart];
+                    for (nuint i = 0; i < pos - specStart; i++)
+                        specData[i] = str[specStart + i];
+                    sos.specId.assign(specData, pos - specStart);
+                }
+            }
             else
-                sos.storageManager = defaultStorageManager_;
+            {
+                // No FSI prefix - treat entire string as spec ID
+                sos.specId.assign(str.data(), str.size());
+                sos.storageManager = guessStorageType(str, docCharset);
+                pos = str.size(); // consume everything
+            }
+
+            if (sos.storageManager == null)
+            {
+                if (defLoc != null && defLoc.storageObjectSpec?.storageManager?.inheritable() == true)
+                    sos.storageManager = defLoc.storageObjectSpec.storageManager;
+                else
+                    sos.storageManager = defaultStorageManager_;
+            }
+            setDefaults(sos, isNdataFlag, defLoc);
         }
-        setDefaults(sos, isNdataFlag, defLoc);
+
         return true;
     }
 
@@ -734,6 +797,27 @@ internal class EntityManagerImpl : ExtendEntityManager
             sos.records = StorageObjectSpec.Records.asis;
         if (isNdataFlag)
             sos.zapEof = false;
+
+        // Set base ID from default location if available and storage managers match
+        if (defLoc != null && defLoc.storageObjectSpec != null &&
+            defLoc.storageObjectSpec.storageManager == sos.storageManager)
+        {
+            // Use the defLoc's specId as the base for resolving relative paths
+            sos.baseId = new StringC(defLoc.storageObjectSpec.specId);
+            // Resolve the base against the defLoc's baseId first
+            if (defLoc.storageObjectSpec.baseId.size() > 0)
+            {
+                sos.storageManager.resolveRelative(defLoc.storageObjectSpec.baseId,
+                                                   sos.baseId, false);
+            }
+        }
+
+        // Resolve the specId relative to baseId
+        if (sos.baseId.size() > 0)
+        {
+            if (sos.storageManager.resolveRelative(sos.baseId, sos.specId, sos.search))
+                sos.baseId.resize(0);
+        }
 
         sos.codingSystem = sos.storageManager.requiredCodingSystem();
         if (sos.codingSystem != null)
@@ -823,8 +907,8 @@ internal class EntityManagerImpl : ExtendEntityManager
 // ExternalInputSource - reads from external storage objects with character decoding
 internal class ExternalInputSource : InputSource
 {
-    private const Char RS = '\n';  // Record start (line feed in SGML)
-    private const Char RE = '\r';  // Record end (carriage return)
+    private const Char RS = 10;  // Record start (LF)
+    private const Char RE = 13;  // Record end (CR) - for output, input CR/LF -> RE
     private const byte EOFCHAR = 0x1A;  // Ctrl-Z
 
     private enum RecordType
@@ -839,7 +923,7 @@ internal class ExternalInputSource : InputSource
 
     private ExternalInfoImpl info_;
     private Char[] buf_;
-    private nuint bufLim_;
+    private nuint bufLim_;           // End of decoded data in buffer
     private Offset bufLimOffset_;
     private nuint bufSize_;
     private nuint readSize_;
@@ -848,10 +932,6 @@ internal class ExternalInputSource : InputSource
     private nuint soIndex_;
     private Boolean insertRS_;
     private Decoder? decoder_;
-    private byte[] leftOver_ = Array.Empty<byte>();
-#pragma warning disable CS0414 // Field is assigned but never used
-    private nuint nLeftOver_;
-#pragma warning restore CS0414
     private Boolean mayRewind_;
     private Boolean mayNotExist_;
     private RecordType recordType_;
@@ -866,7 +946,7 @@ internal class ExternalInputSource : InputSource
                                Char replacementChar,
                                InputSourceOrigin? origin,
                                uint flags)
-        : base(origin, null, 0, null, 0)
+        : base(origin ?? InputSourceOrigin.make(), null, 0, null, 0)
     {
         mayRewind_ = (flags & (uint)EntityManager.mayRewind) != 0;
         mayNotExist_ = (flags & (uint)ExtendEntityManager.mayNotExist) != 0;
@@ -877,13 +957,12 @@ internal class ExternalInputSource : InputSource
         for (nuint i = 0; i < sov_.size(); i++)
             sov_[i] = new Owner<StorageObject>();
 
+        bufSize_ = 8192;
+        buf_ = new Char[bufSize_];
         init();
         info_ = new ExternalInfoImpl(parsedSysid);
-        if (origin != null)
-            origin.setExternalInfo(info_);
-
-        buf_ = Array.Empty<Char>();
-        bufSize_ = 0;
+        // Always set external info on the origin (use base class's origin)
+        inputSourceOrigin()?.setExternalInfo(info_);
     }
 
     private void init()
@@ -893,26 +972,22 @@ internal class ExternalInputSource : InputSource
         bufLimOffset_ = 0;
         insertRS_ = true;
         soIndex_ = 0;
-        nLeftOver_ = 0;
+        recordType_ = RecordType.unknown;
     }
 
     public override void pushCharRef(Char ch, NamedCharRef charRef)
     {
-        // For external input sources, character references are handled during parsing
         noteCharRef(nextIndex(), charRef);
     }
 
     public override Boolean rewind(Messenger mgr)
     {
         reset(null, 0, null, 0);
-
-        // Rewind all storage objects
         for (nuint i = 0; i < soIndex_; i++)
         {
             if (sov_[i].pointer() != null && !sov_[i].pointer()!.rewind(mgr))
                 return false;
         }
-
         init();
         return true;
     }
@@ -929,9 +1004,10 @@ internal class ExternalInputSource : InputSource
 
     protected override Xchar fill(Messenger mgr)
     {
+        // Fill buffer while end() >= bufLim_ (no data available between end and bufLim)
         while (endIdx() >= bufLim_)
         {
-            // Need more data - open next storage object if needed
+            // Open next storage object if needed
             while (so_ == null)
             {
                 if (soIndex_ >= sov_.size())
@@ -994,7 +1070,6 @@ internal class ExternalInputSource : InputSource
 
                     soIndex_++;
                     readSize_ = so_.getBlockSize();
-                    nLeftOver_ = 0;
                     break;
                 }
                 else
@@ -1005,187 +1080,278 @@ internal class ExternalInputSource : InputSource
                 soIndex_++;
             }
 
-            // Read and decode data
-            if (!readAndDecode(mgr))
+            // Move start to end, discarding old data
+            nuint keepSize = endIdx() - startIdx();
+            if (keepSize > 0)
+            {
+                for (nuint i = 0; i < keepSize; i++)
+                    buf_[i] = buf_[startIdx() + i];
+            }
+            moveStart(buf_, 0);
+            bufLim_ = endIdx();
+
+            // Ensure buffer is large enough
+            nuint neededSize = bufLim_ + readSize_ + 64;
+            if (bufSize_ < neededSize)
+            {
+                Char[] newBuf = new Char[neededSize];
+                Array.Copy(buf_, newBuf, (int)bufLim_);
+                changeBuffer(newBuf, buf_);
+                buf_ = newBuf;
+                bufSize_ = neededSize;
+            }
+
+            // Read raw bytes
+            byte[] rawBuf = new byte[readSize_];
+            nuint nread;
+            if (!so_!.read(rawBuf, readSize_, mgr, out nread) || nread == 0)
             {
                 so_ = null;
                 continue;
             }
 
-            break;
-        }
+            // Handle Ctrl-Z at end
+            if (zapEof_ && nread > 0 && rawBuf[(int)nread - 1] == EOFCHAR)
+                nread--;
 
-        if (endIdx() >= bufLim_)
-            return eE;
-
-        // Handle record type conversion
-        return processRecords(mgr);
-    }
-
-    private Boolean readAndDecode(Messenger mgr)
-    {
-        // Ensure buffer is large enough
-        nuint neededSize = (nuint)(readSize_ + 1024);
-        if (bufSize_ < neededSize)
-        {
-            Char[] newBuf = new Char[neededSize];
-            if (buf_.Length > 0)
-                Array.Copy(buf_, newBuf, Math.Min(buf_.Length, (int)bufLim_));
-            buf_ = newBuf;
-            bufSize_ = neededSize;
-        }
-
-        // Read raw bytes
-        byte[] rawBuf = new byte[readSize_];
-        nuint nread;
-        if (!so_!.read(rawBuf, readSize_, mgr, out nread))
-            return false;
-
-        if (nread == 0)
-            return false;
-
-        // Handle Ctrl-Z at end of file
-        if (zapEof_ && nread > 0 && rawBuf[(int)nread - 1] == EOFCHAR)
-            nread--;
-
-        // Decode bytes to characters
-        if (decoder_ != null)
-        {
-            // Decode into a temporary buffer
-            Char[] decodeBuf = new Char[nread];
-            nuint inputUsed;
-            nuint charsDecoded = decoder_.decode(decodeBuf, rawBuf, nread, out inputUsed);
-
-            if (charsDecoded > 0)
+            if (nread == 0)
             {
+                so_ = null;
+                continue;
+            }
+
+            // Decode bytes to characters at bufLim_ position
+            nuint nChars;
+            if (decoder_ != null)
+            {
+                Char[] decodeBuf = new Char[nread];
+                nuint inputUsed;
+                nChars = decoder_.decode(decodeBuf, rawBuf, nread, out inputUsed);
+                for (nuint i = 0; i < nChars; i++)
+                    buf_[bufLim_ + i] = decodeBuf[i];
+            }
+            else
+            {
+                // No decoder - treat bytes as characters directly
+                for (nuint i = 0; i < nread; i++)
+                    buf_[bufLim_ + i] = (Char)rawBuf[i];
+                nChars = nread;
+            }
+
+            if (nChars > 0)
+            {
+                // Insert RS at beginning if needed
                 if (insertRS_)
                 {
-                    noteRS();
-                    // Insert RS at current position
-                    if (bufLim_ < bufSize_)
-                    {
-                        buf_[bufLim_++] = RS;
-                        bufLimOffset_++;
-                    }
+                    info_.noteRS(bufLimOffset_);
+                    // Shift data right by 1 to make room for RS
+                    for (nuint i = nChars; i > 0; i--)
+                        buf_[bufLim_ + i] = buf_[bufLim_ + i - 1];
+                    buf_[bufLim_] = RS;
+                    nChars++;
                     insertRS_ = false;
-                }
-
-                // Copy decoded chars to buffer
-                for (nuint i = 0; i < charsDecoded && bufLim_ < bufSize_; i++)
-                {
-                    buf_[bufLim_++] = decodeBuf[i];
                     bufLimOffset_++;
                 }
-
-                advanceEnd(bufLim_);
-                return true;
+                bufLim_ += nChars;
+                bufLimOffset_ += (Offset)nChars - 1;  // -1 because RS was already counted
+                break;
             }
         }
-        else
-        {
-            // No decoder - treat bytes as characters directly
-            if (insertRS_)
-            {
-                noteRS();
-                buf_[bufLim_++] = RS;
-                bufLimOffset_++;
-                insertRS_ = false;
-            }
 
-            for (nuint i = 0; i < nread && bufLim_ < bufSize_; i++)
-            {
-                buf_[bufLim_++] = (Char)rawBuf[i];
-                bufLimOffset_++;
-            }
+        // Process records - convert LF/CR to RE and set up next RS
+        processRecords();
 
-            advanceEnd(bufLim_);
-            return true;
-        }
+        // Return next character if available
+        if (curIdx() < endIdx())
+            return (Xchar)nextChar();
 
-        return false;
+        return eE;
     }
 
-    private Xchar processRecords(Messenger mgr)
+    private void processRecords()
     {
-        if (insertRS_)
-        {
-            noteRS();
-            insertRS_ = false;
-            return (Xchar)RS;
-        }
-
-        nuint idx = endIdx();
-        if (idx >= bufLim_)
-            return fill(mgr);
-
-        Char c = buf_[(int)idx];
-        advanceEnd(idx + 1);
-
+        // Process from end() to bufLim_, converting line endings and advancing end()
         switch (recordType_)
         {
             case RecordType.unknown:
-                if (c == '\n')
                 {
-                    recordType_ = RecordType.lf;
-                    info_.noteInsertedRSs();
-                    insertRS_ = true;
-                    return (Xchar)RE;
+                    // Scan for first CR or LF to determine record type
+                    nuint? found = findNextCrOrLf(endIdx(), bufLim_);
+                    if (found.HasValue)
+                    {
+                        nuint e = found.Value;
+                        if (buf_[(int)e] == '\n')
+                        {
+                            recordType_ = RecordType.lf;
+                            info_.noteInsertedRSs();
+                            buf_[(int)e] = RE;  // Convert LF to RE
+                            advanceEnd(e + 1);
+                            insertRS_ = true;
+                        }
+                        else  // CR
+                        {
+                            if (e + 1 < bufLim_)
+                            {
+                                if (buf_[(int)(e + 1)] == '\n')
+                                {
+                                    // CRLF
+                                    recordType_ = RecordType.crlf;
+                                    buf_[(int)e] = RE;  // Convert CR to RE
+                                    // Remove the LF by shifting data
+                                    for (nuint i = e + 1; i < bufLim_ - 1; i++)
+                                        buf_[(int)i] = buf_[(int)(i + 1)];
+                                    bufLim_--;
+                                    advanceEnd(e + 1);
+                                    insertRS_ = true;
+                                }
+                                else
+                                {
+                                    // CR only
+                                    recordType_ = RecordType.cr;
+                                    info_.noteInsertedRSs();
+                                    buf_[(int)e] = RE;
+                                    advanceEnd(e + 1);
+                                    insertRS_ = true;
+                                }
+                            }
+                            else
+                            {
+                                // CR at end of buffer - don't know yet
+                                recordType_ = RecordType.crUnknown;
+                                advanceEnd(e);  // Don't include the CR yet
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // No line ending found, process all available data
+                        advanceEnd(bufLim_);
+                    }
                 }
-                else if (c == '\r')
+                break;
+
+            case RecordType.crUnknown:
+                // We had a CR at end of previous buffer
+                // Check if this buffer starts with LF
+                if (endIdx() < bufLim_)
                 {
-                    // Check if CRLF or just CR
-                    if (idx + 1 < bufLim_ && buf_[(int)(idx + 1)] == '\n')
+                    if (buf_[(int)endIdx()] == '\n')
                     {
                         recordType_ = RecordType.crlf;
-                        advanceEnd(idx + 2);
+                        // The CR from previous buffer becomes RE, skip this LF
+                        advanceEnd(endIdx() + 1);
                     }
                     else
                     {
                         recordType_ = RecordType.cr;
                         info_.noteInsertedRSs();
                     }
-                    insertRS_ = true;
-                    return (Xchar)RE;
+                    // Now continue with the appropriate record type
+                    processRecords();
                 }
-                return (Xchar)c;
+                break;
 
             case RecordType.lf:
-                if (c == '\n')
                 {
-                    insertRS_ = true;
-                    return (Xchar)RE;
+                    nuint? found = findNextLf(endIdx(), bufLim_);
+                    if (found.HasValue)
+                    {
+                        buf_[(int)found.Value] = RE;
+                        advanceEnd(found.Value + 1);
+                        insertRS_ = true;
+                    }
+                    else
+                    {
+                        advanceEnd(bufLim_);
+                    }
                 }
-                return (Xchar)c;
+                break;
 
             case RecordType.cr:
-                if (c == '\r')
                 {
-                    insertRS_ = true;
-                    return (Xchar)RE;
+                    nuint? found = findNextCr(endIdx(), bufLim_);
+                    if (found.HasValue)
+                    {
+                        buf_[(int)found.Value] = RE;
+                        advanceEnd(found.Value + 1);
+                        insertRS_ = true;
+                    }
+                    else
+                    {
+                        advanceEnd(bufLim_);
+                    }
                 }
-                return (Xchar)c;
+                break;
 
             case RecordType.crlf:
-                if (c == '\r')
                 {
-                    // Skip the following LF
-                    if (idx + 1 < bufLim_ && buf_[(int)(idx + 1)] == '\n')
+                    // Process CRLF sequences
+                    nuint e = endIdx();
+                    while (e < bufLim_)
                     {
-                        advanceEnd(idx + 2);
+                        nuint? found = findNextCr(e, bufLim_);
+                        if (!found.HasValue)
+                        {
+                            advanceEnd(bufLim_);
+                            break;
+                        }
+                        nuint crPos = found.Value;
+                        if (crPos + 1 < bufLim_)
+                        {
+                            if (buf_[(int)(crPos + 1)] == '\n')
+                            {
+                                buf_[(int)crPos] = RE;
+                                // Remove the LF
+                                for (nuint i = crPos + 1; i < bufLim_ - 1; i++)
+                                    buf_[(int)i] = buf_[(int)(i + 1)];
+                                bufLim_--;
+                                advanceEnd(crPos + 1);
+                                insertRS_ = true;
+                                break;
+                            }
+                            else
+                            {
+                                // CR not followed by LF - just continue
+                                e = crPos + 1;
+                            }
+                        }
+                        else
+                        {
+                            // CR at end of buffer
+                            advanceEnd(crPos);
+                            break;
+                        }
                     }
-                    insertRS_ = true;
-                    return (Xchar)RE;
                 }
-                return (Xchar)c;
+                break;
 
             case RecordType.asis:
-            default:
-                return (Xchar)c;
+                advanceEnd(bufLim_);
+                break;
         }
     }
 
-    private void noteRS()
+    private nuint? findNextCr(nuint start, nuint end)
     {
-        info_.noteRS((Offset)(bufLimOffset_ - (bufLim_ - endIdx())));
+        for (nuint i = start; i < end; i++)
+            if (buf_[(int)i] == '\r')
+                return i;
+        return null;
+    }
+
+    private nuint? findNextLf(nuint start, nuint end)
+    {
+        for (nuint i = start; i < end; i++)
+            if (buf_[(int)i] == '\n')
+                return i;
+        return null;
+    }
+
+    private nuint? findNextCrOrLf(nuint start, nuint end)
+    {
+        for (nuint i = start; i < end; i++)
+            if (buf_[(int)i] == '\r' || buf_[(int)i] == '\n')
+                return i;
+        return null;
     }
 }

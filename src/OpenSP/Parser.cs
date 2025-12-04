@@ -7965,6 +7965,7 @@ public class Parser : ParserState
                         parm.type = SdParam.number;
                         ulong n;
                         if (!stringToNumber(currentInput()!.currentTokenStart(),
+                                           currentInput()!.currentTokenStartIndex(),
                                            currentInput()!.currentTokenLength(),
                                            out n)
                             || n > Number.MaxValue)
@@ -8034,7 +8035,7 @@ public class Parser : ParserState
                         extendNumber(syntax().namelen(), ParserMessages.numberLength);
                         ulong n;
                         Boolean valid;
-                        if (!stringToNumber(@in.currentTokenStart(), @in.currentTokenLength(), out n)
+                        if (!stringToNumber(@in.currentTokenStart(), @in.currentTokenStartIndex(), @in.currentTokenLength(), out n)
                             || n > Constant.syntaxCharMax)
                         {
                             message(ParserMessages.characterNumber,
@@ -8298,22 +8299,31 @@ public class Parser : ParserState
     }
 
     // Boolean stringToNumber(const Char *s, size_t length, unsigned long &result);
-    protected Boolean stringToNumber(Char[]? s, nuint length, out ulong result)
+    // Note: In C#, we need an offset parameter because arrays don't have pointer arithmetic
+    protected Boolean stringToNumber(Char[]? s, nuint offset, nuint length, out ulong result)
     {
         result = 0;
         if (s == null || length == 0)
             return false;
+
         ulong n = 0;
         if (length < 10)
         {
             for (nuint i = 0; i < length; i++)
-                n = 10 * n + (ulong)sd().digitWeight(s[i]);
+            {
+                int w = sd().digitWeight(s[offset + i]);
+                if (w < 0)
+                    return false;
+                n = 10 * n + (ulong)w;
+            }
         }
         else
         {
             for (nuint i = 0; i < length; i++)
             {
-                int val = sd().digitWeight(s[i]);
+                int val = sd().digitWeight(s[offset + i]);
+                if (val < 0)
+                    return false;
                 if (n <= ulong.MaxValue / 10 && (n *= 10) <= ulong.MaxValue - (ulong)val)
                     n += (ulong)val;
                 else

@@ -49,13 +49,8 @@ public class UnivCharsetDesc
     // Copy constructor
     public UnivCharsetDesc(UnivCharsetDesc x)
     {
-        // Copy the charMap by swapping (CharMap has swap method)
-        charMap_ = new CharMap<Unsigned32>((Unsigned32)1 << 31);
-        // Use swap-based copy
-        CharMap<Unsigned32> temp = new CharMap<Unsigned32>((Unsigned32)1 << 31);
-        temp.swap(x.charMap_);
-        charMap_.swap(temp);
-        temp.swap(x.charMap_); // restore x's charMap
+        // Use proper copy constructor for charMap
+        charMap_ = new CharMap<Unsigned32>(x.charMap_);
 
         // Copy the rangeMap
         rangeMap_ = new RangeMap<WideChar, UnivChar>();

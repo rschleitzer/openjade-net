@@ -343,6 +343,10 @@ public abstract class ParserApp : EntityApp
     {
         Owner<EventHandler> eh = new Owner<EventHandler>(eceh);
         parseAll(parser_, eh.pointer()!, eceh.cancelPtr());
+        // In C++, Owner destructor calls delete which calls the destructor.
+        // In C#, we need to explicitly dispose if the object is IDisposable.
+        if (eceh is IDisposable disposable)
+            disposable.Dispose();
         uint errorCount = eceh.errorCount();
         if (errorLimit_ != 0 && errorCount >= errorLimit_)
             message(ParserAppMessages.errorLimitExceeded,

@@ -249,6 +249,14 @@ public class ElementType : Named, IAttributed
     private ShortReferenceMap? map_;
     private Attributed attributed_ = new Attributed();
 
+    // Default constructor for Vector.append
+    public ElementType()
+        : base()
+    {
+        map_ = null;
+        defIndex_ = 0;
+    }
+
     // ElementType(const StringC &, size_t);
     public ElementType(StringC name, nuint index)
         : base(name)

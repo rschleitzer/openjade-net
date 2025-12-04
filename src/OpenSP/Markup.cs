@@ -213,7 +213,7 @@ public class Markup
         item.index = (byte)rn;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addReservedName(Syntax::ReservedName, const StringC &);
@@ -240,7 +240,7 @@ public class Markup
         item.index = (byte)rn;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addSdReservedName(Sd::ReservedName, const Char *, size_t);
@@ -284,7 +284,7 @@ public class Markup
         item.type = (byte)Type.s;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addRefEndRe();
@@ -305,7 +305,7 @@ public class Markup
         item.type = (byte)Type.shortref;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addCommentStart();
@@ -334,7 +334,7 @@ public class Markup
         item.type = (byte)Type.name;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addName(const Char *, size_t);
@@ -357,7 +357,7 @@ public class Markup
         item.type = (byte)Type.nameToken;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addNumber(const InputSource *);
@@ -370,7 +370,7 @@ public class Markup
         item.type = (byte)Type.number;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addAttributeValue(const InputSource *);
@@ -383,7 +383,7 @@ public class Markup
         item.type = (byte)Type.attributeValue;
         Char[]? start = @in.currentTokenStart();
         if (start != null)
-            chars_.append(start, length);
+            chars_.append(start, @in.currentTokenStartIndex(), length);
     }
 
     // void addEntityStart(const Ptr<EntityOrigin> &);

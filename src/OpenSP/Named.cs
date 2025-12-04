@@ -7,6 +7,11 @@ public class Named
 {
     private StringC name_ = new StringC();
 
+    // Default constructor for Vector.append
+    public Named()
+    {
+    }
+
     // Named(const StringC &name) : name_(name) { }
     public Named(StringC name)
     {

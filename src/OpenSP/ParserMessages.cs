@@ -909,6 +909,26 @@ public static class ParserMessages
         MessageType.Severity.warning, null, 576, "length of reserved name %1 exceeds NAMELEN (%2)");
     public static readonly MessageType1 cannotGenerateSystemIdNotation = new MessageType1(
         MessageType.Severity.warning, null, 577, "cannot generate system identifier for notation %1");
+    public static readonly MessageType1 cannotGenerateSystemIdPublic = new MessageType1(
+        MessageType.Severity.warning, null, 578, "cannot generate system identifier for public text %1");
+    public static readonly MessageType1 cannotGenerateSystemIdGeneral = new MessageType1(
+        MessageType.Severity.warning, null, 579, "cannot generate system identifier for general entity %1");
+    public static readonly MessageType1 cannotGenerateSystemIdParameter = new MessageType1(
+        MessageType.Severity.warning, null, 580, "cannot generate system identifier for parameter entity %1");
+    public static readonly MessageType1 cannotGenerateSystemIdDoctype = new MessageType1(
+        MessageType.Severity.warning, null, 581, "cannot generate system identifier for document type %1");
+    public static readonly MessageType1 cannotGenerateSystemIdLinktype = new MessageType1(
+        MessageType.Severity.warning, null, 582, "cannot generate system identifier for link type %1");
+
+    // Entity reference messages
+    public static readonly MessageType1 entlvl = new MessageType1(
+        MessageType.Severity.quantityError, null, 583, "the number of open entities cannot exceed ENTLVL (%1)");
+    public static readonly MessageType1 recursiveEntityReference = new MessageType1(
+        MessageType.Severity.error, null, 584, "entity %1 is already open");
+    public static readonly MessageType1L nonExistentEntityRef = new MessageType1L(
+        MessageType.Severity.error, null, 585, "reference to entity %1 for which no system identifier could be generated", "entity was defined here");
+    public static readonly MessageType1 externalEntityRefInAttributeValue = new MessageType1(
+        MessageType.Severity.warning, null, 586, "reference to external entity %1 in attribute value");
 
     // Link processing messages
     public static readonly MessageType2 idlinkElementType = new MessageType2(

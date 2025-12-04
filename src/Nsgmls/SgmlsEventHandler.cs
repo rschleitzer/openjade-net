@@ -59,7 +59,7 @@ public class SgmlsSubdocState
     // void operator=(const SgmlsSubdocState &); - undefined
 }
 
-public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger
+public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
 {
     public const uint outputAll = 0x0FFF;
     public const uint outputLine = 0x0001;
@@ -189,6 +189,8 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger
             os().put(conformingCode);
             os().put('\n');
         }
+        // Flush the output stream
+        os().flush();
     }
 
     private void startData()
@@ -849,7 +851,8 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger
                 default:
                     // FIXME not clear what to do here given possibility of wide characters
                     ulong c = p[i];
-                    if (c < 040)
+                    // Note: C++ uses octal 040 which is 32. C# doesn't have octal literals.
+                    if (c < 32)  // 32 = space, which should NOT be escaped
                     {
                         os().put(escapePrefix);
                         os().put('0');

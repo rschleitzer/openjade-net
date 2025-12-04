@@ -121,6 +121,12 @@ public class Text
     // void addChars(const Char *, size_t, const Location &);
     public void addChars(Char[]? p, nuint length, Location loc)
     {
+        addChars(p, 0, length, loc);
+    }
+
+    // Overload with start index for C++ pointer offset compatibility
+    public void addChars(Char[]? p, nuint startIndex, nuint length, Location loc)
+    {
         if (p == null || length == 0)
             return;
         if (items_.size() == 0
@@ -134,7 +140,7 @@ public class Text
             items_.back().type = TextItem.Type.data;
             items_.back().index = chars_.size();
         }
-        chars_.append(p, length);
+        chars_.append(p, startIndex, length);
     }
 
     // void insertChars(const StringC &, const Location &);

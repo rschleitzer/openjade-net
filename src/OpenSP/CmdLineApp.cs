@@ -94,15 +94,19 @@ public abstract class CmdLineApp : MessageReporter
         nextArg = 0;
 
         // Convert string[] to Char[][] for Options class
-        Char[][] argv = new Char[args.Length][];
+        // Note: In C#, args[0] is the first argument, not the program name.
+        // Options class expects argv[0] to be program name (starts at ind_=1).
+        // We prepend a dummy program name entry.
+        Char[][] argv = new Char[args.Length + 1][];
+        argv[0] = new Char[] { (Char)'n', (Char)'s', (Char)'g', (Char)'m', (Char)'l', (Char)'s' }; // dummy program name
         for (int i = 0; i < args.Length; i++)
         {
-            argv[i] = new Char[args[i].Length];
+            argv[i + 1] = new Char[args[i].Length];
             for (int j = 0; j < args[i].Length; j++)
-                argv[i][j] = args[i][j];
+                argv[i + 1][j] = args[i][j];
         }
 
-        Options<Char> options = new Options<Char>(args.Length, argv, opts_);
+        Options<Char> options = new Options<Char>(args.Length + 1, argv, opts_);
         Char opt;
         while (options.get(out opt))
         {
@@ -157,7 +161,8 @@ public abstract class CmdLineApp : MessageReporter
                     }
             }
         }
-        nextArg = options.ind();
+        // Subtract 1 to account for dummy program name we added at argv[0]
+        nextArg = options.ind() - 1;
         if (errorFile_ != null)
         {
             FileOutputByteStream file = new FileOutputByteStream();

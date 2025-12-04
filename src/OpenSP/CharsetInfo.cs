@@ -19,6 +19,12 @@ public class CharsetInfo
         desc_ = new UnivCharsetDesc();
         inverse_ = new CharMap<Unsigned32>(NoMapping);
         inverse_.setAll(NoMapping);
+
+        // Initialize execToDesc_ with identity mapping for ASCII characters
+        // This is needed so that digitWeight() and other methods work even
+        // before the charset is fully set up (e.g., when parsing SGML declarations)
+        for (int i = 0; i < 256; i++)
+            execToDesc_[i] = (Char)i;
     }
 
     // CharsetInfo(const UnivCharsetDesc &);

@@ -330,7 +330,7 @@ public class PublicId
         else
             haveDisplayVersion_ = false;
 
-        if (nextIdx != 0) // there's more content
+        if (nextIdx < lim) // there's more content
         {
             error = ParserMessages.fpiExtraField;
             return false;
@@ -490,19 +490,17 @@ public class PublicId
     private static Boolean nextField(Char solidus, Char[]? data, ref nuint nextIdx, nuint lim,
                                      out nuint fieldStart, out nuint fieldLength, Boolean dup)
     {
-        if (nextIdx == 0 && data == null)
-        {
-            fieldStart = 0;
-            fieldLength = 0;
-            return false;
-        }
-        fieldStart = nextIdx;
+        fieldStart = 0;
+        fieldLength = 0;
+
         if (data == null)
-        {
-            fieldLength = 0;
-            nextIdx = 0;
             return false;
-        }
+
+        // nextIdx >= lim means we've processed all content
+        if (nextIdx >= lim)
+            return false;
+
+        fieldStart = nextIdx;
         nuint dupVal = dup ? (nuint)1 : (nuint)0;
         for (nuint i = nextIdx; i < lim; i++)
         {
@@ -513,8 +511,9 @@ public class PublicId
                 return true;
             }
         }
+        // No more separators - return the rest as the last field
         fieldLength = lim - fieldStart;
-        nextIdx = 0;
+        nextIdx = lim;  // Mark that we've reached the end
         return true;
     }
 

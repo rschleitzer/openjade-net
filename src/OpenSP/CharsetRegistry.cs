@@ -353,6 +353,11 @@ public class CharsetRegistry
     // static ISORegistrationNumber getRegistrationNumber(const StringC &desig, const CharsetInfo &);
     public static ISORegistrationNumber getRegistrationNumber(StringC sequence, CharsetInfo charset)
     {
+        // First try direct ASCII matching as a fallback (handles uninitialized charsets)
+        ISORegistrationNumber directResult = getRegistrationNumberDirect(sequence);
+        if (directResult != ISORegistrationNumber.UNREGISTERED)
+            return directResult;
+
         // Canonicalize the escape sequence by mapping esc -> ESC,
         // removing leading zeros from escape sequences, and removing
         // initial spaces.
@@ -383,6 +388,96 @@ public class CharsetRegistry
             if (stringEquals(s, esc))
                 return entry.number;
         }
+
+        return ISORegistrationNumber.UNREGISTERED;
+    }
+
+    // Direct ASCII matching for charset identifiers (fallback when charset isn't properly initialized)
+    private static ISORegistrationNumber getRegistrationNumberDirect(StringC sequence)
+    {
+        // Canonicalize: convert lowercase to uppercase, remove leading spaces, compress whitespace
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+        Boolean inWhitespace = true;  // Start true to skip leading whitespace
+        for (nuint i = 0; i < sequence.size(); i++)
+        {
+            Char c = sequence[i];
+            // Check for whitespace (space, tab, newline, CR)
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r')
+            {
+                if (!inWhitespace && sb.Length > 0)
+                {
+                    sb.Append(' ');
+                    inWhitespace = true;
+                }
+                continue;
+            }
+            inWhitespace = false;
+            // Convert lowercase to uppercase
+            if (c >= 'a' && c <= 'z')
+                c = (Char)(c - 'a' + 'A');
+            sb.Append((char)c);
+        }
+        // Remove trailing space
+        string canonical = sb.ToString().TrimEnd();
+
+        // Check for "ISO Registration Number NNN" format at the start
+        // This is the standard format for base charset identifiers
+        if (canonical.StartsWith("ISO REGISTRATION NUMBER "))
+        {
+            // Extract the registration number
+            int numStart = "ISO REGISTRATION NUMBER ".Length;
+            int numEnd = numStart;
+            while (numEnd < canonical.Length && char.IsDigit(canonical[numEnd]))
+                numEnd++;
+            if (numEnd > numStart)
+            {
+                string numStr = canonical.Substring(numStart, numEnd - numStart);
+                if (int.TryParse(numStr, out int regNum))
+                {
+                    return regNum switch
+                    {
+                        6 => ISORegistrationNumber.ISO646_ASCII_G0,
+                        1 => ISORegistrationNumber.ISO646_C0,
+                        77 => ISORegistrationNumber.ISO6429,
+                        100 => ISORegistrationNumber.ISO8859_1,
+                        101 => ISORegistrationNumber.ISO8859_2,
+                        109 => ISORegistrationNumber.ISO8859_3,
+                        110 => ISORegistrationNumber.ISO8859_4,
+                        144 => ISORegistrationNumber.ISO8859_5,
+                        127 => ISORegistrationNumber.ISO8859_6,
+                        126 => ISORegistrationNumber.ISO8859_7,
+                        138 => ISORegistrationNumber.ISO8859_8,
+                        148 => ISORegistrationNumber.ISO8859_9,
+                        14 => ISORegistrationNumber.ISO646_JIS_G0,
+                        13 => ISORegistrationNumber.JIS0201,
+                        168 => ISORegistrationNumber.JIS0208,
+                        159 => ISORegistrationNumber.JIS0212,
+                        149 => ISORegistrationNumber.KSC5601,
+                        58 => ISORegistrationNumber.GB2312,
+                        176 => ISORegistrationNumber.ISO10646_UCS2,
+                        177 => ISORegistrationNumber.ISO10646_UCS4,
+                        _ => ISORegistrationNumber.UNREGISTERED
+                    };
+                }
+            }
+        }
+
+        // Check known escape sequences
+        // ISO10646 UCS-4 variants
+        if (canonical == "ESC 2/5 2/15 4/6" || canonical == "ESC 2/5 2/15 4/4" || canonical == "ESC 2/5 2/15 4/1")
+            return ISORegistrationNumber.ISO10646_UCS4;
+        // ISO10646 UCS-2 variants
+        if (canonical == "ESC 2/5 2/15 4/5" || canonical == "ESC 2/5 2/15 4/3" || canonical == "ESC 2/5 2/15 4/0")
+            return ISORegistrationNumber.ISO10646_UCS2;
+        // ASCII
+        if (canonical == "ESC 2/5 4/0" || canonical == "ESC 2/8 4/0" || canonical == "ESC 2/8 4/2")
+            return ISORegistrationNumber.ISO646_ASCII_G0;
+        // ISO 8859-1
+        if (canonical == "ESC 2/13 4/1")
+            return ISORegistrationNumber.ISO8859_1;
+        // ISO 8859-2
+        if (canonical == "ESC 2/13 4/2")
+            return ISORegistrationNumber.ISO8859_2;
 
         return ISORegistrationNumber.UNREGISTERED;
     }

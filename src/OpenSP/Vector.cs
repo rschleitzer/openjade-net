@@ -232,7 +232,23 @@ public class Vector<T>
     {
         reserve(size_ + n);
         while (n-- > 0)
-            ptr_![size_++] = default!;
+        {
+            // For value types, use default
+            if (typeof(T).IsValueType)
+            {
+                ptr_![size_++] = default!;
+            }
+            // For interfaces or abstract types, use null (like C++ null pointer)
+            else if (typeof(T).IsInterface || typeof(T).IsAbstract)
+            {
+                ptr_![size_++] = default!;
+            }
+            // For concrete reference types, create new instances like C++ default constructor
+            else
+            {
+                ptr_![size_++] = Activator.CreateInstance<T>();
+            }
+        }
     }
 
     // void reserve1(size_t);

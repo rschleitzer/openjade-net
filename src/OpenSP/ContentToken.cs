@@ -137,6 +137,12 @@ public abstract class ContentToken
     protected PackedBoolean inherentlyOptional_;
     private OccurrenceIndicator occurrenceIndicator_;
 
+    // Default constructor for Vector.append
+    protected ContentToken()
+    {
+        occurrenceIndicator_ = OccurrenceIndicator.none;
+    }
+
     // ContentToken(OccurrenceIndicator);
     protected ContentToken(OccurrenceIndicator oi)
     {
@@ -495,6 +501,15 @@ public class LeafContentToken : ContentToken
     private LeafContentToken? simplePcdataTransition_;
     private nuint requiredIndex_;
     private Owner<AndInfo> andInfo_ = new Owner<AndInfo>();
+
+    // Default constructor for Vector.append
+    public LeafContentToken()
+        : base()
+    {
+        isFinal_ = false;
+        orGroupMember_ = false;
+        requiredIndex_ = nuint.MaxValue;
+    }
 
     // LeafContentToken(const ElementType *, OccurrenceIndicator);
     public LeafContentToken(ElementType? element, OccurrenceIndicator oi)

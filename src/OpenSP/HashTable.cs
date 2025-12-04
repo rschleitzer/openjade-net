@@ -74,6 +74,7 @@ public class HashTable<V>
     }
 
     // const V *lookup(const K &key) const
+    // Note: Returns default(V) when key is not found - use tryLookup to distinguish found vs not found
     public V? lookup(StringC key)
     {
         HashTableItemBase<StringC>? tem = table_.lookup(key);

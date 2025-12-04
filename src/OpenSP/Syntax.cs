@@ -917,10 +917,10 @@ public class Syntax : Resource
     // Boolean lookupReservedName(const StringC &str, ReservedName *result) const;
     public Boolean lookupReservedName(StringC str, out ReservedName result)
     {
-        int? tem = nameTable_.lookup(str);
-        if (tem.HasValue)
+        int temValue;
+        if (nameTable_.tryLookup(str, out temValue))
         {
-            result = (ReservedName)tem.Value;
+            result = (ReservedName)temValue;
             return true;
         }
         result = 0;
@@ -930,10 +930,10 @@ public class Syntax : Resource
     // Boolean lookupFunctionChar(const StringC &name, Char *result) const;
     public Boolean lookupFunctionChar(StringC name, out Char result)
     {
-        Char? p = functionTable_.lookup(name);
-        if (p.HasValue)
+        Char temValue;
+        if (functionTable_.tryLookup(name, out temValue))
         {
-            result = p.Value;
+            result = temValue;
             return true;
         }
         result = 0;

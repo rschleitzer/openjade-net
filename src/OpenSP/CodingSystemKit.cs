@@ -49,7 +49,62 @@ public abstract class CodingSystemKit : InputCodingSystemKit
     // static CodingSystemKit *make(const char *);
     public static CodingSystemKit? make(string? systemCharsetName)
     {
-        // Implementation will be added when specific coding systems are ported
-        return null;
+        return new CodingSystemKitImpl();
+    }
+}
+
+// Implementation of CodingSystemKit
+internal class CodingSystemKitImpl : CodingSystemKit
+{
+    private IdentityCodingSystem identityCodingSystem_ = new IdentityCodingSystem();
+
+    public CodingSystemKitImpl()
+    {
+        // Initialize system charset with basic ASCII/Latin-1 mappings
+        UnivCharsetDesc desc = new UnivCharsetDesc();
+        // Map 0-255 to Unicode (identity mapping for Latin-1)
+        desc.addRange(0, 255, 0);
+        systemCharset_.set(desc);
+    }
+
+    public override CodingSystemKit copy()
+    {
+        return new CodingSystemKitImpl();
+    }
+
+    public override CodingSystem identityCodingSystem()
+    {
+        return identityCodingSystem_;
+    }
+
+    public override InputCodingSystem identityInputCodingSystem()
+    {
+        return identityCodingSystem_;
+    }
+
+    public override CodingSystem? makeCodingSystem(string name, Boolean isBctf)
+    {
+        // For now, return identity coding system for most encodings
+        string upperName = name.ToUpperInvariant();
+        if (upperName == "IDENTITY" || upperName == "UTF-8" || upperName == "XML" ||
+            upperName.StartsWith("IS8859") || upperName.StartsWith("ISO-8859"))
+        {
+            return identityCodingSystem_;
+        }
+        return identityCodingSystem_;
+    }
+
+    public override InputCodingSystem? makeInputCodingSystem(StringC name,
+                                                              CharsetInfo charset,
+                                                              Boolean isBctf,
+                                                              out string? staticName)
+    {
+        staticName = "IDENTITY";
+        return identityCodingSystem_;
+    }
+
+    public override Char replacementChar()
+    {
+        return 0xFFFD; // Unicode replacement character
     }
 }

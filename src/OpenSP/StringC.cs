@@ -70,4 +70,27 @@ public class StringC : String<Char>
             result[i] = srcData[start + i];
         return new StringC(result, actualLength);
     }
+
+    // Convert to system string for debugging
+    public string toSystemString()
+    {
+        Char[]? srcData = data();
+        if (srcData == null || size() == 0)
+            return "";
+        var sb = new System.Text.StringBuilder();
+        for (nuint i = 0; i < size(); i++)
+        {
+            Char c = srcData[i];
+            if (c < 0x10000)
+                sb.Append((char)c);
+            else
+                sb.Append($"\\u{c:X}");
+        }
+        return sb.ToString();
+    }
+
+    public override string ToString()
+    {
+        return toSystemString();
+    }
 }

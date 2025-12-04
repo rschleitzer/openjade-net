@@ -115,8 +115,13 @@ public class String<T> where T : struct
     }
 
     // String<T> &assign(const T *, size_t);
-    public String<T> assign(T[] p, nuint n)
+    public String<T> assign(T[]? p, nuint n)
     {
+        if (p == null || n == 0)
+        {
+            length_ = 0;
+            return this;
+        }
         if (alloc_ < n)
         {
             ptr_ = new T[n];
@@ -223,7 +228,8 @@ public class String<T> where T : struct
     // String<T> &operator+=(const String<T> &s)
     public String<T> operatorPlusAssign(String<T> s)
     {
-        append(s.ptr_!, s.length_);
+        if (s.ptr_ != null)
+            append(s.ptr_, s.length_);
         return this;
     }
 
@@ -238,9 +244,22 @@ public class String<T> where T : struct
     // String<T> &append(const T *, size_t);
     public String<T> append(T[] p, nuint length)
     {
+        if (length == 0)
+            return this;
         if (length_ + length > alloc_)
             grow(length);
         Array.Copy(p, 0, ptr_!, (int)length_, (int)length);
+        length_ += length;
+        return this;
+    }
+
+    // Overload for appending from array with offset
+    public String<T> append(T[] p, nuint start, nuint length)
+    {
+        if (length_ + length > alloc_)
+            grow(length);
+        for (nuint i = 0; i < length; i++)
+            ptr_![length_ + i] = p[start + i];
         length_ += length;
         return this;
     }
@@ -281,6 +300,46 @@ public class String<T> where T : struct
         return !operatorEqual(str);
     }
 
+    // Override Object.Equals to use content comparison (required for HashTable lookups)
+    public override bool Equals(object? obj)
+    {
+        if (obj is String<T> other)
+            return operatorEqual(other);
+        return false;
+    }
+
+    // Override GetHashCode (required when overriding Equals)
+    public override int GetHashCode()
+    {
+        if (length_ == 0 || ptr_ == null)
+            return 0;
+
+        // Simple hash combining first few characters
+        int hash = 17;
+        nuint count = length_ < 8 ? length_ : 8;
+        for (nuint i = 0; i < count; i++)
+        {
+            hash = hash * 31 + ptr_![i].GetHashCode();
+        }
+        return hash;
+    }
+
+    // Operator == for value comparison
+    public static bool operator ==(String<T>? left, String<T>? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left is null || right is null)
+            return false;
+        return left.operatorEqual(right);
+    }
+
+    // Operator != for value comparison
+    public static bool operator !=(String<T>? left, String<T>? right)
+    {
+        return !(left == right);
+    }
+
     // void clear();
     public void clear()
     {
@@ -316,5 +375,17 @@ public class String<T> where T : struct
             Array.Copy(ptr_, s, (int)length_);
         ptr_ = s;
         alloc_ = newAlloc;
+    }
+
+    // Helper to create String<uint> from C# string (for StringC alias)
+    // This is used for catalog keywords which are ASCII
+    public static String<uint> FromString(string s)
+    {
+        String<uint> result = new String<uint>();
+        foreach (char c in s)
+        {
+            result.operatorPlusAssign((uint)c);
+        }
+        return result;
     }
 }
