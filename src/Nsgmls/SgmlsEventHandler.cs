@@ -405,7 +405,7 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
         outputLocation(ev.location());
         flushData();
         os().put(piCode);
-        outputString(ev.data(), ev.dataLength());
+        outputString(ev.data(), ev.dataOffset(), ev.dataLength());
         os().put('\n');
     }
 

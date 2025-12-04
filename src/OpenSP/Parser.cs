@@ -1062,15 +1062,16 @@ public class Parser : ParserState
             if (markup != null)
             {
                 nuint nS = currentInput()!.currentTokenLength() - 6;
+                Char[]? tokenBuf = currentInput()!.currentTokenStart();
+                nuint tokenIdx = currentInput()!.currentTokenStartIndex();
                 for (nuint i = 0; i < nS; i++)
-                    markup.addS(currentInput()!.currentTokenStart()![i]);
+                    markup.addS(tokenBuf![tokenIdx + i]);
                 markup.addDelim(Syntax.DelimGeneral.dMDO);
                 // Extract just the "SGML" portion of the token
-                Char[]? tokenStart = currentInput()!.currentTokenStart();
-                nuint tokenLen = currentInput()!.currentTokenLength();
                 Char[] sgmlChars = new Char[4];
+                nuint tokenLen = currentInput()!.currentTokenLength();
                 for (nuint i = 0; i < 4 && (nS + 2 + i) < tokenLen; i++)
-                    sgmlChars[i] = tokenStart![nS + 2 + i];
+                    sgmlChars[i] = tokenBuf![tokenIdx + nS + 2 + i];
                 markup.addSdReservedName(Sd.ReservedName.rSGML, sgmlChars, 4);
             }
             Syntax syntaxp = new Syntax(sd());
@@ -6730,7 +6731,7 @@ public class Parser : ParserState
                 case Tokens.tokenChar:
                     Char[]? start = ins.currentTokenStart();
                     if (start != null)
-                        buf.operatorPlusAssign(start[0]);
+                        buf.operatorPlusAssign(start[ins.currentTokenStartIndex()]);
                     if (buf.size() / 2 > syntax().pilen())
                     {
                         message(ParserMessages.processingInstructionLength,
