@@ -335,8 +335,10 @@ public class SOEntityCatalog : EntityCatalog
             if (entry != null)
             {
                 Boolean isNdata = entity.dataType() == EntityDecl.DataType.ndata;
+                // Only pass publicId when entry is from DELEGATE (delegated lookup)
+                // For regular PUBLIC entries, pass null to avoid adding CATALOG PUBLIC to FSI
                 return expandCatalogSystemId(entry.systemId, entry.loc, entry.baseNumber,
-                                             isNdata, charset, publicId, mgr, result);
+                                             isNdata, charset, delegated ? publicId : null, mgr, result);
             }
         }
 
@@ -376,8 +378,9 @@ public class SOEntityCatalog : EntityCatalog
         CatalogEntry? entry = findBestPublicEntry(publicId, false, charset, out delegated);
         if (entry != null)
         {
+            // Only pass publicId when delegated, same as lookup()
             return expandCatalogSystemId(entry.systemId, entry.loc, entry.baseNumber,
-                                         false, charset, publicId, mgr, result);
+                                         false, charset, delegated ? publicId : null, mgr, result);
         }
         return false;
     }

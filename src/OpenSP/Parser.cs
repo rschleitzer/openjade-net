@@ -6787,14 +6787,19 @@ public class Parser : ParserState
         if (ins == null) return;
         nuint length = ins.currentTokenLength();
         Char[]? s = ins.currentTokenStart();
+        nuint startIdx = ins.currentTokenStartIndex();  // C# fix: get actual start index
         nuint i = 0;
         if (currentMode() == Mode.econMode || currentMode() == Mode.econnetMode)
         {
             // FIXME do this in advance (what about B sequence?)
-            for (i = 0; i < length && s != null && syntax().isS((Xchar)s[i]); i++)
+            for (i = 0; i < length && s != null && syntax().isS((Xchar)s[startIdx + i]); i++)
                 ;
             if (i > 0 && eventsWanted().wantInstanceMarkup())
-                eventHandler().sSep(new SSepEvent(s, i, currentLocation(), false));
+            {
+                Char[] sSubArray = new Char[i];
+                Array.Copy(s!, (int)startIdx, sSubArray, 0, (int)i);
+                eventHandler().sSep(new SSepEvent(sSubArray, i, currentLocation(), false));
+            }
         }
         if (i < length)
         {
@@ -6807,7 +6812,7 @@ public class Parser : ParserState
                 if (s != null)
                 {
                     Char[] subArray = new Char[length - i];
-                    Array.Copy(s, (int)i, subArray, 0, (int)(length - i));
+                    Array.Copy(s, (int)(startIdx + i), subArray, 0, (int)(length - i));
                     eventHandler().data(new ImmediateDataEvent(Event.Type.characterData, subArray, length - i,
                                                                location, false));
                 }
@@ -6816,18 +6821,18 @@ public class Parser : ParserState
             // FIXME speed this up
             for (; length > 0 && s != null; location.operatorPlusAssign(1), length--, i++)
             {
-                if (s[i] == syntax().standardFunction((int)Syntax.StandardFunction.fRS))
+                if (s[startIdx + i] == syntax().standardFunction((int)Syntax.StandardFunction.fRS))
                 {
                     noteRs();
                     if (eventsWanted().wantInstanceMarkup())
-                        eventHandler().ignoredRs(new IgnoredRsEvent(s[i], location));
+                        eventHandler().ignoredRs(new IgnoredRsEvent(s[startIdx + i], location));
                 }
-                else if (s[i] == syntax().standardFunction((int)Syntax.StandardFunction.fRE))
+                else if (s[startIdx + i] == syntax().standardFunction((int)Syntax.StandardFunction.fRE))
                     queueRe(location);
                 else
                 {
                     noteData();
-                    Char[] singleChar = new Char[] { s[i] };
+                    Char[] singleChar = new Char[] { s[startIdx + i] };
                     eventHandler().data(new ImmediateDataEvent(Event.Type.characterData, singleChar, 1,
                                                                location, false));
                 }

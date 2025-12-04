@@ -89,6 +89,7 @@ internal class DelegateEventHandler : EventHandler
     protected EventHandler? delegateTo_;
 
     public override void data(DataEvent? ev) { delegateTo_?.data(ev); }
+    public override void sSep(SSepEvent? ev) { delegateTo_?.sSep(ev); }
     public override void startElement(StartElementEvent? ev) { delegateTo_?.startElement(ev); }
     public override void endElement(EndElementEvent? ev) { delegateTo_?.endElement(ev); }
     public override void pi(PiEvent? ev) { delegateTo_?.pi(ev); }
@@ -114,6 +115,7 @@ internal class QueueEventHandler : EventHandler
     private IQueue<Event> queue_ = new IQueue<Event>();
 
     public override void data(DataEvent? ev) { if (ev != null) { ev.copyData(); queue_.append(ev); } }
+    public override void sSep(SSepEvent? ev) { if (ev != null) { ev.copyData(); queue_.append(ev); } }
     public override void startElement(StartElementEvent? ev) { if (ev != null) { ev.copyData(); queue_.append(ev); } }
     public override void endElement(EndElementEvent? ev) { if (ev != null) { ev.copyData(); queue_.append(ev); } }
     public override void pi(PiEvent? ev) { if (ev != null) { ev.copyData(); queue_.append(ev); } }
@@ -1748,6 +1750,7 @@ internal class ArcEngineImpl : DelegateEventHandler
                     {
                         ImmediateDataEvent dataEv = new ImmediateDataEvent(ev.type(),
                                                                             ev.data(),
+                                                                            ev.dataOffset(),
                                                                             ev.dataLength(),
                                                                             ev.location(),
                                                                             false);

@@ -249,7 +249,7 @@ public class MultiReplacementOrigin : Origin
 }
 
 // Implementation class for InputSourceOrigin
-internal class InputSourceOriginImpl : InputSourceOrigin
+public class InputSourceOriginImpl : InputSourceOrigin
 {
     private Vector<InputSourceOriginNamedCharRef> charRefs_ = new Vector<InputSourceOriginNamedCharRef>();
     private StringC charRefOrigNames_ = new StringC();
@@ -361,8 +361,13 @@ internal class InputSourceOriginImpl : InputSourceOrigin
 }
 
 // EntityOrigin - abstract base for entity origins
-public abstract class EntityOrigin : InputSourceOrigin
+// In C++, EntityOriginImpl directly extends InputSourceOriginImpl
+// We make EntityOrigin extend InputSourceOriginImpl to get proper defLocation traversal
+public abstract class EntityOrigin : InputSourceOriginImpl
 {
+    protected EntityOrigin() : base() { }
+    protected EntityOrigin(Location refLocation) : base(refLocation) { }
+
     public static nuint allocSize = 0; // Not used in C#
 
     public static EntityOrigin make(Allocator alloc, ConstPtr<Entity> entity)
@@ -392,59 +397,53 @@ public abstract class EntityOrigin : InputSourceOrigin
 }
 
 // Implementation class for EntityOrigin
+// In C++, EntityOriginImpl extends InputSourceOriginImpl, so it IS an InputSourceOrigin
+// This is critical for defLocation traversal to work correctly
 internal class EntityOriginImpl : EntityOrigin
 {
     private ConstPtr<Entity> entity_ = new ConstPtr<Entity>();
     private Index refLength_;
     private Owner<Markup> markup_ = new Owner<Markup>();
-    private Location refLocation_ = new Location();
 
     public EntityOriginImpl(ConstPtr<Entity> entity)
+        : base()
     {
         entity_ = new ConstPtr<Entity>(entity);
         refLength_ = 0;
     }
 
     public EntityOriginImpl(ConstPtr<Entity> entity, Location refLocation)
+        : base(refLocation)
     {
         entity_ = new ConstPtr<Entity>(entity);
-        refLocation_ = new Location(refLocation);
         refLength_ = 0;
     }
 
     public EntityOriginImpl(ConstPtr<Entity> entity, Location refLocation, Index refLength, Owner<Markup> markup)
+        : base(refLocation)
     {
         entity_ = new ConstPtr<Entity>(entity);
-        refLocation_ = new Location(refLocation);
         refLength_ = refLength;
         markup_.swap(markup);
     }
 
-    public override Location parent() => refLocation_;
     public override Index refLength() => refLength_;
     public override Entity? entity() => entity_.pointer();
     public override EntityDecl? entityDecl() => entity_.pointer();
     public override Markup? markup() => markup_.pointer();
     public override EntityOrigin? asEntityOrigin() => this;
+    public override InputSourceOrigin? asInputSourceOrigin() => this;
 
     public override InputSourceOrigin copy()
     {
         Owner<Markup> m = new Owner<Markup>();
         if (markup_.hasValue())
             m.operatorAssign(new Markup(markup_.pointer()!));
-        return new EntityOriginImpl(entity_, refLocation_, refLength_, m);
+        return new EntityOriginImpl(entity_, parent(), refLength_, m);
     }
 
-    public override void noteCharRef(Index replacementIndex, NamedCharRef charRef)
-    {
-        // Delegate to base implementation if needed
-    }
-
-    public override void setExternalInfo(ExternalInfo? info)
-    {
-        // Delegate to base implementation if needed
-    }
-
+    // Override defLocation to handle internal entities
+    // For external entities, this returns false and the base class handles it
     public override Boolean defLocation(Offset off, out Origin? origin, out Index index)
     {
         origin = null;

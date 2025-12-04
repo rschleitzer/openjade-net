@@ -385,6 +385,16 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
         outputString(ev.data(), ev.dataOffset(), ev.dataLength());
     }
 
+    // void sSep(SSepEvent *);
+    // Separator characters (spaces) should be output as data content
+    public override void sSep(SSepEvent? ev)
+    {
+        if (ev == null) return;
+        outputLocation(ev.location());
+        startData();
+        outputString(ev.data(), ev.dataOffset(), ev.dataLength());
+    }
+
     // void sdataEntity(SdataEntityEvent *);
     public override void sdataEntity(SdataEntityEvent? ev)
     {

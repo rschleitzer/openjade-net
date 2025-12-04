@@ -869,11 +869,15 @@ internal class EntityManagerImpl : ExtendEntityManager
         if (defLoc != null && defLoc.storageObjectSpec != null &&
             defLoc.storageObjectSpec.storageManager == sos.storageManager)
         {
-            // Use the defLoc's specId as the base for resolving relative paths
-            sos.baseId = new StringC(defLoc.storageObjectSpec.specId);
-            // Resolve the base against the defLoc's baseId first
-            if (defLoc.storageObjectSpec.baseId.size() > 0)
+            // Use the actualStorageId if available (the resolved path where file was found)
+            // Otherwise construct from specId + baseId
+            if (defLoc.actualStorageId.size() > 0)
             {
+                sos.baseId = new StringC(defLoc.actualStorageId);
+            }
+            else
+            {
+                sos.baseId = new StringC(defLoc.storageObjectSpec.specId);
                 sos.storageManager.resolveRelative(defLoc.storageObjectSpec.baseId,
                                                    sos.baseId, false);
             }
