@@ -1714,9 +1714,10 @@ internal class ArcEngineImpl : DelegateEventHandler
             {
                 Location loc = new Location(ev.location());
                 Syntax? syn = syntax_.pointer();
+                nuint dataOffset = ev.dataOffset();
                 for (nuint i = 0; i < ev.dataLength(); i++)
                 {
-                    Char ch = ev.data()[i];
+                    Char ch = ev.data()![dataOffset + i];
                     if (syn != null && syn.isS((int)ch) && ch != syn.space())
                     {
                         if (ch == syn.standardFunction((int)Syntax.StandardFunction.fRS))
@@ -1831,11 +1832,13 @@ internal class ArcEngineImpl : DelegateEventHandler
         {
             Boolean match = true;
             nuint i = 0;
+            nuint dataOffset = ev.dataOffset();
+            Char[]? data = ev.data();
             SubstTable? substTable = syntax_.pointer()?.generalSubstTable();
 
             for (nuint j = 0; j < is10744_.size() && match; i++, j++)
             {
-                Char c = substTable != null ? substTable[ev.data()[i]] : ev.data()[i];
+                Char c = substTable != null ? substTable[data![dataOffset + i]] : data![dataOffset + i];
                 if (c != is10744_[j])
                     match = false;
             }
@@ -1849,27 +1852,27 @@ internal class ArcEngineImpl : DelegateEventHandler
                 {
                     for (nuint j = 0; j < namespaceDelim_.size() && match; j++)
                     {
-                        Char c = substTable != null ? substTable[ev.data()[i + j]] : ev.data()[i + j];
+                        Char c = substTable != null ? substTable[data![dataOffset + i + j]] : data![dataOffset + i + j];
                         if (c != namespaceDelim_[j])
                             match = false;
                     }
                 }
 
-                if (match || (syn != null && syn.isS((int)ev.data()[i])))
+                if (match || (syn != null && syn.isS((int)data![dataOffset + i])))
                 {
                     if (match)
                         i += namespaceDelim_.size();
                     else
                     {
-                        do { i++; } while (i < ev.dataLength() && syn!.isS((int)ev.data()[i]));
+                        do { i++; } while (i < ev.dataLength() && syn!.isS((int)data![dataOffset + i]));
                     }
 
                     if (i < ev.dataLength())
                     {
                         StringC token = new StringC();
-                        while (i < ev.dataLength() && (syn == null || !syn.isS((int)ev.data()[i])))
+                        while (i < ev.dataLength() && (syn == null || !syn.isS((int)data![dataOffset + i])))
                         {
-                            Char c = substTable != null ? substTable[ev.data()[i]] : ev.data()[i];
+                            Char c = substTable != null ? substTable[data![dataOffset + i]] : data![dataOffset + i];
                             token.operatorPlusAssign(c);
                             i++;
                         }
@@ -1877,20 +1880,20 @@ internal class ArcEngineImpl : DelegateEventHandler
                         if (!match && token.Equals(arcBase_))
                         {
                             nuint dataLength = ev.dataLength();
-                            Char[] data = ev.data();
+                            // Note: data and dataOffset were already defined above
                             for (; ; )
                             {
-                                while (i < dataLength && syn!.isS((int)data[i]))
+                                while (i < dataLength && syn!.isS((int)data![dataOffset + i]))
                                     i++;
                                 if (i >= dataLength)
                                     break;
                                 nuint start = i++;
-                                while (i < dataLength && !syn!.isS((int)data[i]))
+                                while (i < dataLength && !syn!.isS((int)data![dataOffset + i]))
                                     i++;
                                 // Create StringC from substring of the data array
                                 StringC name = new StringC();
                                 for (nuint k = start; k < i; k++)
-                                    name.operatorPlusAssign(data[k]);
+                                    name.operatorPlusAssign(data![dataOffset + k]);
                                 substTable?.subst(name);
                                 arcProcessors_.resize(arcProcessors_.size() + 1);
                                 Location loc = new Location(ev.location());

@@ -1087,8 +1087,10 @@ internal class ExternalInputSource : InputSource
                 for (nuint i = 0; i < keepSize; i++)
                     buf_[i] = buf_[startIdx() + i];
             }
+            // After compaction, data is at [0, keepSize), so we need to reset endIndex to keepSize
             moveStart(buf_, 0);
-            bufLim_ = endIdx();
+            advanceEnd(keepSize);  // FIX: Set endIndex to keepSize after compaction
+            bufLim_ = keepSize;     // FIX: Set bufLim_ to keepSize, not old endIdx()
 
             // Ensure buffer is large enough
             nuint neededSize = bufLim_ + readSize_ + 64;
@@ -1148,14 +1150,44 @@ internal class ExternalInputSource : InputSource
                     for (nuint i = nChars; i > 0; i--)
                         buf_[bufLim_ + i] = buf_[bufLim_ + i - 1];
                     buf_[bufLim_] = RS;
+                    // DEBUG: Console.Error.WriteLine fill: INSERTING RS at bufLim_={bufLim_}, next chars: '{new string(buf_.Skip((int)bufLim_+1).Take(10).Select(c => c < 32 ? '.' : (char)c).ToArray())}'");
                     nChars++;
                     insertRS_ = false;
                     bufLimOffset_++;
+                    // Advance end past the RS so processRecords doesn't find it as an LF
+                    advanceEnd(bufLim_ + 1);
                 }
                 bufLim_ += nChars;
                 bufLimOffset_ += (Offset)nChars - 1;  // -1 because RS was already counted
                 break;
             }
+        }
+
+        // Insert RS at current position if needed (BEFORE processRecords)
+        // This handles the case where insertRS_ was set in a previous fill() call
+        // and there's still data in the buffer (we didn't need to read new data)
+        if (insertRS_ && endIdx() < bufLim_)
+        {
+            // Ensure buffer has room for one more character
+            if (bufLim_ >= bufSize_)
+            {
+                nuint neededSize = bufLim_ + 64;
+                Char[] newBuf = new Char[neededSize];
+                Array.Copy(buf_, newBuf, (int)bufLim_);
+                changeBuffer(newBuf, buf_);
+                buf_ = newBuf;
+                bufSize_ = neededSize;
+            }
+            info_.noteRS((Offset)(bufLimOffset_ - (bufLim_ - endIdx())));
+            // Shift data from endIdx to bufLim by 1 to make room for RS
+            for (nuint i = bufLim_; i > endIdx(); i--)
+                buf_[(int)i] = buf_[(int)(i - 1)];
+            buf_[(int)endIdx()] = RS;
+            // DEBUG: Console.Error.WriteLine fill AFTER LOOP: INSERTING RS at endIdx()={endIdx()}, bufLim_={bufLim_}, next chars: '{new string(buf_.Skip((int)endIdx()+1).Take(10).Select(c => c < 32 ? '.' : (char)c).ToArray())}'");
+            bufLim_++;
+            bufLimOffset_++;
+            advanceEnd(endIdx() + 1);
+            insertRS_ = false;
         }
 
         // Process records - convert LF/CR to RE and set up next RS
@@ -1259,6 +1291,7 @@ internal class ExternalInputSource : InputSource
                         buf_[(int)found.Value] = RE;
                         advanceEnd(found.Value + 1);
                         insertRS_ = true;
+                        // DEBUG: Console.Error.WriteLine processRecords: found LF at {found.Value}, set insertRS_=true, endIdx now={endIdx()}, bufLim_={bufLim_}");
                     }
                     else
                     {

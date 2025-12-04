@@ -43,10 +43,25 @@ public class Recognizer : Resource
             input.startTokenNoMulticode();
 
         Trie? pos = trie_.pointer();
+        int iterations = 0;
+        Xchar firstCh = 0;
         do
         {
-            pos = pos!.next((int)map_[input.tokenChar(mgr)]);
+            Xchar ch = input.tokenChar(mgr);
+            if (iterations == 0) firstCh = ch;
+            EquivCode code = map_[ch];
+            pos = pos!.next((int)code);
+            iterations++;
+            if (pos == null)
+                break;
         } while (pos!.hasNext());
+
+        if (pos == null)
+        {
+            input.endToken(0);
+            return Tokens.tokenUnrecognized;
+        }
+
 
         if (pos.blank() == null)
         {

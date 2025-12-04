@@ -345,10 +345,12 @@ public class Parser : ParserState
     // They will be implemented as the port progresses.
 
     // From parseMode.cxx
-    private const uint modeUsedInSd = 01;
-    private const uint modeUsedInProlog = 02;
-    private const uint modeUsedInInstance = 04;
-    private const uint modeUsesSr = 010;
+    // Note: C++ uses octal literals (01, 02, 04, 010)
+    // C# doesn't have octal, so we use decimal equivalents
+    private const uint modeUsedInSd = 1;       // octal 01 = decimal 1
+    private const uint modeUsedInProlog = 2;   // octal 02 = decimal 2
+    private const uint modeUsedInInstance = 4; // octal 04 = decimal 4
+    private const uint modeUsesSr = 8;         // octal 010 = decimal 8
 
     private static readonly (Mode mode, uint flags)[] modeTable_ = new[]
     {
@@ -542,9 +544,21 @@ public class Parser : ParserState
         int usedSets = 0;
         for (i = 0; i < Syntax.nSet; i++)
             if (sets[i])
-                csets[usedSets++] = syntax().charSet(i)!;
+            {
+                ISet<Char>? setRef = syntax().charSet(i);
+                csets[usedSets++] = setRef!;
+                // Check if colon is in nameStart set
+                if (i == 0 && setRef != null)
+                {
+                    Boolean hasColon = setRef.contains(58);
+                    // DEBUG: Console.Error.WriteLine compileModes: nameStart set contains colon (58)? {hasColon}");
+                }
+                // DEBUG: Console.Error.WriteLine compileModes: adding set {i} ({(Syntax.Set)i})");
+            }
 
         Partition partition = new Partition(chars, csets, usedSets, syntax().generalSubstTable()!);
+        EquivCode colonCode = partition.charCode(58);
+        // DEBUG: Console.Error.WriteLine compileModes: colon (58) equiv code = {colonCode}");
 
         String<EquivCode>[] setCodes = new String<EquivCode>[Syntax.nSet];
         for (i = 0; i < Syntax.nSet; i++)
@@ -553,7 +567,24 @@ public class Parser : ParserState
         int nCodes = 0;
         for (i = 0; i < Syntax.nSet; i++)
             if (sets[i])
-                setCodes[i] = partition.setCodes(nCodes++);
+            {
+                setCodes[i] = partition.setCodes(nCodes);
+                if (i == 0) // nameStart
+                {
+                    // DEBUG: Console.Error.WriteLine compileModes: nameStart setCodes size={setCodes[i].size()}");
+                    Boolean colonInSet = false;
+                    for (nuint k = 0; k < setCodes[i].size(); k++)
+                    {
+                        if (setCodes[i][k] == colonCode)
+                        {
+                            colonInSet = true;
+                            break;
+                        }
+                    }
+                    // DEBUG: Console.Error.WriteLine compileModes: colon code {colonCode} in nameStart setCodes? {colonInSet}");
+                }
+                nCodes++;
+            }
 
         String<EquivCode>[] delimCodes = new String<EquivCode>[Syntax.nDelimGeneral];
         for (i = 0; i < Syntax.nDelimGeneral; i++)
@@ -681,10 +712,11 @@ public class Parser : ParserState
                                      Priority.delim, ambiguities);
                 }
             }
-            setRecognizer(modes[i],
-                          multicode
-                          ? new ConstPtr<Recognizer>(new Recognizer(tb.extractTrie()!, partition.map(), suppressTokens))
-                          : new ConstPtr<Recognizer>(new Recognizer(tb.extractTrie()!, partition.map())));
+            Trie? extractedTrie = tb.extractTrie();
+            Recognizer rec = multicode
+                ? new Recognizer(extractedTrie!, partition.map(), suppressTokens)
+                : new Recognizer(extractedTrie!, partition.map());
+            setRecognizer(modes[i], new ConstPtr<Recognizer>(rec));
             for (nuint j = 0; j < ambiguities.size(); j += 2)
                 message(ParserMessages.lexicalAmbiguity,
                         new TokenMessageArg(ambiguities[j], modes[i], syntaxPointer(), sdPointer()),
@@ -995,6 +1027,7 @@ public class Parser : ParserState
                 return; // will use parent Sd
             if (entityCatalog().sgmlDecl(initCharset, messenger(), sysid_, systemId))
             {
+                // DEBUG: Console.Error.WriteLine Parser: sgmlDecl returned true, systemId={systemId.toSystemString()}");
                 InputSource? catalogIn = entityManager().open(systemId,
                     sd().docCharset(),
                     InputSourceOrigin.make(),
@@ -1002,17 +1035,27 @@ public class Parser : ParserState
                     messenger());
                 if (catalogIn != null)
                 {
+                    // DEBUG: Console.Error.WriteLine Parser: opened catalogIn successfully");
                     pushInput(catalogIn);
                     if (scanForSgmlDecl(initCharset))
+                    {
+                        // DEBUG: Console.Error.WriteLine Parser: scanForSgmlDecl returned true");
                         found = true;
+                    }
                     else
                     {
+                        // DEBUG: Console.Error.WriteLine Parser: scanForSgmlDecl returned false");
                         message(ParserMessages.badDefaultSgmlDecl);
                         popInputStack();
                     }
                 }
+                else
+                {
+                    // DEBUG: Console.Error.WriteLine Parser: catalogIn is null");
+                }
             }
         }
+        // DEBUG: Console.Error.WriteLine Parser: after catalog lookup, found={found}");
         if (found)
         {
             Markup? markup = startMarkup(eventsWanted().wantPrologMarkup(), currentLocation());
@@ -1042,11 +1085,18 @@ public class Parser : ParserState
             compileSdModes();
             ConstPtr<Sd> refSdPtr = new ConstPtr<Sd>(sdPointer().pointer());
             ConstPtr<Syntax> refSyntaxPtr = new ConstPtr<Syntax>(syntaxPointer().pointer());
+            // DEBUG: Console.Error.WriteLine Parser: calling parseSgmlDecl()");
             if (!parseSgmlDecl())
             {
+                // DEBUG: Console.Error.WriteLine Parser: parseSgmlDecl() returned false!");
                 giveUp();
                 return;
             }
+            // DEBUG: Console.Error.WriteLine Parser: parseSgmlDecl() returned true");
+            // Check if colon (58) is a name character
+            Boolean colonIsNameStart = syntax().isNameStartCharacter(58);
+            Boolean colonIsNameChar = syntax().isNameCharacter(58);
+            // DEBUG: Console.Error.WriteLine Parser: After parseSgmlDecl, colon (58) isNameStart={colonIsNameStart}, isNameChar={colonIsNameChar}");
             // queue an SGML declaration event
             eventHandler().sgmlDecl(new SgmlDeclEvent(
                 sdPointer(),
@@ -1066,6 +1116,7 @@ public class Parser : ParserState
         }
         else
         {
+            // DEBUG: Console.Error.WriteLine Parser: found=false, using implied SGML decl");
             if (!implySgmlDecl())
             {
                 giveUp();
@@ -1722,8 +1773,13 @@ public class Parser : ParserState
         if (ins == null) return;
         nuint length = ins.currentTokenLength();
         Syntax syn = syntax();
-        while (syn.isNameCharacter(ins.tokenChar(messenger())))
+        Xchar ch;
+        while (syn.isNameCharacter(ch = ins.tokenChar(messenger())))
+        {
             length++;
+        }
+        if (ch == 10 || ch == 13)
+            // DEBUG: Console.Error.WriteLine extendNameToken: stopped at RS/RE char ({ch}), isNameChar={syn.isNameCharacter(ch)}, category={syn.charCategory(ch)}, length={length}");
         if (length > maxLength)
             message(tooLongMessage, new NumberMessageArg(maxLength));
         ins.endToken(length);
@@ -4764,14 +4820,19 @@ public class Parser : ParserState
             currentMarkup()!.addDelim(Syntax.DelimGeneral.dRNI);
         InputSource? inSrc = currentInput();
         inSrc!.startToken();
-        if (!syntax().isNameStartCharacter(inSrc.tokenChar(messenger())))
+        Xchar firstChar = inSrc.tokenChar(messenger());
+        Boolean isNameStart = syntax().isNameStartCharacter(firstChar);
+        if (!isNameStart)
         {
             message(ParserMessages.rniNameStart);
             return false;
         }
+        // DEBUG: Console.Error.WriteLine getIndicatedReservedName: BEFORE extendNameToken, tokenLength={inSrc.currentTokenLength()}, firstChar={(char)firstChar}");
         extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        // DEBUG: Console.Error.WriteLine getIndicatedReservedName: AFTER extendNameToken, tokenLength={inSrc.currentTokenLength()}");
         StringC buffer = nameBuffer();
         getCurrentToken(syntax().generalSubstTable(), buffer);
+        // DEBUG: Console.Error.WriteLine getIndicatedReservedName: buffer='{buffer.toSystemString()}', firstChar={(char)firstChar} ({firstChar})");
         if (!syntax().lookupReservedName(buffer, out result))
         {
             message(ParserMessages.noSuchReservedName, new StringMessageArg(buffer));
@@ -4786,9 +4847,12 @@ public class Parser : ParserState
     protected Boolean getReservedName(out Syntax.ReservedName result)
     {
         result = Syntax.ReservedName.rALL;
+        // DEBUG: Console.Error.WriteLine getReservedName: before extendNameToken, tokenLength={currentInput()?.currentTokenLength()}");
         extendNameToken(syntax().namelen(), ParserMessages.nameLength);
+        // DEBUG: Console.Error.WriteLine getReservedName: after extendNameToken, tokenLength={currentInput()?.currentTokenLength()}");
         StringC buffer = nameBuffer();
         getCurrentToken(syntax().generalSubstTable(), buffer);
+        // DEBUG: Console.Error.WriteLine getReservedName: buffer='{buffer.toSystemString()}'");
         if (!syntax().lookupReservedName(buffer, out result))
         {
             message(ParserMessages.noSuchReservedName, new StringMessageArg(buffer));
@@ -4809,6 +4873,7 @@ public class Parser : ParserState
         parm.type = Param.attributeValue;
         Text text = new Text();
         text.addChars(currentInput()!.currentTokenStart(),
+                      currentInput()!.currentTokenStartIndex(),
                       currentInput()!.currentTokenLength(),
                       currentLocation());
         text.swap(parm.literalText);
@@ -4976,6 +5041,7 @@ public class Parser : ParserState
         for (;;)
         {
             Token token = getToken(Mode.grpMode);
+            // DEBUG: Console.Error.WriteLine parseGroupToken: token={token}, currentToken='{currentToken().toSystemString()}', allow.nameStart={allow.nameStart()}");
             switch (token)
             {
                 case Tokens.tokenEe:
@@ -5104,6 +5170,7 @@ public class Parser : ParserState
                                 gt.type = GroupToken.Type.elementToken;
                                 StringC buffer = nameBuffer();
                                 getCurrentToken(syntax().generalSubstTable(), buffer);
+                                // DEBUG: Console.Error.WriteLine parseGroupToken: parsed element name='{buffer.toSystemString()}'");
                                 if (currentMarkup() != null)
                                     currentMarkup()!.addName(currentInput()!);
                                 ElementType? e = lookupCreateElement(buffer);
@@ -5188,6 +5255,7 @@ public class Parser : ParserState
         for (;;)
         {
             Token token = getToken(Mode.grpMode);
+            // DEBUG: Console.Error.WriteLine parseGroupConnector: token={token}, currentToken='{currentToken().toSystemString()}'");
             switch (token)
             {
                 case Tokens.tokenEe:
@@ -6175,6 +6243,7 @@ public class Parser : ParserState
         noteData();
         eventHandler().data(new ImmediateDataEvent(Event.Type.characterData,
                                                    currentInput()!.currentTokenStart(),
+                                                   currentInput()!.currentTokenStartIndex(),
                                                    currentInput()!.currentTokenLength(),
                                                    currentLocation(),
                                                    false));
@@ -7099,6 +7168,7 @@ public class Parser : ParserState
                 if (markup != null)
                     markup.addAttributeValue(currentInput()!);
                 text.addChars(currentInput()!.currentTokenStart(),
+                              currentInput()!.currentTokenStartIndex(),
                               currentInput()!.currentTokenLength(),
                               currentLocation());
                 break;
@@ -7128,6 +7198,7 @@ public class Parser : ParserState
                 if (markup != null)
                     markup.addAttributeValue(currentInput()!);
                 text.addChars(currentInput()!.currentTokenStart(),
+                              currentInput()!.currentTokenStartIndex(),
                               currentInput()!.currentTokenLength(),
                               currentLocation());
                 break;
@@ -7168,6 +7239,7 @@ public class Parser : ParserState
                     {
                         Text text = new Text();
                         text.addChars(currentInput()!.currentTokenStart(),
+                                      currentInput()!.currentTokenStartIndex(),
                                       currentInput()!.currentTokenLength(),
                                       currentLocation());
                         nuint nameMarkupIndex = 0;
@@ -7200,6 +7272,7 @@ public class Parser : ParserState
                     {
                         Text text = new Text();
                         text.addChars(currentInput()!.currentTokenStart(),
+                                      currentInput()!.currentTokenStartIndex(),
                                       currentInput()!.currentTokenLength(),
                                       currentLocation());
                         text.subst(syntax().generalSubstTable()!, syntax().space());

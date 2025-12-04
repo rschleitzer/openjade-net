@@ -67,12 +67,14 @@ public class PackedTokenInfo
 
 public class ModeInfo
 {
-    public const uint REQUIRE_EMPTY_STARTTAG = 01;
-    public const uint REQUIRE_EMPTY_ENDTAG = 02;
-    public const uint REQUIRE_CONCUR = 04;
-    public const uint REQUIRE_LINK_OR_CONCUR = 010;
-    public const uint REQUIRE_NOT_KEEPRSRE = 020;
-    public const uint REQUIRE_FLAGS = 037;
+    // Note: C++ uses octal literals (01, 02, 04, 010, 020, 037)
+    // C# doesn't have octal, so we use decimal equivalents
+    public const uint REQUIRE_EMPTY_STARTTAG = 1;    // octal 01 = decimal 1
+    public const uint REQUIRE_EMPTY_ENDTAG = 2;      // octal 02 = decimal 2
+    public const uint REQUIRE_CONCUR = 4;            // octal 04 = decimal 4
+    public const uint REQUIRE_LINK_OR_CONCUR = 8;    // octal 010 = decimal 8
+    public const uint REQUIRE_NOT_KEEPRSRE = 16;     // octal 020 = decimal 16
+    public const uint REQUIRE_FLAGS = 31;            // octal 037 = decimal 31
 
     public const byte SET = (byte)Syntax.nDelimGeneral;
     public const byte FUNCTION = (byte)(SET + Syntax.nSet);

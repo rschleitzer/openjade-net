@@ -6,7 +6,8 @@ namespace OpenSP;
 public class ElementDefinition : Resource
 {
     public enum DeclaredContent { modelGroup, any, cdata, rcdata, empty }
-    public enum OmitFlags { omitStart = 01, omitEnd = 02, omitSpec = 04 }
+    // Note: C++ uses octal literals (01, 02, 04) - in C# use decimal equivalents
+    public enum OmitFlags { omitStart = 1, omitEnd = 2, omitSpec = 4 }
     public const int undefinedIndex = -1;
 
     private Location location_ = new Location();

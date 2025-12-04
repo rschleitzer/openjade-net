@@ -266,17 +266,18 @@ public abstract class InputSource : Link
     }
 
     // void changeBuffer(const Char *newBase, const Char *oldBase);
+    // In C++, this adjusts pointers by (newBase - oldBase).
+    // In C#, we just update the array references - indices stay the same because
+    // the data positions don't change when we resize with Array.Copy.
     protected void changeBuffer(Char[]? newBase, Char[]? oldBase)
     {
-        // In C#, we just update the array references
-        // The caller should set endIndex_ via advanceEnd after calling this
-        nuint offset = curIndex_ - startIndex_;
+        // Only update the array references - indices remain the same
+        // because the data was copied to the same positions in the new buffer
         cur_ = newBase;
         start_ = newBase;
         end_ = newBase;
-        curIndex_ = offset;
-        startIndex_ = 0;
-        // Don't set endIndex_ here - caller should use advanceEnd to set the actual data limit
+        // NOTE: Don't modify curIndex_, startIndex_, or endIndex_ here!
+        // The data positions are the same, so the indices should stay the same.
     }
 
     // void advanceEnd(const Char *newEnd);

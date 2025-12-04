@@ -132,7 +132,8 @@ public struct GroupInfo
 
 public abstract class ContentToken
 {
-    public enum OccurrenceIndicator { none = 0, opt = 01, plus = 02, rep = 03 }
+    // Note: C++ uses octal literals (01, 02, 03) but in C# these would be decimal anyway
+    public enum OccurrenceIndicator { none = 0, opt = 1, plus = 2, rep = 3 }
 
     protected PackedBoolean inherentlyOptional_;
     private OccurrenceIndicator occurrenceIndicator_;

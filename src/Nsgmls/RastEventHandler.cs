@@ -531,7 +531,7 @@ public class RastEventHandler : ErrorCountEventHandler, IMessenger
     public override void data(DataEvent? ev)
     {
         if (ev == null) return;
-        lines(LineType.dataLine, ev.data(), ev.dataLength());
+        lines(LineType.dataLine, ev.data(), ev.dataOffset(), ev.dataLength());
     }
 
     // void pi(PiEvent *);
@@ -813,12 +813,18 @@ public class RastEventHandler : ErrorCountEventHandler, IMessenger
         os().put('\n');
     }
 
-    private void lines(LineType type, Char[] p, nuint length)
+    private void lines(LineType type, Char[]? p, nuint length)
     {
+        lines(type, p, 0, length);
+    }
+
+    private void lines(LineType type, Char[]? p, nuint offset, nuint length)
+    {
+        if (p == null) return;
         nuint i = 0;
         while (i < length)
         {
-            if (printable.Invoke(p[i]) != 0)
+            if (printable.Invoke(p[offset + i]) != 0)
             {
                 int lim;
                 switch (lineLength_)
@@ -843,11 +849,11 @@ public class RastEventHandler : ErrorCountEventHandler, IMessenger
                 int n = lim;
                 for (; ; )
                 {
-                    os().put(p[i]);
+                    os().put(p[offset + i]);
                     i++;
                     if (--n == 0)
                         break;
-                    if (printable.Invoke(p[i]) == 0)
+                    if (printable.Invoke(p[offset + i]) == 0)
                     {
                         lim -= n;
                         break;
@@ -859,7 +865,7 @@ public class RastEventHandler : ErrorCountEventHandler, IMessenger
             {
                 // *p is an unprintable character print it
                 flushLine(type);
-                switch (p[i])
+                switch (p[offset + i])
                 {
                     case RS:
                         os().put("#RS");
@@ -875,7 +881,7 @@ public class RastEventHandler : ErrorCountEventHandler, IMessenger
                         break;
                     default:
                         os().put('#');
-                        os().put(((ulong)p[i]).ToString());
+                        os().put(((ulong)p[offset + i]).ToString());
                         os().put('\n');
                         break;
                 }

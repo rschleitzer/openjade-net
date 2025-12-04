@@ -382,7 +382,7 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
         if (ev == null) return;
         outputLocation(ev.location());
         startData();
-        outputString(ev.data(), ev.dataLength());
+        outputString(ev.data(), ev.dataOffset(), ev.dataLength());
     }
 
     // void sdataEntity(SdataEntityEvent *);
@@ -393,7 +393,7 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
         startData();
         os().put(escapePrefix);
         os().put(sdataDelim);
-        outputString(ev.data(), ev.dataLength());
+        outputString(ev.data(), ev.dataOffset(), ev.dataLength());
         os().put(escapePrefix);
         os().put(sdataDelim);
     }
@@ -832,11 +832,17 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
         return subdocState_.definedNotations_.add(notation.name());
     }
 
-    private void outputString(Char[] p, nuint n)
+    private void outputString(Char[]? p, nuint n)
     {
+        outputString(p, 0, n);
+    }
+
+    private void outputString(Char[]? p, nuint offset, nuint n)
+    {
+        if (p == null) return;
         for (nuint i = 0; i < n; i++)
         {
-            switch (p[i])
+            switch (p[offset + i])
             {
                 case escapePrefixChar:
                     os().put(escapePrefix);
@@ -850,7 +856,7 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
                     break;
                 default:
                     // FIXME not clear what to do here given possibility of wide characters
-                    ulong c = p[i];
+                    ulong c = p[offset + i];
                     // Note: C++ uses octal 040 which is 32. C# doesn't have octal literals.
                     if (c < 32)  // 32 = space, which should NOT be escaped
                     {
@@ -860,7 +866,7 @@ public class SgmlsEventHandler : ErrorCountEventHandler, IMessenger, IDisposable
                         os().put((char)('0' + (c % 8)));
                     }
                     else
-                        os().put((Char)p[i]);
+                        os().put((Char)p[offset + i]);
                     break;
             }
         }

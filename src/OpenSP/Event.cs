@@ -337,13 +337,16 @@ public class EndElementEvent : LocatedEvent
 public class DataEvent : LocatedEvent
 {
     protected Char[]? p_;
+    protected nuint offset_;  // C# addition: offset into p_ where data starts
     protected nuint length_;
 
     // DataEvent(Type, const Char *, size_t, const Location &);
-    public DataEvent(Type type, Char[]? p, nuint length, Location location)
+    // C# note: Added offset parameter to support array-based access
+    public DataEvent(Type type, Char[]? p, nuint offset, nuint length, Location location)
         : base(type, location)
     {
         p_ = p;
+        offset_ = offset;
         length_ = length;
     }
 
@@ -357,6 +360,12 @@ public class DataEvent : LocatedEvent
     public Char[]? data()
     {
         return p_;
+    }
+
+    // C# addition: offset into data() where content starts
+    public nuint dataOffset()
+    {
+        return offset_;
     }
 
     // size_t dataLength() const;
@@ -385,7 +394,16 @@ public class ImmediateDataEvent : DataEvent
 
     // ImmediateDataEvent(Type type, const Char *, size_t, const Location &, Boolean copy);
     public ImmediateDataEvent(Type type, Char[]? p, nuint length, Location location, Boolean copy)
-        : base(type, p, length, location)
+        : base(type, p, 0, length, location)
+    {
+        alloc_ = null;
+        if (copy)
+            copyData();
+    }
+
+    // C# addition: constructor with offset
+    public ImmediateDataEvent(Type type, Char[]? p, nuint offset, nuint length, Location location, Boolean copy)
+        : base(type, p, offset, length, location)
     {
         alloc_ = null;
         if (copy)
@@ -401,8 +419,9 @@ public class ImmediateDataEvent : DataEvent
         if (alloc_ == null && p_ != null)
         {
             alloc_ = new Char[length_];
-            Array.Copy(p_, alloc_, (int)length_);
+            Array.Copy(p_, (int)offset_, alloc_, 0, (int)length_);
             p_ = alloc_;
+            offset_ = 0;  // After copy, data starts at index 0
         }
     }
 }
@@ -411,7 +430,7 @@ public class DataEntityEvent : DataEvent
 {
     // DataEntityEvent(Type type, const InternalEntity *, const ConstPtr<Origin> &);
     public DataEntityEvent(Type type, InternalEntity entity, ConstPtr<Origin> origin)
-        : base(type, entity.@string().data(), entity.@string().size(),
+        : base(type, entity.@string().data(), 0, entity.@string().size(),
                new Location(origin, 0))
     {
     }
@@ -450,6 +469,7 @@ public class SdataEntityEvent : DataEntityEvent
 public class PiEvent : LocatedEvent
 {
     private Char[]? data_;
+    private nuint dataOffset_;  // C# addition: offset into data_ where content starts
     private nuint dataLength_;
 
     // PiEvent(const Char *, size_t, const Location &);
@@ -457,6 +477,16 @@ public class PiEvent : LocatedEvent
         : base(Type.pi, location)
     {
         data_ = data;
+        dataOffset_ = 0;
+        dataLength_ = dataLength;
+    }
+
+    // C# addition: constructor with offset
+    public PiEvent(Char[]? data, nuint dataOffset, nuint dataLength, Location location)
+        : base(Type.pi, location)
+    {
+        data_ = data;
+        dataOffset_ = dataOffset;
         dataLength_ = dataLength;
     }
 
@@ -464,6 +494,12 @@ public class PiEvent : LocatedEvent
     public Char[]? data()
     {
         return data_;
+    }
+
+    // C# addition: offset into data() where content starts
+    public nuint dataOffset()
+    {
+        return dataOffset_;
     }
 
     // size_t dataLength() const;
