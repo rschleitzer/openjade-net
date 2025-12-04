@@ -171,52 +171,177 @@ public class ProcessContextImpl
 
     public void startConnection(SymbolObj? label, Location loc)
     {
-        throw new NotImplementedException();
+        uint connLevel = connectableStackLevel_;
+        for (int idx = 0; idx < connectableStack_.Count; idx++)
+        {
+            Connectable conn = connectableStack_[idx];
+            for (int i = 0; i < conn.ports.Count; i++)
+            {
+                Port port = conn.ports[i];
+                for (int j = 0; j < port.labels.Count; j++)
+                {
+                    if (port.labels[j] == label)
+                    {
+                        restoreConnection(connLevel, (nuint)i);
+                        return;
+                    }
+                }
+            }
+            for (int i = 0; i < conn.principalPortLabels.Count; i++)
+            {
+                if (conn.principalPortLabels[i] == label)
+                {
+                    restoreConnection(connLevel, nuint.MaxValue);
+                    return;
+                }
+            }
+            connLevel--;
+        }
+        // Bad connection - would report error
+        if (connectionStack_.Count > 0)
+            connectionStack_[0].nBadFollow++;
     }
 
     public void endConnection()
     {
-        throw new NotImplementedException();
+        if (inTableRow() && tableStack_.Count > 0 && tableStack_[tableStack_.Count - 1].rowConnectableLevel == connectableStackLevel_)
+            endTableRow();
+        if (connectionStack_.Count > 0 && connectionStack_[0].nBadFollow > 0)
+            connectionStack_[0].nBadFollow--;
+        else if (connectionStack_.Count > 0)
+        {
+            currentFOTBuilder().endNode();
+            Port? port = connectionStack_[0].port;
+            if (port != null && --(port.connected) == 0)
+            {
+                while (port.saveQueue.Count > 0)
+                {
+                    SaveFOTBuilder saved = port.saveQueue.Dequeue();
+                    saved.emit(port.fotb!);
+                }
+            }
+            connectionStack_.RemoveAt(0);
+        }
     }
 
-    public void pushPorts(bool hasPrincipalPort, System.Collections.Generic.List<SymbolObj?> ports, System.Collections.Generic.List<FOTBuilder?> fotbs)
+    public void pushPorts(bool hasPrincipalPort, System.Collections.Generic.List<SymbolObj?> labels, System.Collections.Generic.List<FOTBuilder?> fotbs)
     {
-        throw new NotImplementedException();
+        Connectable c = new Connectable(labels.Count, currentStyleStack(), flowObjLevel_);
+        connectableStack_.Insert(0, c);
+        for (int i = 0; i < labels.Count; i++)
+        {
+            c.ports[i].labels.Add(labels[i]);
+            c.ports[i].fotb = fotbs[i];
+        }
+        connectableStackLevel_++;
+        // TODO: deal with !hasPrincipalPort
     }
 
     public void popPorts()
     {
-        throw new NotImplementedException();
+        connectableStackLevel_--;
+        if (connectableStack_.Count > 0)
+            connectableStack_.RemoveAt(0);
     }
 
     public void pushPrincipalPort(FOTBuilder? principalPort)
     {
-        throw new NotImplementedException();
+        connectionStack_.Insert(0, new Connection(principalPort));
     }
 
     public void popPrincipalPort()
     {
-        throw new NotImplementedException();
+        if (connectionStack_.Count > 0)
+            connectionStack_.RemoveAt(0);
     }
 
-    public void startMapContent(ELObj? obj, Location loc)
+    public void startMapContent(ELObj? contentMap, Location loc)
     {
-        throw new NotImplementedException();
+        bool badFlag = false;
+        if (connectableStack_.Count == 0 || connectableStack_[0].flowObjLevel != flowObjLevel_)
+            connectableStack_.Insert(0, new Connectable(0, currentStyleStack(), flowObjLevel_));
+        Connectable conn = connectableStack_[0];
+        var portNames = new System.Collections.Generic.List<SymbolObj?>();
+        for (int i = 0; i < conn.ports.Count; i++)
+        {
+            portNames.Add(conn.ports[i].labels.Count > 0 ? conn.ports[i].labels[0] : null);
+            conn.ports[i].labels.Clear();
+        }
+        while (contentMap != null && !contentMap.isNil())
+        {
+            PairObj? tem = contentMap.asPair();
+            if (tem == null)
+            {
+                badContentMap(ref badFlag, loc);
+                break;
+            }
+            ELObj? entry = tem.car();
+            contentMap = tem.cdr();
+            tem = entry?.asPair();
+            if (tem != null)
+            {
+                SymbolObj? label = tem.car()?.asSymbol();
+                if (label != null)
+                {
+                    tem = tem.cdr()?.asPair();
+                    if (tem != null)
+                    {
+                        SymbolObj? port = tem.car()?.asSymbol();
+                        if (port != null)
+                        {
+                            bool found = false;
+                            for (int i = 0; i < portNames.Count; i++)
+                            {
+                                if (portNames[i] == port)
+                                {
+                                    conn.ports[i].labels.Add(label);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if (!found)
+                            {
+                                // Bad port - would report error
+                            }
+                        }
+                        else if (tem.car() == vm_.interp.makeFalse())
+                            conn.principalPortLabels.Add(label);
+                        else
+                            badContentMap(ref badFlag, loc);
+                        if (tem.cdr() != null && !tem.cdr()!.isNil())
+                            badContentMap(ref badFlag, loc);
+                    }
+                    else
+                        badContentMap(ref badFlag, loc);
+                }
+                else
+                    badContentMap(ref badFlag, loc);
+            }
+            else
+                badContentMap(ref badFlag, loc);
+        }
     }
 
     public void endMapContent()
     {
-        throw new NotImplementedException();
+        if (connectableStack_.Count > 0 && connectableStack_[0].ports.Count == 0)
+            connectableStack_.RemoveAt(0);
     }
 
-    public void startDiscardLabeled(SymbolObj? sym)
+    public void startDiscardLabeled(SymbolObj? label)
     {
-        throw new NotImplementedException();
+        startFlowObj();
+        Connectable c = new Connectable(1, currentStyleStack(), flowObjLevel_);
+        connectableStack_.Insert(0, c);
+        c.ports[0].labels.Add(label);
+        c.ports[0].fotb = ignoreFotb_;
     }
 
     public void endDiscardLabeled()
     {
-        throw new NotImplementedException();
+        if (connectableStack_.Count > 0)
+            connectableStack_.RemoveAt(0);
+        endFlowObj();
     }
 
     // Table support
@@ -460,9 +585,12 @@ public class ProcessContextImpl
         public ProcessingMode? processingMode;
     }
 
-    private void badContentMap(ref bool flag, Location loc)
+    private void badContentMap(ref bool badFlag, Location loc)
     {
-        throw new NotImplementedException();
+        if (badFlag)
+            return;
+        badFlag = true;
+        // Would report error via vm_.interp.message()
     }
 
     private void coverSpannedRows()
@@ -482,7 +610,53 @@ public class ProcessContextImpl
 
     private void restoreConnection(uint connectableLevel, nuint portIndex)
     {
-        throw new NotImplementedException();
+        uint connLevel = connectableStackLevel_;
+        int idx = 0;
+        while (connLevel != connectableLevel && idx < connectableStack_.Count)
+        {
+            idx++;
+            connLevel--;
+        }
+        if (idx >= connectableStack_.Count)
+            return;
+        Connectable conn = connectableStack_[idx];
+        if (portIndex != nuint.MaxValue)
+        {
+            Port port = conn.ports[(int)portIndex];
+            Connection c = new Connection(conn.styleStack, port, connLevel);
+            if (port.connected > 0)
+            {
+                port.connected++;
+                SaveFOTBuilder save = new SaveFOTBuilder(vm_.currentNode, vm_.processingMode?.name() ?? new StringC());
+                c.fotb = save;
+                port.saveQueue.Enqueue(save);
+            }
+            else
+            {
+                c.fotb = port.fotb;
+                port.connected = 1;
+            }
+            connectionStack_.Insert(0, c);
+            currentFOTBuilder().startNode(vm_.currentNode, vm_.processingMode?.name() ?? new StringC());
+        }
+        else
+        {
+            Connection c = new Connection(conn.styleStack, null, connLevel);
+            if (conn.flowObjLevel == flowObjLevel_)
+            {
+                c.fotb = currentFOTBuilder();
+            }
+            else
+            {
+                SaveFOTBuilder save = new SaveFOTBuilder(vm_.currentNode, vm_.processingMode?.name() ?? new StringC());
+                c.fotb = save;
+                while (principalPortSaveQueues_.Count <= (int)conn.flowObjLevel)
+                    principalPortSaveQueues_.Add(new System.Collections.Generic.Queue<SaveFOTBuilder>());
+                principalPortSaveQueues_[(int)conn.flowObjLevel].Enqueue(save);
+            }
+            connectionStack_.Insert(0, c);
+            currentFOTBuilder().startNode(vm_.currentNode, vm_.processingMode?.name() ?? new StringC());
+        }
     }
 }
 

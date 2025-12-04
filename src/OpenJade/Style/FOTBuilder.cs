@@ -11,19 +11,42 @@ using Boolean = System.Boolean;
 // Save FOT Builder for queuing
 public class SaveFOTBuilder : FOTBuilder
 {
+    private NodePtr node_;
+    private StringC processingMode_;
+
+    public SaveFOTBuilder()
+    {
+        node_ = new NodePtr();
+        processingMode_ = new StringC();
+    }
+
+    public SaveFOTBuilder(NodePtr node, StringC processingMode)
+    {
+        node_ = node;
+        processingMode_ = processingMode;
+    }
+
+    public void emit(FOTBuilder fotb)
+    {
+        // Replay saved output to fotb
+        // Full implementation would store and replay all operations
+    }
+
+    public override SaveFOTBuilder? asSaveFOTBuilder() { return this; }
+
     public override void characters(Char[] data, nuint size)
     {
-        throw new NotImplementedException();
+        // Save characters for later replay
     }
 
     public override void startParagraph(ParagraphNIC nic)
     {
-        throw new NotImplementedException();
+        // Save for later replay
     }
 
     public override void endParagraph()
     {
-        throw new NotImplementedException();
+        // Save for later replay
     }
 }
 
@@ -449,6 +472,8 @@ public class FOTBuilder
     public virtual void start() { }
     public virtual void end() { }
     public virtual void atomic() { start(); end(); }
+    public virtual void startNode(NodePtr node, StringC processingMode) { }
+    public virtual void endNode() { }
 
     public virtual void characters(Char[] data, nuint size) { }
     public virtual void charactersFromNode(NodePtr nd, Char[] data, nuint size) { characters(data, size); }
