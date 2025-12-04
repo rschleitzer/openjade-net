@@ -249,9 +249,13 @@ internal class ArcProcessor : ContentState
     private StringC piDeclAttspecText_ = new StringC();
     private Index piDeclAttspecIndex_;
     private ConstPtr<AttributeDefinitionList> archPiAttributeDefs_ = new ConstPtr<AttributeDefinitionList>();
+#pragma warning disable CS0414 // Field is assigned but its value is never used
     private Boolean arcDtdIsParam_;
+#pragma warning restore CS0414
     private Boolean arcAuto_;
+#pragma warning disable CS0414 // Field is assigned but its value is never used
     private new Boolean mayDefaultAttribute_;
+#pragma warning restore CS0414
     private Vector<StringC> arcOpts_ = new Vector<StringC>();
     private StringC rniContent_ = new StringC();
     private StringC rniArcCont_ = new StringC();

@@ -572,7 +572,9 @@ public class Parser : ParserState
                 if (i == 0) // nameStart
                 {
                     // DEBUG: Console.Error.WriteLine compileModes: nameStart setCodes size={setCodes[i].size()}");
+#pragma warning disable CS0219 // Variable is assigned but its value is never used
                     Boolean colonInSet = false;
+#pragma warning restore CS0219
                     for (nuint k = 0; k < setCodes[i].size(); k++)
                     {
                         if (setCodes[i][k] == colonCode)

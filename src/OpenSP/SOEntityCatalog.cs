@@ -626,7 +626,9 @@ internal class CatalogParser : IMessenger
 
     // Special characters
     private Char minus_;
+#pragma warning disable CS0414 // Field is assigned but its value is never used
     private Char tab_;
+#pragma warning restore CS0414
     private Char re_;
     private Char rs_;
     private Char space_;
