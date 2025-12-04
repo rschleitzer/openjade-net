@@ -1438,6 +1438,23 @@ public class NodePtr
         return node.getDocumentElement(ref result);
     }
 
+    public AccessResult elementIndex(ref ulong index)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        uint idx;
+        var result = node.elementIndex(out idx);
+        index = idx;
+        return result;
+    }
+
+    public uint groveIndex()
+    {
+        if (node == null)
+            return 0;
+        return node.groveIndex();
+    }
+
     private void addRef() { if (node != null) node.addRef(); }
     private void release() { if (node != null) node.release(); }
 }

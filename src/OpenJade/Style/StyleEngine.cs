@@ -124,9 +124,35 @@ public class ProcessContextImpl
         throw new NotImplementedException();
     }
 
-    public void processNodeSafe(NodePtr node, ProcessingMode? mode, bool chunk = true)
+    public void processNodeSafe(NodePtr nodePtr, ProcessingMode? processingMode, bool chunk = true)
     {
-        throw new NotImplementedException();
+        ulong elementIndex = 0;
+        if (nodePtr.elementIndex(ref elementIndex) == AccessResult.accessOK)
+        {
+            uint groveIndex = nodePtr.groveIndex();
+            for (int i = 0; i < nodeStack_.Count; i++)
+            {
+                NodeStackEntry nse = nodeStack_[i];
+                if (nse.elementIndex == elementIndex &&
+                    nse.groveIndex == groveIndex &&
+                    nse.processingMode == processingMode)
+                {
+                    // Loop detected - would report error
+                    vm_.interp.setNodeLocation(nodePtr);
+                    return;
+                }
+            }
+            nodeStack_.Add(new NodeStackEntry
+            {
+                elementIndex = elementIndex,
+                groveIndex = groveIndex,
+                processingMode = processingMode
+            });
+            processNode(nodePtr, processingMode, chunk);
+            nodeStack_.RemoveAt(nodeStack_.Count - 1);
+        }
+        else
+            processNode(nodePtr, processingMode, chunk);
     }
 
     public void nextMatch(StyleObj? style)
