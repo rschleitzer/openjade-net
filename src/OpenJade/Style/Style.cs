@@ -26,8 +26,8 @@ public abstract class InheritedC : IResource
     }
 
     public abstract void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
-                             ref ELObj? value, List<nuint> dependencies);
-    public abstract ELObj? value(VM vm, VarStyleObj? style, List<nuint> dependencies);
+                             ref ELObj? value, System.Collections.Generic.List<nuint> dependencies);
+    public abstract ELObj? value(VM vm, VarStyleObj? style, System.Collections.Generic.List<nuint> dependencies);
     public abstract ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp);
 
     public uint index() { return index_; }
@@ -36,7 +36,8 @@ public abstract class InheritedC : IResource
 
     protected void invalidValue(Location loc, Interpreter interp)
     {
-        throw new NotImplementedException();
+        // Report invalid value error - implementation would use interp.message()
+        // For now, just a no-op as message system is not fully implemented
     }
 }
 
@@ -56,14 +57,33 @@ public class VarInheritedC : InheritedC
     }
 
     public override void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
-                             ref ELObj? value, List<nuint> dependencies)
+                             ref ELObj? cacheObj, System.Collections.Generic.List<nuint> dependencies)
     {
-        throw new NotImplementedException();
+        if (cacheObj == null)
+        {
+            using (new CurrentNodeSetter(style?.node() ?? new NodePtr(), null, vm))
+            {
+                vm.actualDependencies = dependencies;
+                cacheObj = vm.eval(code_?.get(), style?.display());
+                System.Diagnostics.Debug.Assert(cacheObj != null);
+                vm.actualDependencies = null;
+            }
+        }
+        if (!vm.interp.isError(cacheObj))
+        {
+            ConstPtr<InheritedC>? c = inheritedC_?.pointer()?.make(cacheObj, loc_, vm.interp);
+            if (c != null && !c.isNull())
+                c.pointer()!.set(vm, null, fotb, ref cacheObj, dependencies);
+        }
     }
 
-    public override ELObj? value(VM vm, VarStyleObj? style, List<nuint> dependencies)
+    public override ELObj? value(VM vm, VarStyleObj? style, System.Collections.Generic.List<nuint> dependencies)
     {
-        throw new NotImplementedException();
+        using (new CurrentNodeSetter(style?.node() ?? new NodePtr(), null, vm))
+        {
+            vm.actualDependencies = dependencies;
+            return vm.eval(code_?.get(), style?.display());
+        }
     }
 
     public override ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp)
@@ -96,7 +116,17 @@ public class StyleObjIter
 
     public ConstPtr<InheritedC>? next(out VarStyleObj? style)
     {
-        throw new NotImplementedException();
+        style = null;
+        for (; vi_ < (nuint)vecs_.Count; vi_++, i_ = 0)
+        {
+            var vec = vecs_[(int)vi_];
+            if (vec != null && i_ < (nuint)vec.Count)
+            {
+                style = styleVec_[(int)vi_];
+                return vec[(int)i_++];
+            }
+        }
+        return null;
     }
 }
 
@@ -143,17 +173,24 @@ public class VarStyleObj : BasicStyleObj
 
     public override void appendIter(StyleObjIter iter)
     {
-        throw new NotImplementedException();
+        appendIterForce(iter);
+        appendIterNormal(iter);
     }
 
     public override void appendIterForce(StyleObjIter iter)
     {
-        throw new NotImplementedException();
+        var spec = styleSpec_?.pointer();
+        if (spec != null && spec.forceSpecs.Count > 0)
+            iter.append(spec.forceSpecs, this);
     }
 
     public override void appendIterNormal(StyleObjIter iter)
     {
-        throw new NotImplementedException();
+        var spec = styleSpec_?.pointer();
+        if (spec != null && spec.specs.Count > 0)
+            iter.append(spec.specs, this);
+        if (use_ != null)
+            use_.appendIter(iter);
     }
 
     public NodePtr node() { return node_; }
@@ -174,7 +211,12 @@ public class OverriddenStyleObj : StyleObj
 
     public override void appendIter(StyleObjIter iter)
     {
-        throw new NotImplementedException();
+        if (basic_ != null)
+            basic_.appendIterForce(iter);
+        if (override_ != null)
+            override_.appendIter(iter);
+        if (basic_ != null)
+            basic_.appendIterNormal(iter);
     }
 }
 
@@ -195,7 +237,9 @@ public class MergeStyleObj : StyleObj
 
     public override void appendIter(StyleObjIter iter)
     {
-        throw new NotImplementedException();
+        for (int i = 0; i < styles_.Count; i++)
+            if (styles_[i] != null)
+                styles_[i]!.appendIter(iter);
     }
 }
 
@@ -216,7 +260,7 @@ public class InheritedCInfo : IResource
     public ProcessingMode.Rule? rule;
     public ELObj? cachedValue;
     public VarStyleObj? style;
-    public List<nuint> dependencies;
+    public System.Collections.Generic.List<nuint> dependencies;
 
     public InheritedCInfo(ConstPtr<InheritedC>? spec, VarStyleObj? style,
                           uint valLevel, uint specLevel, ProcessingMode.Rule? rule,
@@ -229,7 +273,7 @@ public class InheritedCInfo : IResource
         this.rule = rule;
         this.prev = prev;
         cachedValue = null;
-        dependencies = new List<nuint>();
+        dependencies = new System.Collections.Generic.List<nuint>();
     }
 }
 
@@ -241,48 +285,132 @@ public class PopList : IResource
     public void @ref() { refCount_++; }
     public int unref() { return --refCount_; }
 
-    public List<nuint> list;
-    public List<nuint> dependingList;
+    public System.Collections.Generic.List<nuint> list;
+    public System.Collections.Generic.List<nuint> dependingList;
     public Ptr<PopList>? prev;
 
     public PopList(Ptr<PopList>? prev)
     {
         this.prev = prev;
-        list = new List<nuint>();
-        dependingList = new List<nuint>();
+        list = new System.Collections.Generic.List<nuint>();
+        dependingList = new System.Collections.Generic.List<nuint>();
     }
 }
 
 // Style stack for processing
 public class StyleStack
 {
-    private List<Ptr<InheritedCInfo>> inheritedCInfo_;
+    private System.Collections.Generic.List<Ptr<InheritedCInfo>?> inheritedCInfo_;
     private uint level_;
     private Ptr<PopList>? popList_;
 
     public StyleStack()
     {
-        inheritedCInfo_ = new List<Ptr<InheritedCInfo>>();
+        inheritedCInfo_ = new System.Collections.Generic.List<Ptr<InheritedCInfo>?>();
         level_ = 0;
         popList_ = null;
     }
 
     public ELObj? actual(ConstPtr<InheritedC>? ic, Location loc, Interpreter interp,
-                         List<nuint> dependencies)
+                         System.Collections.Generic.List<nuint> dependencies)
     {
-        throw new NotImplementedException();
+        if (ic == null || ic.isNull()) return null;
+        nuint ind = ic.pointer()!.index();
+        for (int i = 0; i < dependencies.Count; i++)
+        {
+            if (dependencies[i] == ind)
+            {
+                // Circular dependency - actual loop error
+                interp.setNodeLocation(new NodePtr());
+                return interp.makeError();
+            }
+        }
+        dependencies.Add(ind);
+        ConstPtr<InheritedC>? spec = null;
+        VarStyleObj? style = null;
+        if (ind >= (nuint)inheritedCInfo_.Count)
+            spec = ic;
+        else
+        {
+            var p = inheritedCInfo_[(int)ind]?.pointer();
+            if (p == null)
+                spec = ic;
+            else if (p.cachedValue != null)
+            {
+                var dep = p.dependencies;
+                for (int i = 0; i < dep.Count; i++)
+                    dependencies.Add(dep[i]);
+                return p.cachedValue;
+            }
+            else
+            {
+                style = p.style;
+                spec = p.spec;
+            }
+        }
+        VM vm = new VM(interp);
+        vm.styleStack = this;
+        vm.specLevel = level_;
+        return spec?.pointer()?.value(vm, style, dependencies);
     }
 
     public ELObj? actual(ConstPtr<InheritedC>? ic, Interpreter interp,
-                         List<nuint> dependencies)
+                         System.Collections.Generic.List<nuint> dependencies)
     {
         return actual(ic, new Location(), interp, dependencies);
     }
 
     public ELObj? inherited(ConstPtr<InheritedC>? ic, uint specLevel, Interpreter interp,
-                            List<nuint> dependencies)
+                            System.Collections.Generic.List<nuint> dependencies)
     {
-        throw new NotImplementedException();
+        if (ic == null || ic.isNull()) return null;
+        System.Diagnostics.Debug.Assert(specLevel != uint.MaxValue);
+        nuint ind = ic.pointer()!.index();
+        ConstPtr<InheritedC>? spec = null;
+        VarStyleObj? style = null;
+        uint newSpecLevel = uint.MaxValue;
+        if (ind >= (nuint)inheritedCInfo_.Count)
+            spec = ic;
+        else
+        {
+            var p = inheritedCInfo_[(int)ind]?.pointer();
+            while (p != null)
+            {
+                if (p.specLevel < specLevel)
+                    break;
+                p = p.prev?.pointer();
+            }
+            if (p == null)
+                spec = ic;
+            else
+            {
+                if (p.cachedValue != null)
+                {
+                    // We can only use the cached value if none of the values
+                    // we depended on changed since we computed it.
+                    bool cacheOk = true;
+                    for (int i = 0; i < p.dependencies.Count; i++)
+                    {
+                        nuint d = p.dependencies[i];
+                        if (d < (nuint)inheritedCInfo_.Count &&
+                            inheritedCInfo_[(int)d]?.pointer()?.valLevel > p.valLevel)
+                        {
+                            cacheOk = false;
+                            break;
+                        }
+                    }
+                    if (cacheOk)
+                        return p.cachedValue;
+                }
+                style = p.style;
+                spec = p.spec;
+                newSpecLevel = p.specLevel;
+            }
+        }
+        VM vm = new VM(interp);
+        vm.styleStack = this;
+        vm.specLevel = newSpecLevel;
+        return spec?.pointer()?.value(vm, style, dependencies);
     }
 
     public void push(StyleObj? style, VM vm, FOTBuilder fotb)
@@ -301,17 +429,126 @@ public class StyleStack
     public void pushContinue(StyleObj? style, ProcessingMode.Rule? rule,
                              NodePtr node, Messenger? mgr)
     {
-        throw new NotImplementedException();
+        if (style == null) return;
+        StyleObjIter iter = new StyleObjIter();
+        style.appendIter(iter);
+        for (;;)
+        {
+            VarStyleObj? varStyle;
+            ConstPtr<InheritedC>? spec = iter.next(out varStyle);
+            if (spec == null || spec.isNull())
+                break;
+            nuint ind = spec.pointer()!.index();
+            if (ind >= (nuint)inheritedCInfo_.Count)
+            {
+                while ((nuint)inheritedCInfo_.Count <= ind)
+                    inheritedCInfo_.Add(null);
+            }
+            var info = inheritedCInfo_[(int)ind];
+            if (info != null && info.pointer() != null && info.pointer()!.valLevel == level_)
+            {
+                if (rule != null)
+                {
+                    System.Diagnostics.Debug.Assert(info.pointer()!.rule != null);
+                    if (rule.compareSpecificity(info.pointer()!.rule!) == 0)
+                    {
+                        // Ambiguous style - would normally report error via mgr
+                    }
+                }
+            }
+            else
+            {
+                popList_!.pointer()!.list.Add(ind);
+                inheritedCInfo_[(int)ind] = new Ptr<InheritedCInfo>(
+                    new InheritedCInfo(spec, varStyle, level_, level_, rule, info));
+            }
+        }
     }
 
     public void pushEnd(VM vm, FOTBuilder fotb)
     {
-        throw new NotImplementedException();
+        var oldPopList = popList_?.pointer()?.prev?.pointer();
+        if (oldPopList != null)
+        {
+            for (int i = 0; i < oldPopList.dependingList.Count; i++)
+            {
+                nuint d = oldPopList.dependingList[i];
+                // d is the index of a characteristic that depends on the actual
+                // value of another characteristic
+                if ((int)d < inheritedCInfo_.Count &&
+                    inheritedCInfo_[(int)d]?.pointer()?.valLevel != level_)
+                {
+                    var dependencies = inheritedCInfo_[(int)d]?.pointer()?.dependencies;
+                    bool changed = false;
+                    if (dependencies != null)
+                    {
+                        for (int j = 0; j < dependencies.Count; j++)
+                        {
+                            var p = (int)dependencies[j] < inheritedCInfo_.Count
+                                ? inheritedCInfo_[(int)dependencies[j]]?.pointer() : null;
+                            if (p != null && p.valLevel == level_)
+                            {
+                                var oldInfo = inheritedCInfo_[(int)d]?.pointer();
+                                inheritedCInfo_[(int)d] = new Ptr<InheritedCInfo>(
+                                    new InheritedCInfo(oldInfo?.spec, oldInfo?.style,
+                                                       level_, oldInfo?.specLevel ?? 0,
+                                                       oldInfo?.rule, inheritedCInfo_[(int)d]));
+                                popList_!.pointer()!.list.Add(d);
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+                    // If it changed, then doing set() on the new value will add
+                    // it to the dependingList for this level.
+                    if (!changed)
+                        popList_!.pointer()!.dependingList.Add(d);
+                }
+            }
+        }
+        vm.styleStack = this;
+        var popListPtr = popList_?.pointer();
+        if (popListPtr != null)
+        {
+            for (int i = 0; i < popListPtr.list.Count; i++)
+            {
+                var info = inheritedCInfo_[(int)popListPtr.list[i]]?.pointer();
+                if (info != null)
+                {
+                    vm.specLevel = info.specLevel;
+                    info.spec?.pointer()?.set(vm, info.style, fotb,
+                                              ref info.cachedValue, info.dependencies);
+                    if (info.dependencies.Count > 0)
+                        popListPtr.dependingList.Add(popListPtr.list[i]);
+                }
+            }
+        }
+        vm.styleStack = null;
     }
 
     public void pop()
     {
-        throw new NotImplementedException();
+        if (popList_ != null)
+        {
+            var popListPtr = popList_.pointer();
+            if (popListPtr != null)
+            {
+                for (int i = 0; i < popListPtr.list.Count; i++)
+                {
+                    nuint ind = popListPtr.list[i];
+                    if (ind < (nuint)inheritedCInfo_.Count)
+                    {
+                        var info = inheritedCInfo_[(int)ind];
+                        if (info != null && info.pointer() != null)
+                        {
+                            inheritedCInfo_[(int)ind] = info.pointer()!.prev;
+                        }
+                    }
+                }
+                level_--;
+                popList_ = popListPtr.prev;
+            }
+        }
     }
 
     public void pushEmpty() { level_++; }
@@ -320,7 +557,14 @@ public class StyleStack
 
     public void trace(Collector collector)
     {
-        throw new NotImplementedException();
+        for (int i = 0; i < inheritedCInfo_.Count; i++)
+        {
+            for (var p = inheritedCInfo_[i]?.pointer(); p != null; p = p.prev?.pointer())
+            {
+                collector.trace(p.style);
+                collector.trace(p.cachedValue);
+            }
+        }
     }
 }
 

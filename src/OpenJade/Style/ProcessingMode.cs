@@ -320,32 +320,69 @@ public abstract class Expression
     }
 }
 
+// CurrentNodeSetter - saves and restores current node context
+public class CurrentNodeSetter : IDisposable
+{
+    private VM ec_;
+    private NodePtr saveCurrentNode_;
+    private ProcessingMode? saveProcessingMode_;
+
+    public CurrentNodeSetter(NodePtr node, ProcessingMode? mode, VM ec)
+    {
+        ec_ = ec;
+        saveCurrentNode_ = ec.currentNode;
+        saveProcessingMode_ = ec.processingMode;
+        ec.currentNode = node;
+        ec.processingMode = mode;
+    }
+
+    public void Dispose()
+    {
+        ec_.currentNode = saveCurrentNode_;
+        ec_.processingMode = saveProcessingMode_;
+    }
+}
+
 // VM (Virtual Machine) for DSSSL execution
 public class VM
 {
-    private Interpreter interpreter_;
-    private NodePtr? currentNode_;
-    private ProcessingMode? processingMode_;
-    private StyleObj? overridingStyle_;
+    public Interpreter interp;
+    public NodePtr currentNode;
+    public ProcessingMode? processingMode;
+    public StyleObj? overridingStyle;
+    public StyleStack? styleStack;
+    public uint specLevel;
+    public System.Collections.Generic.List<nuint>? actualDependencies;
+    public LanguageObj? currentLanguage;
     private ELObj?[] frame_;
     private int frameSize_;
 
-    public VM(Interpreter interp)
+    public VM(Interpreter interpreter)
     {
-        interpreter_ = interp;
-        currentNode_ = null;
-        processingMode_ = null;
-        overridingStyle_ = null;
+        interp = interpreter;
+        currentNode = new NodePtr();
+        processingMode = null;
+        overridingStyle = null;
+        styleStack = null;
+        specLevel = 0;
+        actualDependencies = null;
+        currentLanguage = null;
         frame_ = Array.Empty<ELObj?>();
         frameSize_ = 0;
     }
 
-    public Interpreter interpreter() { return interpreter_; }
-    public NodePtr? currentNode() { return currentNode_; }
-    public ProcessingMode? processingMode() { return processingMode_; }
-    public StyleObj? overridingStyle() { return overridingStyle_; }
+    public Interpreter interpreter() { return interp; }
 
-    public void setCurrentNode(NodePtr? nd) { currentNode_ = nd; }
-    public void setProcessingMode(ProcessingMode? mode) { processingMode_ = mode; }
-    public void setOverridingStyle(StyleObj? style) { overridingStyle_ = style; }
+    public ELObj? eval(Insn? insn)
+    {
+        if (insn == null) return null;
+        return insn.execute(this);
+    }
+
+    public ELObj? eval(Insn? insn, ELObj?[]? display, ELObj? arg = null)
+    {
+        if (insn == null) return null;
+        // TODO: Full implementation with display and arg
+        return insn.execute(this);
+    }
 }

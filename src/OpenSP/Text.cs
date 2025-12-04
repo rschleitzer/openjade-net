@@ -576,6 +576,13 @@ public class TextIter
         ptr_ = 0;
     }
 
+    // Copy constructor
+    public TextIter(TextIter other)
+    {
+        text_ = other.text_;
+        ptr_ = other.ptr_;
+    }
+
     // void rewind();
     public void rewind()
     {

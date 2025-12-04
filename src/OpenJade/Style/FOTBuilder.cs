@@ -716,6 +716,19 @@ public class Collector
 {
     public class Object
     {
+        private enum Color
+        {
+            someColor,
+            anotherColor,
+            permanentColor
+        }
+        private Color color_ = Color.someColor;
+        protected bool hasSubObjects_;
+        protected bool readOnly_;
+
+        public bool permanent() { return color_ == Color.permanentColor; }
+        public bool readOnly() { return readOnly_; }
+        internal void makePermanent() { color_ = Color.permanentColor; }
         public virtual void traceSubObjects(Collector c) { }
     }
 
@@ -729,4 +742,5 @@ public class Collector
     public object allocateObject(int size) { return new object(); }
     public void unallocateObject(object p) { }
     public void trace(object o) { }
+    public void makePermanent(Object obj) { obj.makePermanent(); }
 }

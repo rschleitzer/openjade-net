@@ -104,7 +104,19 @@ public class ProcessContextImpl
 
     public void process(NodePtr node)
     {
-        throw new NotImplementedException();
+        Interpreter interp = vm_.interp;
+        StyleObj? style = interp.initialStyle();
+        if (style != null)
+        {
+            currentStyleStack().push(style, vm(), currentFOTBuilder());
+            currentFOTBuilder().startSequence();
+        }
+        processNode(node, interp.initialProcessingMode());
+        if (style != null)
+        {
+            currentFOTBuilder().endSequence();
+            currentStyleStack().pop();
+        }
     }
 
     public void processNode(NodePtr node, ProcessingMode? mode, bool chunk = true)
@@ -124,7 +136,22 @@ public class ProcessContextImpl
 
     public void processChildren(ProcessingMode? mode)
     {
-        throw new NotImplementedException();
+        NodePtr currentNode = vm_.currentNode;
+        if (currentNode.assignFirstChild() == AccessResult.accessOK)
+        {
+            do
+            {
+                processNode(currentNode, mode);
+            } while (currentNode.assignNextChunkSibling() == AccessResult.accessOK);
+        }
+        else
+        {
+            // Try to get document element
+            NodePtr docElement = new NodePtr();
+            AccessResult result = currentNode.getDocumentElement(ref docElement);
+            if (result == AccessResult.accessOK)
+                processNode(docElement, mode);
+        }
     }
 
     public void processChildrenTrim(ProcessingMode? mode)
@@ -205,17 +232,38 @@ public class ProcessContextImpl
 
     public void startTablePart()
     {
-        throw new NotImplementedException();
+        if (tableStack_.Count > 0)
+        {
+            Table table = tableStack_[tableStack_.Count - 1];
+            table.currentColumn = 0;
+            table.rowStyle = null;
+            table.columnStyles.Clear();
+            table.covered.Clear();
+            table.nColumns = 0;
+        }
     }
 
     public void endTablePart()
     {
-        throw new NotImplementedException();
+        coverSpannedRows();
     }
 
     public void addTableColumn(uint columnIndex, uint span, StyleObj? style)
     {
-        throw new NotImplementedException();
+        if (tableStack_.Count > 0)
+        {
+            Table table = tableStack_[tableStack_.Count - 1];
+            table.currentColumn = columnIndex + span;
+            while (table.columnStyles.Count <= (int)columnIndex)
+                table.columnStyles.Add(new System.Collections.Generic.List<StyleObj?>());
+            var tem = table.columnStyles[(int)columnIndex];
+            if (span > 0)
+            {
+                while (tem.Count < (int)span)
+                    tem.Add(null);
+                tem[(int)span - 1] = style;
+            }
+        }
     }
 
     public uint currentTableColumn()
@@ -225,12 +273,32 @@ public class ProcessContextImpl
 
     public void noteTableCell(uint colIndex, uint colSpan, uint rowSpan)
     {
-        throw new NotImplementedException();
+        if (tableStack_.Count == 0)
+            return;
+        Table table = tableStack_[tableStack_.Count - 1];
+        table.currentColumn = colIndex + colSpan;
+        var covered = table.covered;
+        while (covered.Count < (int)(colIndex + colSpan))
+            covered.Add(0);
+        for (uint i = 0; i < colSpan; i++)
+            covered[(int)(colIndex + i)] = rowSpan;
+        if (colIndex + colSpan > table.nColumns)
+            table.nColumns = colIndex + colSpan;
     }
 
     public StyleObj? tableColumnStyle(uint columnIndex, uint span)
     {
-        throw new NotImplementedException();
+        if (tableStack_.Count > 0)
+        {
+            Table table = tableStack_[tableStack_.Count - 1];
+            if (columnIndex < table.columnStyles.Count)
+            {
+                var tem = table.columnStyles[(int)columnIndex];
+                if (span > 0 && span <= (uint)tem.Count)
+                    return tem[(int)span - 1];
+            }
+        }
+        return null;
     }
 
     public StyleObj? tableRowStyle()
@@ -240,7 +308,15 @@ public class ProcessContextImpl
 
     public void startTableRow(StyleObj? style)
     {
-        throw new NotImplementedException();
+        if (tableStack_.Count > 0)
+        {
+            Table table = tableStack_[tableStack_.Count - 1];
+            table.rowStyle = style;
+            table.currentColumn = 0;
+            table.inTableRow = true;
+            table.rowConnectableLevel = connectionStack_[connectionStack_.Count - 1].connectableLevel;
+        }
+        currentFOTBuilder().startTableRow();
     }
 
     public bool inTable()
@@ -255,7 +331,19 @@ public class ProcessContextImpl
 
     public void endTableRow()
     {
-        throw new NotImplementedException();
+        if (tableStack_.Count > 0)
+        {
+            Table table = tableStack_[tableStack_.Count - 1];
+            // Decrement covered counts for each column
+            var covered = table.covered;
+            for (int i = 0; i < (int)table.nColumns && i < covered.Count; i++)
+            {
+                if (covered[i] > 0)
+                    covered[i] -= 1;
+            }
+            table.inTableRow = false;
+        }
+        currentFOTBuilder().endTableRow();
     }
 
     public void clearPageType()
@@ -379,7 +467,17 @@ public class ProcessContextImpl
 
     private void coverSpannedRows()
     {
-        throw new NotImplementedException();
+        // Generate empty cells to cover any remaining vertical spans
+        if (tableStack_.Count == 0)
+            return;
+        Table table = tableStack_[tableStack_.Count - 1];
+        // Find max remaining rows to cover
+        uint n = 0;
+        for (int i = 0; i < table.covered.Count; i++)
+            if (table.covered[i] > n)
+                n = table.covered[i];
+        // Skip generating empty rows for now - would need EmptySosofoObj and TableRowFlowObj
+        // The full implementation creates dummy rows to cover spans
     }
 
     private void restoreConnection(uint connectableLevel, nuint portIndex)

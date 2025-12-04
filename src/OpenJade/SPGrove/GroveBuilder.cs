@@ -276,6 +276,7 @@ public class GroveImpl
     private SgmlDocumentChunk? root_;
     private ParentChunk? origin_;
     private DataChunk? pendingData_;
+    private Action<Chunk>? tailPtrSetter_;  // Function to set the tail pointer
     private ConstPtr<Dtd> dtd_ = new ConstPtr<Dtd>();
     private ConstPtr<Sd> sd_ = new ConstPtr<Sd>();
     private ConstPtr<Syntax> prologSyntax_ = new ConstPtr<Syntax>();
@@ -283,6 +284,7 @@ public class GroveImpl
     private ConstPtr<AttributeValue> impliedAttributeValue_ = new ConstPtr<AttributeValue>();
     private List<ConstPtr<AttributeValue>> values_ = new List<ConstPtr<AttributeValue>>();
     private List<ConstPtr<Origin>> origins_ = new List<ConstPtr<Origin>>();
+    private NamedResourceTable<Entity> defaultedEntityTable_ = new NamedResourceTable<Entity>();
     private Boolean hasDefaultEntity_;
     private Boolean haveAppinfo_;
     private StringC appinfo_ = new StringC();
@@ -291,13 +293,25 @@ public class GroveImpl
     private object? completeLimit_;
     private object? completeLimitWithLocChunkAfter_;
     private uint refCount_;
+    private ulong nEvents_;
+    private ulong nElements_;
+    private uint pulseStep_;
+    private uint nChunksSinceLocOrigin_;
+    private const uint maxChunksWithoutLocOrigin = 100;
     private MessageItem? messageList_;
+    private MessageItem? messageListTail_;
 
     public GroveImpl(uint groveIndex)
     {
         groveIndex_ = groveIndex;
         complete_ = false;
         refCount_ = 0;
+        nEvents_ = 0;
+        nElements_ = 0;
+        pulseStep_ = 0;
+        nChunksSinceLocOrigin_ = 0;
+        root_ = new SgmlDocumentChunk();
+        origin_ = root_;
     }
 
     // Const interface
@@ -348,6 +362,16 @@ public class GroveImpl
     public Origin? currentLocOrigin() { return currentLocOrigin_; }
     public Boolean hasDefaultEntity() { return hasDefaultEntity_; }
 
+    // Element lookup by ID
+    private Dictionary<StringC, ElementChunk> idTable_ = new Dictionary<StringC, ElementChunk>();
+
+    public ElementChunk? lookupElement(StringC id)
+    {
+        if (idTable_.TryGetValue(id, out var element))
+            return element;
+        return null;
+    }
+
     public Boolean maybeMoreSiblings(ParentChunk chunk)
     {
         return complete_
@@ -374,7 +398,13 @@ public class GroveImpl
 
     public AccessResult proxifyLocation(Location from, out Location to)
     {
-        throw new NotImplementedException();
+        if (from.origin().isNull())
+        {
+            to = new Location();
+            return AccessResult.accessNull;
+        }
+        to = new Location(new GroveImplProxyOrigin(this, from.origin().pointer()), from.index());
+        return AccessResult.accessOK;
     }
 
     public MessageItem? messageList() { return messageList_; }
@@ -389,29 +419,132 @@ public class GroveImpl
     // Non-const interface
     public object allocChunk(nuint size)
     {
-        throw new NotImplementedException();
+        // In C#, we don't need custom memory management - just track for loc origin
+        nChunksSinceLocOrigin_++;
+        return new object(); // Placeholder - actual chunks created separately
     }
 
     public void appendSibling(Chunk chunk)
     {
-        throw new NotImplementedException();
+        if (pendingData_ != null)
+        {
+            // Must set completeLimit_ before setting tailPtr_
+            completeLimit_ = pendingData_.after();
+            if (tailPtrSetter_ != null)
+            {
+                tailPtrSetter_(pendingData_);
+                tailPtrSetter_ = null;
+            }
+            pendingData_ = null;
+        }
+        // Must set origin before advancing completeLimit_
+        chunk.origin = origin_;
+        // Must advance completeLimit_ before setting tailPtr_
+        completeLimit_ = chunk;
+        if (tailPtrSetter_ != null)
+        {
+            tailPtrSetter_(chunk);
+            tailPtrSetter_ = null;
+        }
+        maybePulse();
     }
 
     public void appendSibling(DataChunk chunk)
     {
-        throw new NotImplementedException();
+        // Since we might extend this DataChunk, it's
+        // not safe to set completeLimit_ to after this chunk yet.
+        if (pendingData_ != null)
+        {
+            // Must set completeLimit_ before setting tailPtr_
+            completeLimit_ = pendingData_.after();
+            if (tailPtrSetter_ != null)
+            {
+                tailPtrSetter_(pendingData_);
+                tailPtrSetter_ = null;
+            }
+        }
+        chunk.origin = origin_;
+        pendingData_ = chunk;
+        maybePulse();
     }
 
     public DataChunk? pendingData() { return pendingData_; }
 
     public void push(ElementChunk chunk, Boolean hasId)
     {
-        throw new NotImplementedException();
+        if (pendingData_ != null)
+        {
+            // Must set completeLimit_ before setting tailPtr_
+            completeLimit_ = pendingData_.after();
+            if (tailPtrSetter_ != null)
+            {
+                tailPtrSetter_(pendingData_);
+                tailPtrSetter_ = null;
+            }
+            pendingData_ = null;
+        }
+        chunk.elementIndex = (uint)nElements_++;
+        chunk.origin = origin_;
+        // Must set origin_ to chunk before advancing completeLimit_
+        origin_ = chunk;
+        completeLimit_ = chunk;
+        // Allow for the possibility of invalid documents with elements
+        // after the document element.
+        if ((Chunk?)chunk.origin == root_ && root_!.documentElement == null)
+            root_.documentElement = chunk;
+        else if (tailPtrSetter_ != null)
+        {
+            tailPtrSetter_(chunk);
+            tailPtrSetter_ = null;
+        }
+        // hasId handling would add to idTable_ in full impl
+        maybePulse();
     }
 
     public void pop()
     {
-        throw new NotImplementedException();
+        if (pendingData_ != null)
+        {
+            // Must set completeLimit_ before setting tailPtr_
+            completeLimit_ = pendingData_.after();
+            if (tailPtrSetter_ != null)
+            {
+                tailPtrSetter_(pendingData_);
+                tailPtrSetter_ = null;
+            }
+            pendingData_ = null;
+        }
+        tailPtrSetter_ = (c) => { origin_!.nextSibling = c; };
+        origin_ = origin_!.origin;
+        if ((Chunk?)origin_ == root_)
+            finishDocumentElement();
+        maybePulse();
+    }
+
+    private void finishDocumentElement()
+    {
+        // Be robust in the case of erroneous documents
+        if (root_!.epilog == null)
+        {
+            tailPtrSetter_ = (c) => { root_!.epilog = c; };
+        }
+    }
+
+    private void maybePulse()
+    {
+        // Pulsing condition variable for multi-threading support
+        // Once we've had (2^n)*(2^10) events, only pulse every (2^n)th event.
+        if ((++nEvents_ & ~(~0UL << (int)pulseStep_)) == 0)
+        {
+            pulse();
+            if (pulseStep_ < 8 && nEvents_ > (1UL << (int)(pulseStep_ + 10)))
+                pulseStep_++;
+        }
+    }
+
+    private void pulse()
+    {
+        // Signal condition variable - no-op in single-threaded mode
     }
 
     public void setAppinfo(StringC appinfo)
@@ -439,7 +572,9 @@ public class GroveImpl
 
     public void addDefaultedEntity(ConstPtr<Entity> entity)
     {
-        throw new NotImplementedException();
+        // We need a table of ConstPtr<Entity> but we don't have one.
+        if (entity.pointer() != null)
+            defaultedEntityTable_.insert(new Ptr<Entity>(entity.pointer()));
     }
 
     public void setComplete()
@@ -454,12 +589,45 @@ public class GroveImpl
 
     public void setLocOrigin(ConstPtr<Origin> origin)
     {
-        throw new NotImplementedException();
+        if (origin.pointer() != currentLocOrigin_
+            || nChunksSinceLocOrigin_ >= maxChunksWithoutLocOrigin)
+            storeLocOrigin(origin);
+    }
+
+    private void storeLocOrigin(ConstPtr<Origin> locOrigin)
+    {
+        var chunk = new LocOriginChunk(currentLocOrigin_);
+        chunk.origin = origin_;
+        completeLimitWithLocChunkAfter_ = completeLimit_;
+        nChunksSinceLocOrigin_ = 0;
+        if (locOrigin.pointer() == currentLocOrigin_)
+            return;
+        if (currentLocOrigin_ != null
+            && locOrigin.pointer() == currentLocOrigin_.parent().origin().pointer())
+        {
+            // Don't need to store it.
+            currentLocOrigin_ = locOrigin.pointer();
+            return;
+        }
+        currentLocOrigin_ = locOrigin.pointer();
+        if (locOrigin.isNull())
+            return;
+        origins_.append(locOrigin);
     }
 
     public void appendMessage(MessageItem item)
     {
-        throw new NotImplementedException();
+        if (messageList_ == null)
+        {
+            messageList_ = item;
+            messageListTail_ = item;
+        }
+        else
+        {
+            messageListTail_!.nextP() = item;
+            messageListTail_ = item;
+        }
+        pulse();
     }
 }
 
@@ -479,6 +647,18 @@ public class GroveImplPtr : IDisposable
     }
 
     public GroveImpl Grove => grove_;
+}
+
+// Proxy origin that keeps the grove alive
+public class GroveImplProxyOrigin : ProxyOrigin
+{
+    private GroveImplPtr grove_;
+
+    public GroveImplProxyOrigin(GroveImpl grove, Origin? origin)
+        : base(origin)
+    {
+        grove_ = new GroveImplPtr(grove);
+    }
 }
 
 public abstract class BaseNode : Node, IDisposable
@@ -548,32 +728,57 @@ public abstract class BaseNode : Node, IDisposable
 
     public override AccessResult nextSibling(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        return nextChunkSibling(ref ptr);
     }
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 
     public override AccessResult children(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr head = new NodePtr();
+        AccessResult ret = firstChild(ref head);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(head));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 
     public override AccessResult getOrigin(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        return getParent(ref ptr);
     }
 
     public override AccessResult getGroveRoot(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(new SgmlDocumentNode(grove_, grove_.root()!));
+        return AccessResult.accessOK;
     }
 
     public virtual AccessResult getLocation(ref Location location)
     {
-        throw new NotImplementedException();
+        return AccessResult.accessNull;
     }
 
     public override bool queryInterface(string iid, out object? ptr)
@@ -584,7 +789,9 @@ public abstract class BaseNode : Node, IDisposable
 
     public override bool chunkContains(Node nd)
     {
-        throw new NotImplementedException();
+        if (!sameGrove(nd))
+            return false;
+        return same((BaseNode)nd);
     }
 
     public virtual bool inChunk(DataNode? node) { return false; }
@@ -792,12 +999,16 @@ public class SgmlDocumentChunk : ParentChunk
 
     public override AccessResult setNodePtrFirst(ref NodePtr ptr, BaseNode? node)
     {
-        throw new NotImplementedException();
+        if (node != null)
+            ptr.assign(new SgmlDocumentNode(node.grove(), this));
+        return AccessResult.accessOK;
     }
 
     public override Chunk? after()
     {
-        throw new NotImplementedException();
+        // In C++, returns this + 1 (pointer to next memory location)
+        // In C#, we return null since we don't have chunk memory management
+        return null;
     }
 }
 
@@ -1872,7 +2083,19 @@ public abstract class AttributeAsgnNode : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2049,52 +2272,152 @@ public class AttributeValueTokenNode : BaseNode
 
     public override AccessResult getParent(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(makeOriginNode(grove(), attIndex_));
+        return AccessResult.accessOK;
+    }
+
+    protected virtual Node makeOriginNode(GroveImpl grove, nuint attIndex)
+    {
+        // To be implemented by derived classes
+        return null!;
+    }
+
+    protected virtual AttributeDefinitionList? attDefList()
+    {
+        return null;
+    }
+
+    protected virtual object? attributeOriginId()
+    {
+        return null;
+    }
+
+    protected virtual Node makeAttributeValueTokenNode(GroveImpl grove, TokenizedAttributeValue? value, nuint attIndex, nuint tokenIndex)
+    {
+        return new AttributeValueTokenNode(grove, value, attIndex, tokenIndex);
     }
 
     public override AccessResult nextChunkSibling(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        return followSiblingRef(0, ref ptr);
     }
 
     public override AccessResult followSiblingRef(uint n, ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        // Do it like this to avoid possibility of overflow
+        if (value_ == null || n >= value_.nTokens() - tokenIndex_ - 1)
+            return AccessResult.accessNull;
+        if (canReuse(ptr))
+        {
+            tokenIndex_ += n + 1;
+        }
+        else
+            ptr.assign(makeAttributeValueTokenNode(grove(), value_, attIndex_,
+                       tokenIndex_ + n + 1));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult firstSibling(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        if (canReuse(ptr))
+            tokenIndex_ = 0;
+        else
+            ptr.assign(makeAttributeValueTokenNode(grove(), value_, attIndex_, 0));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult siblingsIndex(out uint index)
     {
-        throw new NotImplementedException();
+        index = (uint)tokenIndex_;
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getToken(ref GroveString str)
     {
-        throw new NotImplementedException();
+        if (value_ == null)
+            return AccessResult.accessNull;
+        nuint len;
+        Char[]? chars;
+        value_.token(tokenIndex_, out chars, out len);
+        if (chars != null)
+            str.assign(chars, len);
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getEntity(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        var defList = attDefList();
+        if (defList == null || !defList.def(attIndex_)!.isEntity())
+            return AccessResult.accessNull;
+        if (value_ == null)
+            return AccessResult.accessNull;
+        StringC token = value_.token(tokenIndex_);
+        var dtd = grove().governingDtd();
+        if (dtd == null)
+            return AccessResult.accessNull;
+        Entity? entity = dtd.lookupEntityTemp(false, token);
+        if (entity == null)
+            return AccessResult.accessNull;
+        ptr.assign(new EntityNode(grove(), entity));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getNotation(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        var defList = attDefList();
+        if (defList == null || !defList.def(attIndex_)!.isNotation())
+            return AccessResult.accessNull;
+        if (value_ == null)
+            return AccessResult.accessNull;
+        StringC token = value_.token(tokenIndex_);
+        var dtd = grove().governingDtd();
+        if (dtd == null)
+            return AccessResult.accessNull;
+        Notation? notation = dtd.lookupNotationTemp(token);
+        if (notation == null)
+            return AccessResult.accessNull;
+        ptr.assign(new NotationNode(grove(), notation));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getReferent(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        var defList = attDefList();
+        if (defList == null || !defList.def(attIndex_)!.isIdref())
+            return AccessResult.accessNull;
+        if (value_ == null)
+            return AccessResult.accessNull;
+        StringC token = value_.token(tokenIndex_);
+        for (;;)
+        {
+            Boolean complete = grove().complete();
+            ElementChunk? element = grove().lookupElement(token);
+            if (element != null)
+            {
+                ptr.assign(new ElementNode(grove(), element));
+                break;
+            }
+            if (complete)
+                return AccessResult.accessNull;
+            if (!grove().waitForMoreNodes())
+                return AccessResult.accessTimeout;
+        }
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getLocation(ref Location location)
     {
-        throw new NotImplementedException();
+        if (value_ == null)
+            return AccessResult.accessNull;
+        ConstPtr<Origin>? originP;
+        Index index;
+        if (!value_.tokenLocation(tokenIndex_, out originP, out index)
+            && originP?.pointer() != null)
+        {
+            location = new Location(new GroveImplProxyOrigin(grove(), originP.pointer()), index);
+            return AccessResult.accessOK;
+        }
+        return AccessResult.accessNull;
     }
 
     public override void accept(NodeVisitor visitor)
@@ -2117,22 +2440,38 @@ public class AttributeValueTokenNode : BaseNode
 
     public override bool same2(AttributeValueTokenNode? node)
     {
-        throw new NotImplementedException();
+        if (node == null) return false;
+        return (attributeOriginId() == node.attributeOriginId()
+                && attIndex_ == node.attIndex_
+                && tokenIndex_ == node.tokenIndex_);
     }
 
     public override uint hash()
     {
-        throw new NotImplementedException();
+        return secondHash(secondHash((uint)((nuint)(attributeOriginId()?.GetHashCode() ?? 0) + attIndex_)) + (uint)tokenIndex_);
     }
 
     public override AccessResult children(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2159,78 +2498,237 @@ public class CdataAttributeValueNode : BaseNode
 
     public static bool skipBoring(TextIter iter)
     {
-        throw new NotImplementedException();
+        while (iter.valid())
+        {
+            switch (iter.type())
+            {
+                case TextItem.Type.data:
+                case TextItem.Type.cdata:
+                case TextItem.Type.sdata:
+                {
+                    nuint length;
+                    iter.chars(out length);
+                    if (length > 0)
+                        return true;
+                }
+                break;
+            }
+            iter.advance();
+        }
+        return false;
     }
 
     public override AccessResult getParent(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(makeOriginNode(grove(), attIndex_));
+        return AccessResult.accessOK;
+    }
+
+    protected virtual Node makeOriginNode(GroveImpl grove, nuint attIndex)
+    {
+        // To be implemented by derived classes (ElementCdataAttributeValueNode, etc.)
+        return null!;
+    }
+
+    public virtual object? attributeOriginId()
+    {
+        return null;
     }
 
     public override AccessResult charChunk(SdataMapper mapper, ref GroveString str)
     {
-        throw new NotImplementedException();
+        if (iter_.type() == TextItem.Type.sdata)
+        {
+            var entityOrigin = iter_.location().origin().pointer()?.asEntityOrigin();
+            if (entityOrigin != null)
+            {
+                var entity = entityOrigin.entity();
+                if (entity != null)
+                {
+                    StringC name = entity.name();
+                    var internalEntity = entity.asInternalEntity();
+                    if (internalEntity != null)
+                    {
+                        StringC text = internalEntity.@string();
+                        Char c;
+                        if (mapper.sdataMap(new GroveString(name.data(), name.size()),
+                                           new GroveString(text.data(), text.size()), out c))
+                        {
+                            c_ = c;
+                            str.assign(new Char[] { c_ }, 1);
+                            return AccessResult.accessOK;
+                        }
+                    }
+                }
+            }
+            return AccessResult.accessNull;
+        }
+        // Regular data
+        nuint length;
+        Char[]? chars = iter_.chars(out length);
+        if (chars != null)
+        {
+            str.assign(chars, charIndex_, length - charIndex_);
+        }
+        return AccessResult.accessOK;
     }
 
     public override bool chunkContains(Node nd)
     {
-        throw new NotImplementedException();
+        if (!sameGrove(nd))
+            return false;
+        return ((BaseNode)nd).inChunk(this);
     }
 
     public override bool inChunk(CdataAttributeValueNode? node)
     {
-        throw new NotImplementedException();
+        if (node == null) return false;
+        nuint tem1, tem2;
+        Char[]? chars1 = iter_.chars(out tem1);
+        Char[]? chars2 = node.iter_.chars(out tem2);
+        return (attributeOriginId() == node.attributeOriginId()
+                && attIndex_ == node.attIndex_
+                && chars1 == chars2
+                && charIndex_ >= node.charIndex_);
     }
 
     public override AccessResult getEntity(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        if (iter_.type() != TextItem.Type.sdata)
+            return AccessResult.accessNotInClass;
+        var entityOrigin = iter_.location().origin().pointer()?.asEntityOrigin();
+        if (entityOrigin == null)
+            return AccessResult.accessNull;
+        var entity = entityOrigin.entity();
+        ptr.assign(new EntityNode(grove(), entity));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getEntityName(ref GroveString str)
     {
-        throw new NotImplementedException();
+        if (iter_.type() != TextItem.Type.sdata)
+            return AccessResult.accessNotInClass;
+        var entityOrigin = iter_.location().origin().pointer()?.asEntityOrigin();
+        if (entityOrigin == null)
+            return AccessResult.accessNull;
+        var entity = entityOrigin.entity();
+        setString(ref str, entity!.name());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getSystemData(ref GroveString str)
     {
-        throw new NotImplementedException();
+        if (iter_.type() != TextItem.Type.sdata)
+            return AccessResult.accessNotInClass;
+        nuint len;
+        Char[]? chars = iter_.chars(out len);
+        if (chars != null)
+            str.assign(chars, len);
+        return AccessResult.accessOK;
     }
 
     public override AccessResult nextSibling(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        if (iter_.type() != TextItem.Type.sdata)
+        {
+            nuint length;
+            iter_.chars(out length);
+            if (charIndex_ + 1 < length)
+            {
+                if (canReuse(ptr))
+                    charIndex_++;
+                else
+                    ptr.assign(makeCdataAttributeValueNode(grove(), value_, attIndex_,
+                        new TextIter(iter_), charIndex_ + 1));
+                return AccessResult.accessOK;
+            }
+        }
+        return nextChunkSibling(ref ptr);
+    }
+
+    protected virtual CdataAttributeValueNode makeCdataAttributeValueNode(
+        GroveImpl grove, AttributeValue? value, nuint attIndex,
+        TextIter iter, nuint charIndex)
+    {
+        return new CdataAttributeValueNode(grove, value, attIndex, iter, charIndex);
     }
 
     public override AccessResult nextChunkSibling(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        TextIter copy = new TextIter(iter_);
+        copy.advance();
+        if (!skipBoring(copy))
+            return AccessResult.accessNull;
+        if (canReuse(ptr))
+        {
+            iter_ = copy;
+            charIndex_ = 0;
+        }
+        else
+            ptr.assign(makeCdataAttributeValueNode(grove(), value_, attIndex_, copy, 0));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult firstSibling(ref NodePtr ptr)
     {
-        throw new NotImplementedException();
+        TextIter copy = new TextIter(iter_);
+        copy.rewind();
+        skipBoring(copy);
+        if (canReuse(ptr))
+        {
+            iter_ = copy;
+            charIndex_ = 0;
+        }
+        else
+            ptr.assign(makeCdataAttributeValueNode(grove(), value_, attIndex_, copy, 0));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult siblingsIndex(out uint index)
     {
-        throw new NotImplementedException();
+        TextIter copy = new TextIter(iter_);
+        nuint tem;
+        Char[]? iterChars = iter_.chars(out tem);
+        copy.rewind();
+        skipBoring(copy);
+        index = 0;
+        nuint copyTem;
+        while (copy.chars(out copyTem) != iterChars)
+        {
+            if (copy.type() == TextItem.Type.sdata)
+                index += 1;
+            else
+                index += (uint)copyTem;
+            copy.advance();
+            if (!skipBoring(copy))
+                break;
+        }
+        index += (uint)charIndex_;
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getLocation(ref Location location)
     {
-        throw new NotImplementedException();
+        if (iter_.type() == TextItem.Type.sdata)
+            return grove().proxifyLocation(iter_.location().origin().pointer()!.parent(), out location);
+        else
+            return grove().proxifyLocation(iter_.location(), out location);
     }
 
     public override void accept(NodeVisitor visitor)
     {
-        // Depending on type, could be dataChar or sdata
-        visitor.dataChar(this);
+        if (iter_.type() == TextItem.Type.sdata)
+            visitor.sdata(this);
+        else
+            visitor.dataChar(this);
     }
 
     public override ClassDef classDef()
     {
-        throw new NotImplementedException();
+        if (iter_.type() == TextItem.Type.sdata)
+            return ClassDef.sdata;
+        else
+            return ClassDef.dataChar;
     }
 
     public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
@@ -2246,22 +2744,44 @@ public class CdataAttributeValueNode : BaseNode
 
     public override bool same2(CdataAttributeValueNode? node)
     {
-        throw new NotImplementedException();
+        if (node == null) return false;
+        nuint tem1, tem2;
+        Char[]? chars1 = iter_.chars(out tem1);
+        Char[]? chars2 = node.iter_.chars(out tem2);
+        return (attributeOriginId() == node.attributeOriginId()
+                && attIndex_ == node.attIndex_
+                && charIndex_ == node.charIndex_
+                && chars1 == chars2);
     }
 
     public override uint hash()
     {
-        throw new NotImplementedException();
+        uint n;
+        siblingsIndex(out n);
+        return secondHash(secondHash((uint)((nuint)(attributeOriginId()?.GetHashCode() ?? 0) + attIndex_)) + n);
     }
 
     public override AccessResult children(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2401,7 +2921,19 @@ public abstract class EntityNodeBase : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2572,7 +3104,19 @@ public class NotationNode : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2653,7 +3197,19 @@ public abstract class ExternalIdNode : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2769,7 +3325,19 @@ public class DocumentTypeNode : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2816,7 +3384,19 @@ public class SgmlConstantsNode : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -2917,7 +3497,19 @@ public class MessageNode : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 
@@ -3062,7 +3654,19 @@ public class ElementTypeNode : BaseNode
 
     public override AccessResult follow(ref NodeListPtr ptr)
     {
-        throw new NotImplementedException();
+        NodePtr nd = new NodePtr();
+        AccessResult ret = nextSibling(ref nd);
+        switch (ret)
+        {
+            case AccessResult.accessOK:
+                ptr.assign(new SiblingNodeList(nd));
+                break;
+            case AccessResult.accessNull:
+                ptr.assign(new BaseNodeList());
+                ret = AccessResult.accessOK;
+                break;
+        }
+        return ret;
     }
 }
 

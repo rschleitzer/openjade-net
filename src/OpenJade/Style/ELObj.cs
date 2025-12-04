@@ -43,8 +43,14 @@ public class ELObj : Collector.Object
     public virtual LanguageObj? asLanguage() { return null; }
     public virtual bool charValue(out Char c) { c = 0; return false; }
     public virtual bool stringData(out Char[]? data, out nuint size) { data = null; size = 0; return false; }
-    public virtual void print(Interpreter interp, OutputCharStream os) { throw new NotImplementedException(); }
-    public virtual void print(Interpreter interp, OutputCharStream os, uint radix) { throw new NotImplementedException(); }
+    public virtual void print(Interpreter interp, OutputCharStream os)
+    {
+        os.put("#<unknown object>");
+    }
+    public virtual void print(Interpreter interp, OutputCharStream os, uint radix)
+    {
+        print(interp, os);
+    }
     public virtual bool exactIntegerValue(out long value) { value = 0; return false; }
     public virtual bool realValue(out double value) { value = 0; return false; }
     public virtual bool inexactRealValue(out double value) { value = 0; return false; }
@@ -99,7 +105,7 @@ public class ErrorObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("#<error>");
     }
 }
 
@@ -109,7 +115,7 @@ public class UnspecifiedObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("#v");
     }
 }
 
@@ -122,7 +128,7 @@ public class NilObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("()");
     }
 }
 
@@ -132,7 +138,7 @@ public class TrueObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("#t");
     }
 }
 
@@ -144,7 +150,7 @@ public class FalseObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("#f");
     }
 }
 
@@ -160,7 +166,8 @@ public class SymbolObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        if (name_ != null)
+            os.write(name_.data(), name_.size());
     }
 
     public override SymbolObj? asSymbol() { return this; }
@@ -184,10 +191,16 @@ public class SymbolObj : ELObj
     }
 }
 
-public class Identifier
+public class Identifier : Named
 {
-    // Forward declaration - will be implemented in full
-    public StringC name() { throw new NotImplementedException(); }
+    private StringC name_;
+
+    public Identifier(StringC name) : base(name)
+    {
+        name_ = name;
+    }
+
+    public new StringC name() { return name_; }
 }
 
 public class KeywordObj : ELObj
@@ -201,7 +214,11 @@ public class KeywordObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        if (ident_ != null)
+        {
+            os.write(ident_.name().data(), ident_.name().size());
+            os.put(":");
+        }
     }
 
     public override KeywordObj? asKeyword() { return this; }
@@ -233,11 +250,46 @@ public class PairObj : ELObj
     public void setCdr(ELObj? obj) { cdr_ = obj; }
 
     public override PairObj? asPair() { return this; }
-    public override bool isList() { return cdr_ != null && cdr_.isList(); }
+
+    public override bool isList()
+    {
+        ELObj? p = cdr_;
+        while (p != null && !p.isNil())
+        {
+            PairObj? pair = p.asPair();
+            if (pair == null)
+                return false;
+            p = pair.cdr();
+        }
+        return true;
+    }
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("(");
+        if (car_ != null)
+            car_.print(interp, os);
+        ELObj? p = cdr_;
+        for (;;)
+        {
+            if (p == null || p.isNil())
+            {
+                os.put(")");
+                return;
+            }
+            PairObj? pair = p.asPair();
+            if (pair == null)
+            {
+                os.put(" . ");
+                p.print(interp, os);
+                os.put(")");
+                return;
+            }
+            os.put(" ");
+            if (pair.car() != null)
+                pair.car()!.print(interp, os);
+            p = pair.cdr();
+        }
     }
 
     public override void traceSubObjects(Collector c)
@@ -250,17 +302,51 @@ public class PairObj : ELObj
 
     public override ELObj? resolveQuantities(bool force, Interpreter interp, Location loc)
     {
-        throw new NotImplementedException();
+        bool fail = false;
+        PairObj pair = this;
+        for (;;)
+        {
+            ELObj? tem = pair.car_?.resolveQuantities(force, interp, loc);
+            if (tem == null)
+                fail = true;
+            else
+            {
+                if (pair.permanent())
+                    interp.makePermanent(tem);
+                pair.car_ = tem;
+            }
+            PairObj? nextPair = pair.cdr_?.asPair();
+            if (nextPair == null)
+                break;
+            pair = nextPair;
+        }
+        ELObj? tem2 = pair.cdr_?.resolveQuantities(force, interp, loc);
+        if (tem2 == null)
+            fail = true;
+        else
+        {
+            if (pair.permanent())
+                interp.makePermanent(tem2);
+            pair.cdr_ = tem2;
+        }
+        if (fail)
+            return null;
+        else
+            return this;
     }
 
     protected override bool isEqual(ELObj other)
     {
-        throw new NotImplementedException();
+        PairObj? p = other.asPair();
+        // FIXME need non-recursive implementation
+        return p != null && equal(p.car()!, car()!) && equal(p.cdr()!, cdr()!);
     }
 
     protected override bool isEquiv(ELObj other)
     {
-        throw new NotImplementedException();
+        PairObj? p = other.asPair();
+        // FIXME need non-recursive implementation
+        return p != null && eqv(p.car()!, car()!) && eqv(p.cdr()!, cdr()!);
     }
 }
 
@@ -286,22 +372,60 @@ public class VectorObj : ELObj
 
     protected override bool isEqual(ELObj other)
     {
-        throw new NotImplementedException();
+        VectorObj? v = other.asVector();
+        if (v == null)
+            return false;
+        if (size() != v.size())
+            return false;
+        for (int i = 0; i < (int)size(); i++)
+            if (!equal(this[i]!, v[i]!))
+                return false;
+        return true;
     }
 
     protected override bool isEquiv(ELObj other)
     {
-        throw new NotImplementedException();
+        return false;
     }
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("#(");
+        for (int i = 0; i < elements_.Count; i++)
+        {
+            if (i > 0)
+                os.put(" ");
+            ELObj? tem = elements_[i];
+            if (tem == null)
+                os.put("#<cycle>");
+            else
+            {
+                elements_[i] = null;
+                tem.print(interp, os);
+                elements_[i] = tem;
+            }
+        }
+        os.put(")");
     }
 
     public override ELObj? resolveQuantities(bool force, Interpreter interp, Location loc)
     {
-        throw new NotImplementedException();
+        bool fail = false;
+        for (int i = 0; i < elements_.Count; i++)
+        {
+            ELObj? tem = elements_[i]?.resolveQuantities(force, interp, loc);
+            if (tem != null)
+            {
+                if (permanent())
+                    interp.makePermanent(tem);
+                elements_[i] = tem;
+            }
+            else
+                fail = true;
+        }
+        if (fail)
+            return null;
+        return this;
     }
 
     public nuint size() { return (nuint)elements_.Count; }
@@ -321,12 +445,13 @@ public class CharObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put("#\\");
+        os.put(ch_); // FIXME
     }
 
     public void display(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put(ch_); // FIXME
     }
 
     protected override bool isEqual(ELObj other)
@@ -359,9 +484,29 @@ public class StringObj : ELObj
         str_ = new StringC(data, size);
     }
 
+    public Char[] data() { return str_.data(); }
+    public nuint size() { return str_.size(); }
+
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        // FIXME
+        os.put("\"");
+        Char[] s = str_.data();
+        for (nuint i = 0; i < str_.size(); i++)
+        {
+            switch (s[i])
+            {
+                case '\\':
+                case '"':
+                    os.put("\\");
+                    os.put(s[i]);
+                    break;
+                default:
+                    os.put(s[i]);
+                    break;
+            }
+        }
+        os.put("\"");
     }
 
     public override StringObj? convertToString() { return this; }
@@ -375,9 +520,19 @@ public class StringObj : ELObj
 
     protected override bool isEqual(ELObj other)
     {
-        if (other is StringObj so)
-            return str_.Equals(so.str_);
-        return false;
+        Char[]? s;
+        nuint n;
+        if (!other.stringData(out s, out n))
+            return false;
+        if (n != str_.size())
+            return false;
+        if (n == 0)
+            return true;
+        Char[] myData = str_.data();
+        for (nuint i = 0; i < n; i++)
+            if (s![i] != myData[i])
+                return false;
+        return true;
     }
 
     // Allow implicit conversion to StringC
@@ -393,12 +548,50 @@ public class IntegerObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        print(interp, os, 10);
     }
 
     public override void print(Interpreter interp, OutputCharStream os, uint radix)
     {
-        throw new NotImplementedException();
+        if (radix == 10)
+        {
+            if (n_ < 0)
+            {
+                os.put("-");
+                os.put(((ulong)(-n_)).ToString());
+            }
+            else
+                os.put(((ulong)n_).ToString());
+            return;
+        }
+
+        if (n_ == 0)
+        {
+            os.put("0");
+            return;
+        }
+
+        ulong n;
+        if (n_ < 0)
+        {
+            os.put("-");
+            n = (ulong)(-n_);
+        }
+        else
+            n = (ulong)n_;
+
+        char[] buf = new char[64];
+        int i = 0;
+        const string digits = "0123456789abcdef";
+
+        while (n != 0)
+        {
+            buf[i++] = digits[(int)(n % radix)];
+            n /= radix;
+        }
+
+        while (i > 0)
+            os.put((Char)buf[--i]);
     }
 
     public override bool exactIntegerValue(out long value)
@@ -457,14 +650,13 @@ public class RealObj : ELObj
 
     protected override bool isEqual(ELObj other)
     {
-        if (other is RealObj ro)
-            return n_ == ro.n_;
-        return false;
+        double n;
+        return other.inexactRealValue(out n) && n == n_;
     }
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        os.put(n_.ToString("G"));
     }
 }
 
@@ -490,13 +682,24 @@ public class LengthObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        double pt = n_ * 72.0 / interp.unitsPerInch();
+        os.put(pt.ToString("G") + "pt");
     }
 
     protected override bool isEqual(ELObj other)
     {
-        if (other is LengthObj lo)
-            return n_ == lo.n_;
+        long n;
+        double d;
+        int dim;
+        switch (other.quantityValue(out n, out d, out dim))
+        {
+            case QuantityType.noQuantity:
+                break;
+            case QuantityType.doubleQuantity:
+                return dim == 1 && d == n_;
+            case QuantityType.longQuantity:
+                return dim == 1 && n == n_;
+        }
         return false;
     }
 }
@@ -522,13 +725,24 @@ public class QuantityObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        throw new NotImplementedException();
+        double val = val_ * Math.Pow(72.0 / interp.unitsPerInch(), (double)dim_);
+        os.put(val.ToString("G") + "pt" + dim_.ToString());
     }
 
     protected override bool isEqual(ELObj other)
     {
-        if (other is QuantityObj qo)
-            return val_ == qo.val_ && dim_ == qo.dim_;
+        long n;
+        double d;
+        int dim;
+        switch (other.quantityValue(out n, out d, out dim))
+        {
+            case QuantityType.noQuantity:
+                break;
+            case QuantityType.doubleQuantity:
+                return dim == dim_ && d == val_;
+            case QuantityType.longQuantity:
+                return dim == dim_ && n == val_;
+        }
         return false;
     }
 
@@ -602,12 +816,21 @@ public class LengthSpec
 
     public bool convert(out FOTBuilder.LengthSpec spec)
     {
-        throw new NotImplementedException();
+        // FIXME do some checking
+        spec = new FOTBuilder.LengthSpec();
+        spec.length = (long)(val_[0] < 0.0 ? val_[0] - 0.5 : val_[0] + 0.5);
+        spec.displaySizeFactor = val_[1];
+        return true;
     }
 
     public bool convert(out FOTBuilder.TableLengthSpec spec)
     {
-        throw new NotImplementedException();
+        // FIXME do some checking
+        spec = new FOTBuilder.TableLengthSpec();
+        spec.length = (long)(val_[0] < 0.0 ? val_[0] - 0.5 : val_[0] + 0.5);
+        spec.displaySizeFactor = val_[1];
+        spec.tableUnitFactor = val_[2];
+        return true;
     }
 }
 

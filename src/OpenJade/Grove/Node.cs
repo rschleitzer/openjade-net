@@ -1431,6 +1431,13 @@ public class NodePtr
         return result;
     }
 
+    public AccessResult getDocumentElement(ref NodePtr result)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getDocumentElement(ref result);
+    }
+
     private void addRef() { if (node != null) node.addRef(); }
     private void release() { if (node != null) node.release(); }
 }
