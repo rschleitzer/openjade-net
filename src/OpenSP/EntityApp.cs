@@ -8,6 +8,11 @@ namespace OpenSP;
 // Entity management application base class
 public abstract class EntityApp : CmdLineApp
 {
+    // Compile-time defaults - matches C++ SGML_SEARCH_PATH_DEFAULT and SGML_CATALOG_FILES_DEFAULT
+    // To override, change these values before building (like C++ -D flag)
+    private const string SGML_SEARCH_PATH_DEFAULT = "";
+    private const string SGML_CATALOG_FILES_DEFAULT = "";
+
     private Vector<string> searchDirs_ = new Vector<string>();
     private Vector<string> catalogSysids_ = new Vector<string>();
     private Boolean mapCatalogDocument_;
@@ -103,8 +108,10 @@ public abstract class EntityApp : CmdLineApp
         for (nuint i = 0; i < searchDirs_.size(); i++)
             sm.addSearchDir(convertInput(searchDirs_[i]));
 
-        // Get search path from environment
+        // Get search path from environment (or compile-time default)
         string? searchPath = Environment.GetEnvironmentVariable("SGML_SEARCH_PATH");
+        if (searchPath == null)
+            searchPath = SGML_SEARCH_PATH_DEFAULT;
         if (!string.IsNullOrEmpty(searchPath))
         {
             string[] dirs = searchPath.Split(PATH_SEPARATOR);
@@ -142,8 +149,10 @@ public abstract class EntityApp : CmdLineApp
             // filenames specified on command-line must exist
             v.push_back(convertInput(catalogSysids_[i]));
 
-        // Get catalog files from environment
+        // Get catalog files from environment (or compile-time default)
         string? catalogFiles = Environment.GetEnvironmentVariable("SGML_CATALOG_FILES");
+        if (catalogFiles == null)
+            catalogFiles = SGML_CATALOG_FILES_DEFAULT;
         if (!string.IsNullOrEmpty(catalogFiles))
         {
             string[] catalogs = catalogFiles.Split(PATH_SEPARATOR);

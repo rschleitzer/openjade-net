@@ -5434,7 +5434,7 @@ public class Parser : ParserState
                 vec.resize(vec.size() + 1);
                 gt.token.swap(vec[(int)(vec.size() - 1)].name);
                 getCurrentToken(vec[(int)(vec.size() - 1)].origName);
-                vec[(int)(vec.size() - 1)].loc = currentLocation();
+                vec[(int)(vec.size() - 1)].loc = new Location(currentLocation());
             }
             GroupConnector gc = new GroupConnector();
             AllowedGroupConnectors allowAnyConnectorGrpc = new AllowedGroupConnectors(
@@ -5877,8 +5877,8 @@ public class Parser : ParserState
             Char[]? start = ins.currentTokenStart();
             if (start != null && lim != null)
             {
-                nuint startIdx = 0;
-                nuint limIdx = ins.currentTokenLength();
+                nuint startIdx = ins.currentTokenStartIndex();
+                nuint limIdx = startIdx + ins.currentTokenLength();
                 for (nuint p = startIdx; p < limIdx; p++)
                 {
                     int val = sd().hexDigitWeight(start[p]);
@@ -5900,8 +5900,8 @@ public class Parser : ParserState
             Char[]? start = ins.currentTokenStart();
             if (start != null && lim != null)
             {
-                nuint startIdx = 0;
-                nuint limIdx = ins.currentTokenLength();
+                nuint startIdx = ins.currentTokenStartIndex();
+                nuint limIdx = startIdx + ins.currentTokenLength();
                 for (nuint p = startIdx; p < limIdx; p++)
                 {
                     int val = sd().digitWeight(start[p]);

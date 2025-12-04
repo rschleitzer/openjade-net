@@ -99,7 +99,10 @@ public class Location
     public Index index() => index_;
 
     // const ConstPtr<Origin> &origin() const { return origin_; }
-    public ConstPtr<Origin> origin() => origin_;
+    public ConstPtr<Origin> origin()
+    {
+        return origin_;
+    }
 
     // void clear() { origin_.clear(); }
     public void clear() { origin_.clear(); }

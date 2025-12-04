@@ -716,6 +716,7 @@ internal class EntityManagerImpl : ExtendEntityManager
                                           ParsedSystemId parsedSysid)
     {
         // Parse FSI (Formal System Identifier) format: <StorageType>specId
+        // Also handles <CATALOG> and <CATALOG PUBLIC="..."> directives
         nuint pos = 0;
 
         while (pos < str.size())
@@ -727,9 +728,6 @@ internal class EntityManagerImpl : ExtendEntityManager
             if (pos >= str.size())
                 break;
 
-            parsedSysid.resize(parsedSysid.size() + 1);
-            StorageObjectSpec sos = parsedSysid.back();
-
             // Check if this is an FSI starting with '<'
             if (str[pos] == '<')
             {
@@ -740,10 +738,68 @@ internal class EntityManagerImpl : ExtendEntityManager
                 while (pos < str.size() && str[pos] != '>' && str[pos] != ' ')
                     pos++;
 
-                // Find registered storage manager by type
+                // Check if this is a CATALOG directive
                 StringC typeName = new StringC();
                 for (nuint i = typeStart; i < pos; i++)
                     typeName.operatorPlusAssign(str[i]);
+
+                if (typeName.ToString() == "CATALOG")
+                {
+                    // Handle CATALOG directive - this is a map, not a storage spec
+                    ParsedSystemId.Map map = new ParsedSystemId.Map();
+
+                    // Check for PUBLIC attribute
+                    while (pos < str.size() && str[pos] == ' ')
+                        pos++;
+
+                    if (pos < str.size() && str[pos] != '>')
+                    {
+                        // Look for PUBLIC="..."
+                        nuint attrStart = pos;
+                        while (pos < str.size() && str[pos] != '=' && str[pos] != '>')
+                            pos++;
+
+                        StringC attrName = new StringC();
+                        for (nuint i = attrStart; i < pos; i++)
+                            attrName.operatorPlusAssign(str[i]);
+
+                        if (attrName.ToString() == "PUBLIC" && pos < str.size() && str[pos] == '=')
+                        {
+                            pos++; // skip '='
+                            if (pos < str.size() && str[pos] == '"')
+                            {
+                                pos++; // skip opening quote
+                                nuint publicIdStart = pos;
+                                while (pos < str.size() && str[pos] != '"')
+                                    pos++;
+                                // Extract public ID
+                                for (nuint i = publicIdStart; i < pos; i++)
+                                    map.publicId.operatorPlusAssign(str[i]);
+                                if (pos < str.size())
+                                    pos++; // skip closing quote
+                                map.type = ParsedSystemId.Map.Type.catalogPublic;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // No PUBLIC attribute - catalogDocument type
+                        map.type = ParsedSystemId.Map.Type.catalogDocument;
+                    }
+
+                    // Skip to closing '>'
+                    while (pos < str.size() && str[pos] != '>')
+                        pos++;
+                    if (pos < str.size())
+                        pos++; // skip '>'
+
+                    parsedSysid.maps.push_back(map);
+                    continue; // Continue parsing - don't create a storage spec for CATALOG
+                }
+
+                // Regular storage type - create storage object spec
+                parsedSysid.resize(parsedSysid.size() + 1);
+                StorageObjectSpec sos = parsedSysid.back();
 
                 sos.storageManager = lookupStorageType(typeName, docCharset);
 
@@ -767,23 +823,34 @@ internal class EntityManagerImpl : ExtendEntityManager
                         specData[i] = str[specStart + i];
                     sos.specId.assign(specData, pos - specStart);
                 }
+
+                if (sos.storageManager == null)
+                {
+                    if (defLoc != null && defLoc.storageObjectSpec?.storageManager?.inheritable() == true)
+                        sos.storageManager = defLoc.storageObjectSpec.storageManager;
+                    else
+                        sos.storageManager = defaultStorageManager_;
+                }
+                setDefaults(sos, isNdataFlag, defLoc);
             }
             else
             {
                 // No FSI prefix - treat entire string as spec ID
+                parsedSysid.resize(parsedSysid.size() + 1);
+                StorageObjectSpec sos = parsedSysid.back();
                 sos.specId.assign(str.data(), str.size());
                 sos.storageManager = guessStorageType(str, docCharset);
                 pos = str.size(); // consume everything
-            }
 
-            if (sos.storageManager == null)
-            {
-                if (defLoc != null && defLoc.storageObjectSpec?.storageManager?.inheritable() == true)
-                    sos.storageManager = defLoc.storageObjectSpec.storageManager;
-                else
-                    sos.storageManager = defaultStorageManager_;
+                if (sos.storageManager == null)
+                {
+                    if (defLoc != null && defLoc.storageObjectSpec?.storageManager?.inheritable() == true)
+                        sos.storageManager = defLoc.storageObjectSpec.storageManager;
+                    else
+                        sos.storageManager = defaultStorageManager_;
+                }
+                setDefaults(sos, isNdataFlag, defLoc);
             }
-            setDefaults(sos, isNdataFlag, defLoc);
         }
 
         return true;

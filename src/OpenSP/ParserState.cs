@@ -864,7 +864,7 @@ public class ParserState : ContentState
             rniPcdata.operatorPlusAssign(syntax().reservedName(Syntax.ReservedName.rPCDATA));
             getOpenElementInfo(msg.openElementInfo, rniPcdata);
         }
-        msg.loc = currentLocation();
+        msg.loc = new Location(currentLocation());
     }
 
     // void dispatchMessage(Message &msg);
@@ -1067,7 +1067,8 @@ public class ParserState : ContentState
     public Location currentLocation()
     {
         InputSource? ins = currentInput();
-        return ins != null ? ins.currentLocation() : nullLocation_;
+        Location loc = ins != null ? ins.currentLocation() : nullLocation_;
+        return loc;
     }
 
     // Boolean pcdataRecovering() const;

@@ -1170,7 +1170,7 @@ internal class CatalogParser : IMessenger
 
     public void initMessage(Message msg)
     {
-        msg.loc = in_!.currentLocation();
+        msg.loc = new Location(in_!.currentLocation());
     }
 
     public void setNextLocation(Location loc)
