@@ -1,0 +1,732 @@
+// Copyright (c) 1996, 1997 James Clark
+// See the file copying.txt for copying permission.
+
+namespace OpenJade.Style;
+
+using OpenSP;
+using OpenJade.Grove;
+using Char = System.UInt32;
+using Boolean = System.Boolean;
+
+// Save FOT Builder for queuing
+public class SaveFOTBuilder : FOTBuilder
+{
+    public override void characters(Char[] data, nuint size)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void startParagraph(ParagraphNIC nic)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void endParagraph()
+    {
+        throw new NotImplementedException();
+    }
+}
+
+public class FOTBuilder
+{
+    public enum Symbol
+    {
+        symbolFalse,
+        symbolTrue,
+        symbolNotApplicable,
+        symbolUltraCondensed,
+        symbolExtraCondensed,
+        symbolCondensed,
+        symbolSemiCondensed,
+        symbolUltraLight,
+        symbolExtraLight,
+        symbolLight,
+        symbolSemiLight,
+        symbolMedium,
+        symbolSemiExpanded,
+        symbolExpanded,
+        symbolExtraExpanded,
+        symbolUltraExpanded,
+        symbolSemiBold,
+        symbolBold,
+        symbolExtraBold,
+        symbolUltraBold,
+        symbolUpright,
+        symbolOblique,
+        symbolBackSlantedOblique,
+        symbolItalic,
+        symbolBackSlantedItalic,
+        symbolStart,
+        symbolEnd,
+        symbolCenter,
+        symbolJustify,
+        symbolSpreadInside,
+        symbolSpreadOutside,
+        symbolPageInside,
+        symbolPageOutside,
+        symbolWrap,
+        symbolAsis,
+        symbolAsisWrap,
+        symbolAsisTruncate,
+        symbolNone,
+        symbolBefore,
+        symbolThrough,
+        symbolAfter,
+        symbolTopToBottom,
+        symbolLeftToRight,
+        symbolBottomToTop,
+        symbolRightToLeft,
+        symbolInside,
+        symbolOutside,
+        symbolHorizontal,
+        symbolVertical,
+        symbolEscapement,
+        symbolLineProgression,
+        symbolMath,
+        symbolOrdinary,
+        symbolOperator,
+        symbolBinary,
+        symbolRelation,
+        symbolOpening,
+        symbolClosing,
+        symbolPunctuation,
+        symbolInner,
+        symbolSpace,
+        symbolPage,
+        symbolPageRegion,
+        symbolColumnSet,
+        symbolColumn,
+        symbolMax,
+        symbolMaxUniform,
+        symbolMiter,
+        symbolRound,
+        symbolBevel,
+        symbolButt,
+        symbolSquare,
+        symbolLoose,
+        symbolNormal,
+        symbolKern,
+        symbolTight,
+        symbolTouch,
+        symbolPreserve,
+        symbolCollapse,
+        symbolIgnore,
+        symbolRelative,
+        symbolDisplay,
+        symbolInline,
+        symbolBorder,
+        symbolBackground,
+        symbolBoth,
+        symbolBase,
+        symbolFont,
+        symbolTop,
+        symbolBottom,
+        symbolSpread,
+        symbolSolid,
+        symbolOutline,
+        symbolWith,
+        symbolAgainst,
+        symbolForce,
+        symbolIndependent,
+        symbolPile,
+        symbolSupOut,
+        symbolSubOut,
+        symbolLeadEdge,
+        symbolTrailEdge,
+        symbolExplicit,
+        symbolRowMajor,
+        symbolColumnMajor
+    }
+
+    public const int nSymbols = (int)Symbol.symbolColumnMajor + 1;
+
+    // Extension class for FOT builder extensions
+    public class Extension
+    {
+        // Extension data
+    }
+
+    public struct GlyphId
+    {
+        public string? publicId;
+        public uint suffix;
+
+        public GlyphId() { publicId = null; suffix = 0; }
+        public GlyphId(string? s, uint n = 0) { publicId = s; suffix = n; }
+
+        public bool Equals(GlyphId other)
+        {
+            return publicId == other.publicId && suffix == other.suffix;
+        }
+    }
+
+    public class GlyphSubstTable : IResource
+    {
+        private int refCount_ = 0;
+        public uint uniqueId;
+        public System.Collections.Generic.List<GlyphId> pairs = new System.Collections.Generic.List<GlyphId>();
+
+        public int count() { return refCount_; }
+        public void @ref() { refCount_++; }
+        public int unref() { return --refCount_; }
+
+        public GlyphId subst(GlyphId id)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    public struct LengthSpec
+    {
+        public long length;
+        public double displaySizeFactor;
+
+        public LengthSpec() { length = 0; displaySizeFactor = 0.0; }
+        public LengthSpec(long len) { length = len; displaySizeFactor = 0.0; }
+
+        public static implicit operator bool(LengthSpec s) => s.length != 0 || s.displaySizeFactor != 0.0;
+    }
+
+    public struct TableLengthSpec
+    {
+        public long length;
+        public double displaySizeFactor;
+        public double tableUnitFactor;
+
+        public TableLengthSpec() { length = 0; displaySizeFactor = 0.0; tableUnitFactor = 0.0; }
+    }
+
+    public struct OptLengthSpec
+    {
+        public bool hasLength;
+        public LengthSpec length;
+
+        public OptLengthSpec() { hasLength = false; length = new LengthSpec(); }
+    }
+
+    public struct DisplaySpace
+    {
+        public LengthSpec nominal;
+        public LengthSpec min;
+        public LengthSpec max;
+        public long priority;
+        public bool conditional;
+        public bool force;
+
+        public DisplaySpace()
+        {
+            nominal = new LengthSpec();
+            min = new LengthSpec();
+            max = new LengthSpec();
+            priority = 0;
+            conditional = true;
+            force = false;
+        }
+    }
+
+    public struct InlineSpace
+    {
+        public LengthSpec nominal;
+        public LengthSpec min;
+        public LengthSpec max;
+
+        public InlineSpace()
+        {
+            nominal = new LengthSpec();
+            min = new LengthSpec();
+            max = new LengthSpec();
+        }
+    }
+
+    public struct OptInlineSpace
+    {
+        public bool hasSpace;
+        public InlineSpace space;
+
+        public OptInlineSpace() { hasSpace = false; space = new InlineSpace(); }
+    }
+
+    public class DisplayNIC
+    {
+        public DisplaySpace spaceBefore = new DisplaySpace();
+        public DisplaySpace spaceAfter = new DisplaySpace();
+        public Symbol positionPreference = Symbol.symbolFalse;
+        public Symbol keep = Symbol.symbolFalse;
+        public Symbol breakBefore = Symbol.symbolFalse;
+        public Symbol breakAfter = Symbol.symbolFalse;
+        public bool keepWithPrevious = false;
+        public bool keepWithNext = false;
+        public bool mayViolateKeepBefore = false;
+        public bool mayViolateKeepAfter = false;
+    }
+
+    public class InlineNIC
+    {
+        public long breakBeforePriority = 0;
+        public long breakAfterPriority = 0;
+    }
+
+    public class DisplayGroupNIC : DisplayNIC
+    {
+        public bool hasCoalesceId = false;
+        public StringC coalesceId = new StringC();
+    }
+
+    public class ExternalGraphicNIC : DisplayNIC
+    {
+        public bool isDisplay = true;
+        public Symbol scaleType = Symbol.symbolFalse;
+        public double[] scale = new double[2];
+        public StringC entitySystemId = new StringC();
+        public StringC notationSystemId = new StringC();
+        public bool hasMaxWidth = false;
+        public LengthSpec maxWidth = new LengthSpec();
+        public bool hasMaxHeight = false;
+        public LengthSpec maxHeight = new LengthSpec();
+        public Symbol escapementDirection = Symbol.symbolFalse;
+        public LengthSpec positionPointX = new LengthSpec();
+        public LengthSpec positionPointY = new LengthSpec();
+        public long breakBeforePriority = 0;
+        public long breakAfterPriority = 0;
+    }
+
+    public class BoxNIC : DisplayNIC
+    {
+        public bool isDisplay = true;
+        public long breakBeforePriority = 0;
+        public long breakAfterPriority = 0;
+    }
+
+    public class RuleNIC : DisplayNIC
+    {
+        public Symbol orientation = Symbol.symbolHorizontal;
+        public bool hasLength = false;
+        public LengthSpec length = new LengthSpec();
+        public long breakBeforePriority = 0;
+        public long breakAfterPriority = 0;
+    }
+
+    public class LeaderNIC : InlineNIC
+    {
+        public bool hasLength = false;
+        public LengthSpec length = new LengthSpec();
+    }
+
+    public class ParagraphNIC : DisplayNIC { }
+
+    public class CharacterNIC
+    {
+        public const int cIsDropAfterLineBreak = 1;
+        public const int cIsDropUnlessBeforeLineBreak = 2;
+        public const int cIsPunct = 4;
+        public const int cIsInputWhitespace = 8;
+        public const int cIsInputTab = 16;
+        public const int cIsRecordEnd = 32;
+        public const int cIsSpace = 64;
+        public const int cChar = 128;
+        public const int cGlyphId = 256;
+        public const int cScript = 512;
+        public const int cMathClass = 1024;
+        public const int cMathFontPosture = 2048;
+        public const int cBreakBeforePriority = 4096;
+        public const int cBreakAfterPriority = 8192;
+
+        public bool valid = false;
+        public uint specifiedC = 0;
+        public Char ch;
+        public GlyphId glyphId;
+        public long breakBeforePriority = 0;
+        public long breakAfterPriority = 0;
+        public Symbol mathClass = Symbol.symbolOrdinary;
+        public Symbol mathFontPosture = Symbol.symbolFalse;
+        public string? script = null;
+        public bool isDropAfterLineBreak = false;
+        public bool isDropUnlessBeforeLineBreak = false;
+        public bool isPunct = false;
+        public bool isInputWhitespace = false;
+        public bool isInputTab = false;
+        public bool isRecordEnd = false;
+        public bool isSpace = false;
+        public double stretchFactor = 1.0;
+    }
+
+    public class LineFieldNIC : InlineNIC { }
+
+    public class TableNIC : DisplayNIC
+    {
+        public enum WidthType { widthFull, widthMinimum, widthExplicit }
+
+        public WidthType widthType = WidthType.widthFull;
+        public LengthSpec width = new LengthSpec();
+    }
+
+    public class TablePartNIC : DisplayNIC { }
+
+    public class TableColumnNIC
+    {
+        public uint columnIndex = 0;
+        public uint nColumnsSpanned = 1;
+        public bool hasWidth = false;
+        public TableLengthSpec width = new TableLengthSpec();
+    }
+
+    public class TableCellNIC
+    {
+        public bool missing = false;
+        public uint columnIndex = 0;
+        public uint nColumnsSpanned = 1;
+        public uint nRowsSpanned = 1;
+    }
+
+    public struct DeviceRGBColor
+    {
+        public byte red;
+        public byte green;
+        public byte blue;
+    }
+
+    public class MultiMode
+    {
+        public bool hasDesc = false;
+        public StringC name = new StringC();
+        public StringC desc = new StringC();
+    }
+
+    public class Address
+    {
+        public enum Type
+        {
+            none,
+            resolvedNode,
+            idref,
+            entity,
+            sgmlDocument,
+            hytimeLinkend,
+            tei,
+            html
+        }
+
+        public Type type = Type.none;
+        public NodePtr node = new NodePtr();
+        public StringC[] @params = new StringC[3] { new StringC(), new StringC(), new StringC() };
+    }
+
+    public class GridNIC
+    {
+        public uint nColumns = 1;
+        public uint nRows = 1;
+    }
+
+    public class GridCellNIC
+    {
+        public uint columnNumber = 1;
+        public uint rowNumber = 1;
+    }
+
+    public enum HF
+    {
+        firstHF = 1,
+        otherHF = 0,
+        frontHF = 2,
+        backHF = 0,
+        headerHF = 4,
+        footerHF = 0,
+        leftHF = 8,
+        centerHF = 16,
+        rightHF = 24
+    }
+
+    public class SimplePageSequenceHeaderFooter
+    {
+        public FOTBuilder?[] hf = new FOTBuilder?[24];
+    }
+
+    public class PageSequenceHeaderFooter : SimplePageSequenceHeaderFooter { }
+
+    // Virtual methods
+    public virtual SaveFOTBuilder? asSaveFOTBuilder() { return null; }
+
+    public virtual void start() { }
+    public virtual void end() { }
+    public virtual void atomic() { start(); end(); }
+
+    public virtual void characters(Char[] data, nuint size) { }
+    public virtual void charactersFromNode(NodePtr nd, Char[] data, nuint size) { characters(data, size); }
+    public virtual void character(CharacterNIC nic) { atomic(); }
+    public virtual void paragraphBreak(ParagraphNIC nic) { atomic(); }
+    public virtual void externalGraphic(ExternalGraphicNIC nic) { atomic(); }
+    public virtual void rule(RuleNIC nic) { atomic(); }
+    public virtual void alignmentPoint() { atomic(); }
+    public virtual void formattingInstruction(StringC data) { atomic(); }
+
+    public virtual void startSequence() { start(); }
+    public virtual void endSequence() { end(); }
+    public virtual void startLineField(LineFieldNIC nic) { start(); }
+    public virtual void endLineField() { end(); }
+    public virtual void startParagraph(ParagraphNIC nic) { start(); }
+    public virtual void endParagraph() { end(); }
+    public virtual void startDisplayGroup(DisplayGroupNIC nic) { start(); }
+    public virtual void endDisplayGroup() { end(); }
+    public virtual void startScroll() { start(); }
+    public virtual void endScroll() { end(); }
+    public virtual void startLink(Address addr) { start(); }
+    public virtual void endLink() { end(); }
+    public virtual void startMarginalia() { start(); }
+    public virtual void endMarginalia() { end(); }
+    public virtual void startMultiMode(MultiMode? principalPort, System.Collections.Generic.List<MultiMode> namedPorts, out System.Collections.Generic.List<FOTBuilder> builders)
+    {
+        builders = new System.Collections.Generic.List<FOTBuilder>();
+        start();
+    }
+    public virtual void endMultiMode() { end(); }
+    public virtual void startScore(Char c) { start(); }
+    public virtual void startScore(LengthSpec length) { start(); }
+    public virtual void startScore(Symbol sym) { start(); }
+    public virtual void endScore() { end(); }
+    public virtual void startLeader(LeaderNIC nic) { start(); }
+    public virtual void endLeader() { end(); }
+    public virtual void startSideline() { start(); }
+    public virtual void endSideline() { end(); }
+    public virtual void startBox(BoxNIC nic) { start(); }
+    public virtual void endBox() { end(); }
+
+    // Tables
+    public virtual void startTable(TableNIC nic) { start(); }
+    public virtual void endTable() { end(); }
+    public virtual void tableBeforeRowBorder() { }
+    public virtual void tableAfterRowBorder() { }
+    public virtual void tableBeforeColumnBorder() { }
+    public virtual void tableAfterColumnBorder() { }
+    public virtual void startTablePart(TablePartNIC nic, out FOTBuilder? header, out FOTBuilder? footer)
+    {
+        header = null;
+        footer = null;
+        start();
+    }
+    public virtual void endTablePart() { end(); }
+    public virtual void tableColumn(TableColumnNIC nic) { }
+    public virtual void startTableRow() { start(); }
+    public virtual void endTableRow() { end(); }
+    public virtual void startTableCell(TableCellNIC nic) { start(); }
+    public virtual void endTableCell() { end(); }
+    public virtual void tableCellBeforeRowBorder() { }
+    public virtual void tableCellAfterRowBorder() { }
+    public virtual void tableCellBeforeColumnBorder() { }
+    public virtual void tableCellAfterColumnBorder() { }
+
+    // Math
+    public virtual void startMathSequence() { start(); }
+    public virtual void endMathSequence() { end(); }
+    public virtual void startFraction(out FOTBuilder? numerator, out FOTBuilder? denominator)
+    {
+        numerator = null;
+        denominator = null;
+        start();
+    }
+    public virtual void fractionBar() { }
+    public virtual void endFraction() { end(); }
+    public virtual void startUnmath() { start(); }
+    public virtual void endUnmath() { end(); }
+    public virtual void startSuperscript() { start(); }
+    public virtual void endSuperscript() { end(); }
+    public virtual void startSubscript() { start(); }
+    public virtual void endSubscript() { end(); }
+    public virtual void startScript(out FOTBuilder? preSup, out FOTBuilder? preSub, out FOTBuilder? postSup, out FOTBuilder? postSub, out FOTBuilder? midSup, out FOTBuilder? midSub)
+    {
+        preSup = null; preSub = null; postSup = null; postSub = null; midSup = null; midSub = null;
+        start();
+    }
+    public virtual void endScript() { end(); }
+    public virtual void startMark(out FOTBuilder? overMark, out FOTBuilder? underMark)
+    {
+        overMark = null;
+        underMark = null;
+        start();
+    }
+    public virtual void endMark() { end(); }
+    public virtual void startFence(out FOTBuilder? open, out FOTBuilder? close)
+    {
+        open = null;
+        close = null;
+        start();
+    }
+    public virtual void endFence() { end(); }
+    public virtual void startRadical(out FOTBuilder? degree)
+    {
+        degree = null;
+        start();
+    }
+    public virtual void radicalRadical(CharacterNIC nic) { }
+    public virtual void radicalRadicalDefaulted() { }
+    public virtual void endRadical() { end(); }
+    public virtual void startMathOperator(out FOTBuilder? oper, out FOTBuilder? lowerLimit, out FOTBuilder? upperLimit)
+    {
+        oper = null;
+        lowerLimit = null;
+        upperLimit = null;
+        start();
+    }
+    public virtual void endMathOperator() { end(); }
+
+    // Grid
+    public virtual void startGrid(GridNIC nic) { start(); }
+    public virtual void endGrid() { end(); }
+    public virtual void startGridCell(GridCellNIC nic) { start(); }
+    public virtual void endGridCell() { end(); }
+
+    // Simple page
+    public virtual void startSimplePageSequence(FOTBuilder? headerFooter) { start(); }
+    public virtual void endSimplePageSequenceHeaderFooter() { }
+    public virtual void endSimplePageSequence() { end(); }
+
+    // Page sequence
+    public virtual void startPageSequence() { start(); }
+    public virtual void endPageSequence() { end(); }
+
+    // Column set sequence
+    public virtual void startColumnSetSequence() { start(); }
+    public virtual void endColumnSetSequence() { end(); }
+
+    // Extension flow objects - default to atomic
+    public virtual void extension(StringC extension, StringC publicId) { atomic(); }
+    public virtual void startExtension(StringC extension, StringC publicId) { start(); }
+    public virtual void endExtension() { end(); }
+
+    // Inherited characteristics setting methods - all empty by default
+    public virtual void setFontSize(long size) { }
+    public virtual void setFontFamilyName(StringC name) { }
+    public virtual void setFontWeight(Symbol weight) { }
+    public virtual void setFontPosture(Symbol posture) { }
+    public virtual void setStartIndent(LengthSpec indent) { }
+    public virtual void setEndIndent(LengthSpec indent) { }
+    public virtual void setFirstLineStartIndent(LengthSpec indent) { }
+    public virtual void setLastLineEndIndent(LengthSpec indent) { }
+    public virtual void setLineSpacing(LengthSpec spacing) { }
+    public virtual void setFieldWidth(LengthSpec width) { }
+    public virtual void setMarginaliaSep(LengthSpec sep) { }
+    public virtual void setLines(Symbol lines) { }
+    public virtual void setQuadding(Symbol quadding) { }
+    public virtual void setDisplayAlignment(Symbol alignment) { }
+    public virtual void setFieldAlign(Symbol align) { }
+    public virtual void setColor(DeviceRGBColor color) { }
+    public virtual void setBackgroundColor() { } // background-color: #f
+    public virtual void setBackgroundColor(DeviceRGBColor color) { }
+    public virtual void setBorderPresent(bool present) { }
+    public virtual void setLineThickness(long thickness) { }
+    public virtual void setCellBeforeRowMargin(LengthSpec margin) { }
+    public virtual void setCellAfterRowMargin(LengthSpec margin) { }
+    public virtual void setCellBeforeColumnMargin(LengthSpec margin) { }
+    public virtual void setCellAfterColumnMargin(LengthSpec margin) { }
+    public virtual void setLineSep(LengthSpec sep) { }
+    public virtual void setBoxSizeBefore(LengthSpec size) { }
+    public virtual void setBoxSizeAfter(LengthSpec size) { }
+    public virtual void setPositionPointShift(LengthSpec shift) { }
+    public virtual void setStartMargin(LengthSpec margin) { }
+    public virtual void setEndMargin(LengthSpec margin) { }
+    public virtual void setSidelineSep(LengthSpec sep) { }
+    public virtual void setAsisWrapIndent(LengthSpec indent) { }
+    public virtual void setLineNumberSep(LengthSpec sep) { }
+    public virtual void setLastLineJustifyLimit(LengthSpec limit) { }
+    public virtual void setJustifyGlyphSpaceMaxAdd(LengthSpec add) { }
+    public virtual void setJustifyGlyphSpaceMaxRemove(LengthSpec remove) { }
+    public virtual void setTableCornerRadius(LengthSpec radius) { }
+    public virtual void setBoxCornerRadius(LengthSpec radius) { }
+    public virtual void setInhibitLineBreaks(bool inhibit) { }
+    public virtual void setHyphenate(bool hyphenate) { }
+    public virtual void setKern(bool kern) { }
+    public virtual void setLigature(bool ligature) { }
+    public virtual void setScoreSpaces(bool score) { }
+    public virtual void setFloatOutMarginalia(bool @float) { }
+    public virtual void setFloatOutSidelines(bool @float) { }
+    public virtual void setFloatOutLineNumbers(bool @float) { }
+    public virtual void setCellBackground(bool background) { }
+    public virtual void setSpanWeak(bool weak) { }
+    public virtual void setIgnoreRecordEnd(bool ignore) { }
+    public virtual void setNumberedLines(bool numbered) { }
+    public virtual void setHangingPunct(bool hanging) { }
+    public virtual void setBoxOpenEnd(bool open) { }
+    public virtual void setTruncateLeader(bool truncate) { }
+    public virtual void setAlignLeader(bool align) { }
+    public virtual void setTablePartOmitMiddleHeader(bool omit) { }
+    public virtual void setTablePartOmitMiddleFooter(bool omit) { }
+    public virtual void setBorderOmitAtBreak(bool omit) { }
+    public virtual void setPrincipalModeSimultaneous(bool simultaneous) { }
+    public virtual void setMarginaliaKeepWithPrevious(bool keep) { }
+    public virtual void setGridEquidistantRows(bool equidistant) { }
+    public virtual void setGridEquidistantColumns(bool equidistant) { }
+    public virtual void setLineJoin(Symbol join) { }
+    public virtual void setLineCap(Symbol cap) { }
+    public virtual void setLineMiterLimit(double limit) { }
+    public virtual void setLineDash(System.Collections.Generic.List<LengthSpec> dashes, LengthSpec offset) { }
+    public virtual void setLineDash(System.Collections.Generic.List<long> dashes, long offset) { }
+    public virtual void setLineRepeat(uint repeat) { }
+    public virtual void setGlyphAlignmentMode(Symbol mode) { }
+    public virtual void setInputWhitespaceTreatment(Symbol treatment) { }
+    public virtual void setFillingDirection(Symbol direction) { }
+    public virtual void setWritingMode(Symbol mode) { }
+    public virtual void setLastLineQuadding(Symbol quadding) { }
+    public virtual void setMathDisplayMode(Symbol mode) { }
+    public virtual void setScriptPreAlign(Symbol align) { }
+    public virtual void setScriptPostAlign(Symbol align) { }
+    public virtual void setScriptMidSupAlign(Symbol align) { }
+    public virtual void setScriptMidSubAlign(Symbol align) { }
+    public virtual void setNumeratorAlign(Symbol align) { }
+    public virtual void setDenominatorAlign(Symbol align) { }
+    public virtual void setGridPositionCellType(Symbol type) { }
+    public virtual void setGridColumnAlignment(Symbol alignment) { }
+    public virtual void setGridRowAlignment(Symbol alignment) { }
+    public virtual void setBoxType(Symbol type) { }
+    public virtual void setGlyphSubstTable(ConstPtr<GlyphSubstTable> table) { }
+    public virtual void setGlyphReorderMethod(Symbol method) { }
+    public virtual void setHyphenationKeep(Symbol keep) { }
+    public virtual void setFontStructure(Symbol structure) { }
+    public virtual void setFontProportionateWidth(Symbol width) { }
+    public virtual void setCjkStyle(Symbol style) { }
+    public virtual void setBorderAlignment(Symbol alignment) { }
+    public virtual void setSidelineSide(Symbol side) { }
+    public virtual void setHyphenationLadderCount(Symbol count) { }
+    public virtual void setBackgroundLayer(long layer) { }
+    public virtual void setBorderPriority(long priority) { }
+    public virtual void setLineRepeatCount(long count) { }
+    public virtual void setSpan(long span) { }
+    public virtual void setMinLeaderRepeat(long repeat) { }
+    public virtual void setHyphenationRemainCharCount(long count) { }
+    public virtual void setHyphenationPushCharCount(long count) { }
+    public virtual void setWidowCount(long count) { }
+    public virtual void setOrphanCount(long count) { }
+    public virtual void setExpandTabs(long tabs) { }
+    public virtual void setHyphenationChar(Char c) { }
+    public virtual void setLanguage(Letter2 lang) { }
+    public virtual void setCountry(Letter2 country) { }
+    public virtual void setEscapementSpaceBefore(InlineSpace space) { }
+    public virtual void setEscapementSpaceAfter(InlineSpace space) { }
+    public virtual void setGlyphSubstTableX(System.Collections.Generic.List<ConstPtr<GlyphSubstTable>> tables) { }
+
+    // Utility for 2-letter ISO codes
+    public struct Letter2
+    {
+        public ushort value;
+        public Letter2(char c1, char c2) { value = (ushort)((c1 << 8) | c2); }
+        public Letter2(ushort v) { value = v; }
+    }
+}
+
+// Collector for garbage collection of ELObj instances
+public class Collector
+{
+    public class Object
+    {
+        public virtual void traceSubObjects(Collector c) { }
+    }
+
+    // Dynamic root for tracing
+    public class DynamicRoot
+    {
+        public DynamicRoot(Collector c) { }
+        public virtual void trace(Collector c) { }
+    }
+
+    public object allocateObject(int size) { return new object(); }
+    public void unallocateObject(object p) { }
+    public void trace(object o) { }
+}
