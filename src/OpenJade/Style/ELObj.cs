@@ -988,7 +988,7 @@ public class ColorSpaceObj : ELObj
 public class StyleObj : ELObj
 {
     public override StyleObj? asStyle() { return this; }
-    public virtual void appendIter(StyleObjIter iter) { throw new NotImplementedException(); }
+    public virtual void appendIter(StyleObjIter iter) { }
 }
 
 public class NodeListObj : ELObj
