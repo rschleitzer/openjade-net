@@ -1122,21 +1122,97 @@ public class AlignedColumnFlowObj : CompoundFlowObj
 public class TableFlowObj : CompoundFlowObj
 {
     private FOTBuilder.TableNIC nic_ = new FOTBuilder.TableNIC();
+    private StyleObj? beforeRowBorder_;
+    private StyleObj? afterRowBorder_;
+    private StyleObj? beforeColumnBorder_;
+    private StyleObj? afterColumnBorder_;
 
     public override FlowObj copy(Interpreter interp)
     {
         TableFlowObj c = new TableFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
+        c.beforeRowBorder_ = beforeRowBorder_;
+        c.afterRowBorder_ = afterRowBorder_;
+        c.beforeColumnBorder_ = beforeColumnBorder_;
+        c.afterColumnBorder_ = afterColumnBorder_;
         return c;
     }
 
     public override void processInner(ProcessContext context)
     {
+        context.startTable();
         FOTBuilder fotb = context.currentFOTBuilder();
         fotb.startTable(nic_);
         base.processInner(context);
+        if (context.inTableRow())
+            context.endTableRow();
+        context.endTable();
         fotb.endTable();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyBeforeRowBorder:
+                case Identifier.SyntacticKey.keyAfterRowBorder:
+                case Identifier.SyntacticKey.keyBeforeColumnBorder:
+                case Identifier.SyntacticKey.keyAfterColumnBorder:
+                case Identifier.SyntacticKey.keyTableWidth:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return isDisplayNIC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (setDisplayNIC(ref nic_, ident, obj, loc, interp))
+            return;
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (!ident.syntacticKey(out key))
+            return;
+        if (key == Identifier.SyntacticKey.keyTableWidth)
+        {
+            if (obj == interp.makeFalse())
+                nic_.widthType = FOTBuilder.TableNIC.WidthType.widthMinimum;
+            else if (interp.convertLengthSpecC(obj, ident, loc, ref nic_.width))
+                nic_.widthType = FOTBuilder.TableNIC.WidthType.widthExplicit;
+            return;
+        }
+        StyleObj? style = null;
+        SosofoObj? sosofo = obj.asSosofo();
+        if (sosofo == null || !sosofo.tableBorderStyle(out style))
+        {
+            bool b;
+            if (!interp.convertBooleanC(obj, ident, loc, out b))
+                return;
+            style = b ? interp.borderTrueStyle() : interp.borderFalseStyle();
+        }
+        switch (key)
+        {
+            case Identifier.SyntacticKey.keyBeforeRowBorder:
+                beforeRowBorder_ = style;
+                break;
+            case Identifier.SyntacticKey.keyAfterRowBorder:
+                afterRowBorder_ = style;
+                break;
+            case Identifier.SyntacticKey.keyBeforeColumnBorder:
+                beforeColumnBorder_ = style;
+                break;
+            case Identifier.SyntacticKey.keyAfterColumnBorder:
+                afterColumnBorder_ = style;
+                break;
+        }
     }
 }
 
@@ -1186,17 +1262,94 @@ public class TableRowFlowObj : CompoundFlowObj
 public class TableColumnFlowObj : FlowObj
 {
     private FOTBuilder.TableColumnNIC nic_ = new FOTBuilder.TableColumnNIC();
+    private bool hasColumnNumber_;
 
     public override FlowObj copy(Interpreter interp)
     {
         TableColumnFlowObj c = new TableColumnFlowObj();
         c.setStyle(style());
+        c.nic_ = nic_;
+        c.hasColumnNumber_ = hasColumnNumber_;
         return c;
     }
 
     public override void processInner(ProcessContext context)
     {
-        context.currentFOTBuilder().tableColumn(nic_);
+        if (hasColumnNumber_)
+        {
+            context.currentFOTBuilder().tableColumn(nic_);
+            context.addTableColumn(nic_.columnIndex, nic_.nColumnsSpanned, style());
+        }
+        else
+        {
+            FOTBuilder.TableColumnNIC nic = nic_;
+            nic.columnIndex = context.currentTableColumn();
+            context.currentFOTBuilder().tableColumn(nic);
+            context.addTableColumn(nic.columnIndex, nic_.nColumnsSpanned, style());
+        }
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyColumnNumber:
+                case Identifier.SyntacticKey.keyNColumnsSpanned:
+                case Identifier.SyntacticKey.keyWidth:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyColumnNumber:
+                case Identifier.SyntacticKey.keyNColumnsSpanned:
+                    {
+                        long n;
+                        if (!interp.convertIntegerC(obj, ident, loc, out n))
+                            return;
+                        if (n <= 0)
+                        {
+                            interp.invalidCharacteristicValue(ident, loc);
+                            return;
+                        }
+                        if (key == Identifier.SyntacticKey.keyColumnNumber)
+                        {
+                            nic_.columnIndex = (uint)(n - 1);
+                            hasColumnNumber_ = true;
+                        }
+                        else
+                            nic_.nColumnsSpanned = (uint)n;
+                    }
+                    return;
+                case Identifier.SyntacticKey.keyWidth:
+                    {
+                        FOTBuilder.LengthSpec len = new FOTBuilder.LengthSpec();
+                        if (interp.convertLengthSpecC(obj, ident, loc, ref len))
+                        {
+                            nic_.width = new FOTBuilder.TableLengthSpec { length = len.length };
+                            nic_.hasWidth = true;
+                        }
+                    }
+                    return;
+                default:
+                    break;
+            }
+        }
     }
 }
 
@@ -1204,21 +1357,133 @@ public class TableColumnFlowObj : FlowObj
 public class TableCellFlowObj : CompoundFlowObj
 {
     private FOTBuilder.TableCellNIC nic_ = new FOTBuilder.TableCellNIC();
+    private bool hasColumnNumber_;
+    private bool startsRow_;
+    private bool endsRow_;
+
+    public TableCellFlowObj(bool missing = false)
+    {
+        if (missing)
+            nic_.missing = true;
+    }
 
     public override FlowObj copy(Interpreter interp)
     {
         TableCellFlowObj c = new TableCellFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
+        c.hasColumnNumber_ = hasColumnNumber_;
+        c.startsRow_ = startsRow_;
+        c.endsRow_ = endsRow_;
         return c;
     }
 
     public override void processInner(ProcessContext context)
     {
+        if (!context.inTable())
+        {
+            base.processInner(context);
+            return;
+        }
         FOTBuilder fotb = context.currentFOTBuilder();
-        fotb.startTableCell(nic_);
+        if (!hasColumnNumber_)
+        {
+            FOTBuilder.TableCellNIC nic = nic_;
+            nic.columnIndex = context.currentTableColumn();
+            fotb.startTableCell(nic);
+            if (!nic_.missing)
+                context.noteTableCell(nic.columnIndex, nic.nColumnsSpanned, nic.nRowsSpanned);
+        }
+        else
+        {
+            fotb.startTableCell(nic_);
+            if (!nic_.missing)
+                context.noteTableCell(nic_.columnIndex, nic_.nColumnsSpanned, nic_.nRowsSpanned);
+        }
         base.processInner(context);
         fotb.endTableCell();
+        if (endsRow_)
+            context.endTableRow();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyNRowsSpanned:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    public override bool hasPseudoNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyColumnNumber:
+                case Identifier.SyntacticKey.keyNColumnsSpanned:
+                case Identifier.SyntacticKey.keyIsStartsRow:
+                case Identifier.SyntacticKey.keyIsEndsRow:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyIsStartsRow:
+                    interp.convertBooleanC(obj, ident, loc, out startsRow_);
+                    return;
+                case Identifier.SyntacticKey.keyIsEndsRow:
+                    interp.convertBooleanC(obj, ident, loc, out endsRow_);
+                    return;
+                case Identifier.SyntacticKey.keyColumnNumber:
+                case Identifier.SyntacticKey.keyNColumnsSpanned:
+                case Identifier.SyntacticKey.keyNRowsSpanned:
+                    {
+                        long n;
+                        if (!interp.convertIntegerC(obj, ident, loc, out n))
+                            return;
+                        if (n <= 0)
+                        {
+                            interp.invalidCharacteristicValue(ident, loc);
+                            return;
+                        }
+                        if (key == Identifier.SyntacticKey.keyColumnNumber)
+                        {
+                            nic_.columnIndex = (uint)(n - 1);
+                            hasColumnNumber_ = true;
+                        }
+                        else if (key == Identifier.SyntacticKey.keyNColumnsSpanned)
+                            nic_.nColumnsSpanned = (uint)n;
+                        else
+                            nic_.nRowsSpanned = (uint)n;
+                    }
+                    return;
+                default:
+                    break;
+            }
+        }
     }
 }
 

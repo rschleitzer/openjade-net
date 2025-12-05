@@ -76,6 +76,19 @@ public abstract class ProcessContext
     public abstract void startConnection(SymbolObj? label, Location loc);
     public abstract void endConnection();
 
+    // Table methods
+    public abstract void startTable();
+    public abstract void endTable();
+    public abstract bool inTable();
+    public abstract bool inTableRow();
+    public abstract void startTableRow(StyleObj? style);
+    public abstract void endTableRow();
+    public abstract uint currentTableColumn();
+    public abstract void addTableColumn(uint columnIndex, uint span, StyleObj? style);
+    public abstract void noteTableCell(uint columnIndex, uint columnSpan, uint rowSpan);
+    public abstract StyleObj? tableColumnStyle(uint columnIndex, uint span);
+    public abstract StyleObj? tableRowStyle();
+
     // Character output
     public virtual void characters(Char[] data, nuint start, nuint len)
     {
@@ -569,12 +582,12 @@ public class ProcessContextImpl : ProcessContext
     }
 
     // Table support
-    public void startTable()
+    public override void startTable()
     {
         tableStack_.Add(new Table());
     }
 
-    public void endTable()
+    public override void endTable()
     {
         tableStack_.RemoveAt(tableStack_.Count - 1);
     }
@@ -597,7 +610,7 @@ public class ProcessContextImpl : ProcessContext
         coverSpannedRows();
     }
 
-    public void addTableColumn(uint columnIndex, uint span, StyleObj? style)
+    public override void addTableColumn(uint columnIndex, uint span, StyleObj? style)
     {
         if (tableStack_.Count > 0)
         {
@@ -615,12 +628,12 @@ public class ProcessContextImpl : ProcessContext
         }
     }
 
-    public uint currentTableColumn()
+    public override uint currentTableColumn()
     {
         return tableStack_[tableStack_.Count - 1].currentColumn;
     }
 
-    public void noteTableCell(uint colIndex, uint colSpan, uint rowSpan)
+    public override void noteTableCell(uint colIndex, uint colSpan, uint rowSpan)
     {
         if (tableStack_.Count == 0)
             return;
@@ -635,7 +648,7 @@ public class ProcessContextImpl : ProcessContext
             table.nColumns = colIndex + colSpan;
     }
 
-    public StyleObj? tableColumnStyle(uint columnIndex, uint span)
+    public override StyleObj? tableColumnStyle(uint columnIndex, uint span)
     {
         if (tableStack_.Count > 0)
         {
@@ -650,12 +663,12 @@ public class ProcessContextImpl : ProcessContext
         return null;
     }
 
-    public StyleObj? tableRowStyle()
+    public override StyleObj? tableRowStyle()
     {
         return tableStack_[tableStack_.Count - 1].rowStyle;
     }
 
-    public void startTableRow(StyleObj? style)
+    public override void startTableRow(StyleObj? style)
     {
         if (tableStack_.Count > 0)
         {
@@ -668,17 +681,17 @@ public class ProcessContextImpl : ProcessContext
         currentFOTBuilder().startTableRow();
     }
 
-    public bool inTable()
+    public override bool inTable()
     {
         return tableStack_.Count > 0;
     }
 
-    public bool inTableRow()
+    public override bool inTableRow()
     {
         return tableStack_.Count > 0 && tableStack_[tableStack_.Count - 1].inTableRow;
     }
 
-    public void endTableRow()
+    public override void endTableRow()
     {
         if (tableStack_.Count > 0)
         {

@@ -587,6 +587,30 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             return null;
         return new string(Array.ConvertAll(data, c => (char)c), 0, (int)size);
     }
+
+    // Border styles
+    private StyleObj? borderTrueStyle_;
+    private StyleObj? borderFalseStyle_;
+
+    public StyleObj? borderTrueStyle()
+    {
+        return borderTrueStyle_;
+    }
+
+    public StyleObj? borderFalseStyle()
+    {
+        return borderFalseStyle_;
+    }
+
+    public void setBorderTrueStyle(StyleObj? style)
+    {
+        borderTrueStyle_ = style;
+    }
+
+    public void setBorderFalseStyle(StyleObj? style)
+    {
+        borderFalseStyle_ = style;
+    }
 }
 
 // Interpreter error messages
