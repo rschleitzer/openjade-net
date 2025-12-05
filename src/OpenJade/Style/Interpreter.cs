@@ -818,4 +818,9 @@ public enum InterpreterMessages
     unknownColorSpaceFamily,
     colorSpaceArgError,
     colorSpaceNoArgs,
+    // ProcessContext messages
+    processNodeLoop,
+    badConnection,
+    contentMapBadPort,
+    badContentMap,
 }
