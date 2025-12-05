@@ -775,6 +775,39 @@ public class FOTBuilder
         public Letter2(char c1, char c2) { value = (ushort)((c1 << 8) | c2); }
         public Letter2(ushort v) { value = v; }
     }
+
+    // Extension flow object interface
+    public class ExtensionFlowObj
+    {
+        public virtual ExtensionFlowObj copy() { return new ExtensionFlowObj(); }
+        public virtual CompoundExtensionFlowObj? asCompoundExtensionFlowObj() { return null; }
+        public virtual bool hasNIC(StringC name) { return false; }
+        public virtual void setNIC(StringC name, IExtensionFlowObjValue value) { }
+    }
+
+    // Compound extension flow object interface
+    public class CompoundExtensionFlowObj : ExtensionFlowObj
+    {
+        public override ExtensionFlowObj copy() { return new CompoundExtensionFlowObj(); }
+        public override CompoundExtensionFlowObj? asCompoundExtensionFlowObj() { return this; }
+        public virtual bool hasPrincipalPort() { return true; }
+        public virtual void portNames(System.Collections.Generic.List<StringC> names) { }
+    }
+
+    // Extension table entry (for FOT builder extension registration)
+    public class ExtensionTableEntry
+    {
+        public string? pubid;
+        public ExtensionFlowObj? flowObj;
+    }
+
+    // Extension flow object methods
+    public virtual void extension(ExtensionFlowObj fo, NodePtr currentNode) { atomic(); }
+    public virtual void startExtension(ExtensionFlowObj fo, NodePtr currentNode, System.Collections.Generic.List<FOTBuilder?> fotbs)
+    {
+        start();
+    }
+    public virtual void endExtension(ExtensionFlowObj fo) { end(); }
 }
 
 // Note: Collector is defined in Collector.cs

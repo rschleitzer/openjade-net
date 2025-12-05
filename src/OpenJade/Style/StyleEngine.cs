@@ -88,6 +88,12 @@ public abstract class ProcessContext
     public abstract void noteTableCell(uint columnIndex, uint columnSpan, uint rowSpan);
     public abstract StyleObj? tableColumnStyle(uint columnIndex, uint span);
     public abstract StyleObj? tableRowStyle();
+    public abstract void startTablePart();
+    public abstract void endTablePart();
+
+    // Port management
+    public abstract void pushPorts(bool hasPrincipalPort, System.Collections.Generic.List<SymbolObj> labels, System.Collections.Generic.List<FOTBuilder?> fotbs);
+    public abstract void popPorts();
 
     // Character output
     public virtual void characters(Char[] data, nuint start, nuint len)
@@ -461,7 +467,7 @@ public class ProcessContextImpl : ProcessContext
         }
     }
 
-    public void pushPorts(bool hasPrincipalPort, System.Collections.Generic.List<SymbolObj?> labels, System.Collections.Generic.List<FOTBuilder?> fotbs)
+    public override void pushPorts(bool hasPrincipalPort, System.Collections.Generic.List<SymbolObj> labels, System.Collections.Generic.List<FOTBuilder?> fotbs)
     {
         Connectable c = new Connectable(labels.Count, currentStyleStack(), flowObjLevel_);
         connectableStack_.Insert(0, c);
@@ -474,7 +480,7 @@ public class ProcessContextImpl : ProcessContext
         // TODO: deal with !hasPrincipalPort
     }
 
-    public void popPorts()
+    public override void popPorts()
     {
         connectableStackLevel_--;
         if (connectableStack_.Count > 0)
@@ -592,7 +598,7 @@ public class ProcessContextImpl : ProcessContext
         tableStack_.RemoveAt(tableStack_.Count - 1);
     }
 
-    public void startTablePart()
+    public override void startTablePart()
     {
         if (tableStack_.Count > 0)
         {
@@ -605,7 +611,7 @@ public class ProcessContextImpl : ProcessContext
         }
     }
 
-    public void endTablePart()
+    public override void endTablePart()
     {
         coverSpannedRows();
     }

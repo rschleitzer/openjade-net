@@ -1336,10 +1336,42 @@ public class TablePartFlowObj : CompoundFlowObj
 
     public override void processInner(ProcessContext context)
     {
+        context.startTablePart();
         FOTBuilder fotb = context.currentFOTBuilder();
         fotb.startTablePart(nic_, out FOTBuilder? header, out FOTBuilder? footer);
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?> { header, footer };
+        var labels = new System.Collections.Generic.List<SymbolObj>
+        {
+            context.vm().interp!.portName(Interpreter.PortName.portHeader),
+            context.vm().interp!.portName(Interpreter.PortName.portFooter)
+        };
+        context.pushPorts(true, labels, fotbs);
         base.processInner(context);
+        context.popPorts();
+        if (context.inTableRow())
+            context.endTableRow();
+        context.endTablePart();
         fotb.endTablePart();
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (ident == null || obj == null)
+            return;
+        setDisplayNIC(ref nic_, ident, obj, loc, interp);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        if (!isDisplayNIC(ident))
+            return false;
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            if (key == Identifier.SyntacticKey.keyPositionPreference)
+                return false;
+        }
+        return true;
     }
 }
 
@@ -1354,12 +1386,31 @@ public class TableRowFlowObj : CompoundFlowObj
         return c;
     }
 
+    // Table row doesn't push its own style - the style is pushed via startTableRow
+    public override void pushStyle(ProcessContext context, ref uint flags)
+    {
+        // Do nothing - style is handled specially for table rows
+    }
+
+    public override void popStyle(ProcessContext context, uint flags)
+    {
+        // Do nothing - style is handled specially for table rows
+    }
+
     public override void processInner(ProcessContext context)
     {
-        FOTBuilder fotb = context.currentFOTBuilder();
-        fotb.startTableRow();
+        if (!context.inTable())
+        {
+            context.vm().interp?.message(InterpreterMessages.tableRowOutsideTable);
+            base.processInner(context);
+            return;
+        }
+        if (context.inTableRow())
+            context.endTableRow();
+        context.startTableRow(style());
         base.processInner(context);
-        fotb.endTableRow();
+        if (context.inTableRow())
+            context.endTableRow();
     }
 }
 
@@ -1601,6 +1652,22 @@ public class TableBorderFlowObj : FlowObj
         c.setStyle(style());
         return c;
     }
+
+    public override void process(ProcessContext context)
+    {
+        // Table borders don't process themselves
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        // Table borders don't process themselves
+    }
+
+    public override bool tableBorderStyle(out StyleObj? style)
+    {
+        style = this.style();
+        return true;
+    }
 }
 
 // Math sequence flow object
@@ -1638,7 +1705,34 @@ public class FractionFlowObj : CompoundFlowObj
     {
         FOTBuilder fotb = context.currentFOTBuilder();
         fotb.startFraction(out FOTBuilder? num, out FOTBuilder? denom);
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?> { num, denom };
+
+        // Get fraction bar style from inherited characteristic
+        var dep = new System.Collections.Generic.List<nuint>();
+        StyleObj? fractionBarStyle = null;
+        ConstPtr<InheritedC>? fractionBarC = context.vm().interp?.fractionBarC();
+        if (fractionBarC != null && !fractionBarC.isNull())
+        {
+            ELObj? obj = context.currentStyleStack().actual(fractionBarC, context.vm().interp!, dep);
+            SosofoObj? sosofo = obj?.asSosofo();
+            if (sosofo != null)
+                sosofo.ruleStyle(context, out fractionBarStyle);
+        }
+        if (fractionBarStyle != null)
+            context.currentStyleStack().push(fractionBarStyle, context.vm(), fotb);
+        fotb.fractionBar();
+        if (fractionBarStyle != null)
+            context.currentStyleStack().pop();
+
+        var labels = new System.Collections.Generic.List<SymbolObj>
+        {
+            context.vm().interp!.portName(Interpreter.PortName.portNumerator),
+            context.vm().interp!.portName(Interpreter.PortName.portDenominator)
+        };
+        context.pushPorts(false, labels, fotbs);
+        // Fraction flow object doesn't have principal port
         base.processInner(context);
+        context.popPorts();
         fotb.endFraction();
     }
 }
@@ -1713,6 +1807,29 @@ public class ScriptFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startScript(out FOTBuilder? preSup, out FOTBuilder? preSub,
+                         out FOTBuilder? postSup, out FOTBuilder? postSub,
+                         out FOTBuilder? midSup, out FOTBuilder? midSub);
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?>
+            { preSup, preSub, postSup, postSub, midSup, midSub };
+        var labels = new System.Collections.Generic.List<SymbolObj>
+        {
+            context.vm().interp!.portName(Interpreter.PortName.portPreSup),
+            context.vm().interp!.portName(Interpreter.PortName.portPreSub),
+            context.vm().interp!.portName(Interpreter.PortName.portPostSup),
+            context.vm().interp!.portName(Interpreter.PortName.portPostSub),
+            context.vm().interp!.portName(Interpreter.PortName.portMidSup),
+            context.vm().interp!.portName(Interpreter.PortName.portMidSub)
+        };
+        context.pushPorts(true, labels, fotbs);
+        base.processInner(context);
+        context.popPorts();
+        fotb.endScript();
+    }
 }
 
 // Mark flow object
@@ -1724,6 +1841,22 @@ public class MarkFlowObj : CompoundFlowObj
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startMark(out FOTBuilder? overMark, out FOTBuilder? underMark);
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?> { overMark, underMark };
+        var labels = new System.Collections.Generic.List<SymbolObj>
+        {
+            context.vm().interp!.portName(Interpreter.PortName.portOverMark),
+            context.vm().interp!.portName(Interpreter.PortName.portUnderMark)
+        };
+        context.pushPorts(true, labels, fotbs);
+        base.processInner(context);
+        context.popPorts();
+        fotb.endMark();
     }
 }
 
@@ -1737,17 +1870,86 @@ public class FenceFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startFence(out FOTBuilder? open, out FOTBuilder? close);
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?> { open, close };
+        var labels = new System.Collections.Generic.List<SymbolObj>
+        {
+            context.vm().interp!.portName(Interpreter.PortName.portOpen),
+            context.vm().interp!.portName(Interpreter.PortName.portClose)
+        };
+        context.pushPorts(true, labels, fotbs);
+        base.processInner(context);
+        context.popPorts();
+        fotb.endFence();
+    }
 }
 
 // Radical flow object
 public class RadicalFlowObj : CompoundFlowObj
 {
+    private SosofoObj? radical_;
+
     public override FlowObj copy(Interpreter interp)
     {
         RadicalFlowObj c = new RadicalFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.radical_ = radical_;
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startRadical(out FOTBuilder? degree);
+        StyleObj? style;
+        FOTBuilder.CharacterNIC nic = new FOTBuilder.CharacterNIC();
+        if (radical_ != null && radical_.characterStyle(context, out style, nic))
+        {
+            if (style != null)
+                context.currentStyleStack().push(style, context.vm(), fotb);
+            fotb.radicalRadical(nic);
+            if (style != null)
+                context.currentStyleStack().pop();
+        }
+        else
+            fotb.radicalRadicalDefaulted();
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?> { degree };
+        var labels = new System.Collections.Generic.List<SymbolObj>
+        {
+            context.vm().interp!.portName(Interpreter.PortName.portDegree)
+        };
+        context.pushPorts(true, labels, fotbs);
+        base.processInner(context);
+        context.popPorts();
+        fotb.endRadical();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        return ident != null && ident.syntacticKey(out key) && key == Identifier.SyntacticKey.keyRadical;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (obj == null)
+            return;
+        radical_ = obj.asSosofo();
+        if (radical_ == null || !radical_.isCharacter())
+        {
+            interp.invalidCharacteristicValue(ident, loc);
+        }
+    }
+
+    public override void traceSubObjects(Collector c)
+    {
+        c.trace(radical_);
+        base.traceSubObjects(c);
     }
 }
 
@@ -1760,6 +1962,23 @@ public class MathOperatorFlowObj : CompoundFlowObj
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startMathOperator(out FOTBuilder? oper, out FOTBuilder? lowerLimit, out FOTBuilder? upperLimit);
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?> { oper, lowerLimit, upperLimit };
+        var labels = new System.Collections.Generic.List<SymbolObj>
+        {
+            context.vm().interp!.portName(Interpreter.PortName.portOperator),
+            context.vm().interp!.portName(Interpreter.PortName.portLowerLimit),
+            context.vm().interp!.portName(Interpreter.PortName.portUpperLimit)
+        };
+        context.pushPorts(true, labels, fotbs);
+        base.processInner(context);
+        context.popPorts();
+        fotb.endMathOperator();
     }
 }
 
@@ -1821,12 +2040,108 @@ public class GlyphAnnotationFlowObj : FlowObj
 // Multi mode flow object
 public class MultiModeFlowObj : CompoundFlowObj
 {
+    public class NIC
+    {
+        public bool hasPrincipalMode = false;
+        public FOTBuilder.MultiMode principalMode = new FOTBuilder.MultiMode();
+        public System.Collections.Generic.List<FOTBuilder.MultiMode> namedModes = new();
+    }
+
+    private NIC nic_ = new NIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         MultiModeFlowObj c = new MultiModeFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startMultiMode(nic_.hasPrincipalMode ? nic_.principalMode : null,
+                            nic_.namedModes,
+                            out System.Collections.Generic.List<FOTBuilder> builders);
+        var portSyms = new System.Collections.Generic.List<SymbolObj>();
+        foreach (var mode in nic_.namedModes)
+            portSyms.Add(context.vm().interp!.makeSymbol(mode.name));
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?>();
+        foreach (var b in builders)
+            fotbs.Add(b);
+        context.pushPorts(nic_.hasPrincipalMode, portSyms, fotbs);
+        base.processInner(context);
+        context.popPorts();
+        fotb.endMultiMode();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        return ident != null && ident.syntacticKey(out key) && key == Identifier.SyntacticKey.keyMultiModes;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (obj == null)
+            return;
+        while (!obj.isNil())
+        {
+            PairObj? pair = obj.asPair();
+            if (pair == null || !handleMultiModesMember(ident, pair.car(), loc, interp))
+            {
+                interp.invalidCharacteristicValue(ident, loc);
+                return;
+            }
+            obj = pair.cdr();
+        }
+    }
+
+    private bool handleMultiModesMember(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (obj == null)
+            return false;
+        if (obj == interp.makeFalse())
+        {
+            nic_.hasPrincipalMode = true;
+            return true;
+        }
+        SymbolObj? sym = obj.asSymbol();
+        if (sym != null)
+        {
+            nic_.namedModes.Add(new FOTBuilder.MultiMode { name = sym.name() });
+            return true;
+        }
+        PairObj? pair = obj.asPair();
+        if (pair == null)
+            return false;
+        ELObj spec = pair.car()!;
+        pair = pair.cdr()?.asPair();
+        if (pair == null || !pair.cdr()!.isNil())
+            return false;
+        Char[]? s;
+        nuint n;
+        if (!pair.car()!.stringData(out s, out n) || s == null)
+            return false;
+        if (spec == interp.makeFalse())
+        {
+            nic_.hasPrincipalMode = true;
+            nic_.principalMode.hasDesc = true;
+            nic_.principalMode.desc = new StringC(s, n);
+            return true;
+        }
+        sym = spec.asSymbol();
+        if (sym == null)
+            return false;
+        var mode = new FOTBuilder.MultiMode
+        {
+            name = sym.name(),
+            desc = new StringC(s, n),
+            hasDesc = true
+        };
+        nic_.namedModes.Add(mode);
+        return true;
     }
 }
 
@@ -1901,5 +2216,194 @@ public class FormattingInstructionFlowObj : FlowObj
     {
         if (obj != null)
             interp.convertStringC(obj, ident, loc, out data_);
+    }
+}
+
+// Extension flow object value interface
+public interface IExtensionFlowObjValue
+{
+    bool convertString(out StringC result);
+    bool convertStringPairList(out System.Collections.Generic.List<StringC> v);
+    bool convertStringList(out System.Collections.Generic.List<StringC> v);
+    bool convertBoolean(out bool result);
+}
+
+// ELObj wrapper for extension flow object value
+public class ELObjExtensionFlowObjValue : IExtensionFlowObjValue
+{
+    private Identifier? ident_;
+    private ELObj? obj_;
+    private Location loc_;
+    private Interpreter interp_;
+
+    public ELObjExtensionFlowObjValue(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        ident_ = ident;
+        obj_ = obj;
+        loc_ = loc;
+        interp_ = interp;
+    }
+
+    public bool convertString(out StringC result)
+    {
+        return interp_.convertStringC(obj_!, ident_, loc_, out result);
+    }
+
+    public bool convertStringPairList(out System.Collections.Generic.List<StringC> v)
+    {
+        v = new System.Collections.Generic.List<StringC>();
+        ELObj? obj = obj_;
+        for (; ; )
+        {
+            if (obj == null || obj.isNil())
+                return true;
+            PairObj? pair = obj.asPair();
+            if (pair == null)
+                break;
+            obj = pair.cdr();
+            PairObj? att = pair.car()?.asPair();
+            if (att == null)
+                break;
+            Char[]? s;
+            nuint n;
+            if (!att.car()!.stringData(out s, out n) || s == null)
+                break;
+            v.Add(new StringC(s, n));
+            att = att.cdr()?.asPair();
+            if (att == null || !att.car()!.stringData(out s, out n) || s == null || !att.cdr()!.isNil())
+            {
+                v.RemoveAt(v.Count - 1);
+                break;
+            }
+            v.Add(new StringC(s, n));
+        }
+        interp_.invalidCharacteristicValue(ident_, loc_);
+        return false;
+    }
+
+    public bool convertStringList(out System.Collections.Generic.List<StringC> v)
+    {
+        v = new System.Collections.Generic.List<StringC>();
+        ELObj? obj = obj_;
+        for (; ; )
+        {
+            if (obj == null || obj.isNil())
+                return true;
+            PairObj? pair = obj.asPair();
+            if (pair == null)
+                break;
+            Char[]? s;
+            nuint n;
+            if (!pair.car()!.stringData(out s, out n) || s == null)
+                break;
+            v.Add(new StringC(s, n));
+            obj = pair.cdr();
+        }
+        interp_.invalidCharacteristicValue(ident_, loc_);
+        return false;
+    }
+
+    public bool convertBoolean(out bool result)
+    {
+        return interp_.convertBooleanC(obj_!, ident_, loc_, out result);
+    }
+}
+
+// Extension flow object (non-compound)
+public class ExtensionFlowObj : FlowObj
+{
+    private FOTBuilder.ExtensionFlowObj? fo_;
+
+    public ExtensionFlowObj(FOTBuilder.ExtensionFlowObj fo)
+    {
+        fo_ = fo.copy();
+    }
+
+    public ExtensionFlowObj(ExtensionFlowObj other)
+    {
+        setStyle(other.style());
+        fo_ = other.fo_?.copy();
+    }
+
+    public override FlowObj copy(Interpreter interp)
+    {
+        return new ExtensionFlowObj(this);
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        if (fo_ != null)
+            context.currentFOTBuilder().extension(fo_, context.vm().currentNode);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        return fo_ != null && ident != null && fo_.hasNIC(ident.name());
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (fo_ != null && ident != null)
+            fo_.setNIC(ident.name(), new ELObjExtensionFlowObjValue(ident, obj, loc, interp));
+    }
+}
+
+// Compound extension flow object (with ports)
+public class CompoundExtensionFlowObj : CompoundFlowObj
+{
+    private FOTBuilder.CompoundExtensionFlowObj? fo_;
+
+    public CompoundExtensionFlowObj(FOTBuilder.CompoundExtensionFlowObj fo)
+    {
+        fo_ = fo.copy()?.asCompoundExtensionFlowObj();
+    }
+
+    public CompoundExtensionFlowObj(CompoundExtensionFlowObj other)
+    {
+        setStyle(other.style());
+        setContent(other.content());
+        fo_ = other.fo_?.copy()?.asCompoundExtensionFlowObj();
+    }
+
+    public override FlowObj copy(Interpreter interp)
+    {
+        return new CompoundExtensionFlowObj(this);
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        if (fo_ == null)
+        {
+            base.processInner(context);
+            return;
+        }
+        FOTBuilder fotb = context.currentFOTBuilder();
+        var portNames = new System.Collections.Generic.List<StringC>();
+        fo_.portNames(portNames);
+        var fotbs = new System.Collections.Generic.List<FOTBuilder?>(portNames.Count);
+        fotb.startExtension(fo_, context.vm().currentNode, fotbs);
+        if (portNames.Count > 0)
+        {
+            var portSyms = new System.Collections.Generic.List<SymbolObj>();
+            foreach (var name in portNames)
+                portSyms.Add(context.vm().interp!.makeSymbol(name));
+            context.pushPorts(fo_.hasPrincipalPort(), portSyms, fotbs);
+            base.processInner(context);
+            context.popPorts();
+        }
+        else
+            base.processInner(context);
+        fotb.endExtension(fo_);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        return fo_ != null && ident != null && fo_.hasNIC(ident.name());
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (fo_ != null && ident != null)
+            fo_.setNIC(ident.name(), new ELObjExtensionFlowObjValue(ident, obj, loc, interp));
     }
 }

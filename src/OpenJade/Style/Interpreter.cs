@@ -611,6 +611,152 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     {
         borderFalseStyle_ = style;
     }
+
+    // Port names for multi-port flow objects
+    public enum PortName
+    {
+        portNumerator,
+        portDenominator,
+        portPreSup,
+        portPreSub,
+        portPostSup,
+        portPostSub,
+        portMidSup,
+        portMidSub,
+        portOverMark,
+        portUnderMark,
+        portOpen,
+        portClose,
+        portDegree,
+        portOperator,
+        portLowerLimit,
+        portUpperLimit,
+        portHeader,
+        portFooter
+    }
+
+    public const int nPortNames = (int)PortName.portFooter + 1;
+
+    private SymbolObj?[] portNames_ = new SymbolObj?[nPortNames];
+
+    public SymbolObj portName(PortName i)
+    {
+        if (portNames_[(int)i] == null)
+        {
+            string name = i switch
+            {
+                PortName.portNumerator => "numerator",
+                PortName.portDenominator => "denominator",
+                PortName.portPreSup => "pre-sup",
+                PortName.portPreSub => "pre-sub",
+                PortName.portPostSup => "post-sup",
+                PortName.portPostSub => "post-sub",
+                PortName.portMidSup => "mid-sup",
+                PortName.portMidSub => "mid-sub",
+                PortName.portOverMark => "over-mark",
+                PortName.portUnderMark => "under-mark",
+                PortName.portOpen => "open",
+                PortName.portClose => "close",
+                PortName.portDegree => "degree",
+                PortName.portOperator => "operator",
+                PortName.portLowerLimit => "lower-limit",
+                PortName.portUpperLimit => "upper-limit",
+                PortName.portHeader => "header",
+                PortName.portFooter => "footer",
+                _ => i.ToString()
+            };
+            portNames_[(int)i] = makeSymbol(makeStringC(name));
+            makePermanent(portNames_[(int)i]!);
+        }
+        return portNames_[(int)i]!;
+    }
+
+    // Fraction bar characteristic
+    private ConstPtr<InheritedC>? fractionBarC_;
+
+    public ConstPtr<InheritedC>? fractionBarC()
+    {
+        return fractionBarC_;
+    }
+
+    public void setFractionBarC(ConstPtr<InheritedC> ic)
+    {
+        fractionBarC_ = ic;
+    }
+
+    // Table border characteristics
+    private ConstPtr<InheritedC>? tableBorderC_;
+    private ConstPtr<InheritedC>? cellBeforeRowBorderC_;
+    private ConstPtr<InheritedC>? cellAfterRowBorderC_;
+    private ConstPtr<InheritedC>? cellBeforeColumnBorderC_;
+    private ConstPtr<InheritedC>? cellAfterColumnBorderC_;
+
+    public ConstPtr<InheritedC>? tableBorderC() { return tableBorderC_; }
+    public ConstPtr<InheritedC>? cellBeforeRowBorderC() { return cellBeforeRowBorderC_; }
+    public ConstPtr<InheritedC>? cellAfterRowBorderC() { return cellAfterRowBorderC_; }
+    public ConstPtr<InheritedC>? cellBeforeColumnBorderC() { return cellBeforeColumnBorderC_; }
+    public ConstPtr<InheritedC>? cellAfterColumnBorderC() { return cellAfterColumnBorderC_; }
+
+    public void setTableBorderC(ConstPtr<InheritedC> ic) { tableBorderC_ = ic; }
+    public void setCellBeforeRowBorderC(ConstPtr<InheritedC> ic) { cellBeforeRowBorderC_ = ic; }
+    public void setCellAfterRowBorderC(ConstPtr<InheritedC> ic) { cellAfterRowBorderC_ = ic; }
+    public void setCellBeforeColumnBorderC(ConstPtr<InheritedC> ic) { cellBeforeColumnBorderC_ = ic; }
+    public void setCellAfterColumnBorderC(ConstPtr<InheritedC> ic) { cellAfterColumnBorderC_ = ic; }
+
+    // Enum conversion with specific allowed values
+    public bool convertEnumC(FOTBuilder.Symbol[] vals, int nVals, ELObj obj, Identifier? ident, Location loc, out FOTBuilder.Symbol result)
+    {
+        result = FOTBuilder.Symbol.symbolFalse;
+        if (obj == makeFalse())
+        {
+            // Check if symbolFalse is in the allowed values
+            for (int i = 0; i < nVals; i++)
+            {
+                if (vals[i] == FOTBuilder.Symbol.symbolFalse)
+                {
+                    result = FOTBuilder.Symbol.symbolFalse;
+                    return true;
+                }
+            }
+            invalidCharacteristicValue(ident, loc);
+            return false;
+        }
+        if (obj == makeTrue())
+        {
+            // Check if symbolTrue is in the allowed values
+            for (int i = 0; i < nVals; i++)
+            {
+                if (vals[i] == FOTBuilder.Symbol.symbolTrue)
+                {
+                    result = FOTBuilder.Symbol.symbolTrue;
+                    return true;
+                }
+            }
+            invalidCharacteristicValue(ident, loc);
+            return false;
+        }
+        SymbolObj? sym = obj.asSymbol();
+        if (sym == null)
+        {
+            invalidCharacteristicValue(ident, loc);
+            return false;
+        }
+        // Map symbol name to FOTBuilder.Symbol
+        string name = sym.name().ToString().ToLower().Replace("-", "");
+        if (Enum.TryParse<FOTBuilder.Symbol>("symbol" + name, true, out FOTBuilder.Symbol parsed))
+        {
+            for (int i = 0; i < nVals; i++)
+            {
+                if (vals[i] == parsed)
+                {
+                    result = parsed;
+                    return true;
+                }
+            }
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
 }
 
 // Interpreter error messages
@@ -645,4 +791,8 @@ public enum InterpreterMessages
     unterminatedString,
     invalidCharName,
     invalidCharNumber,
+    // Table messages
+    tableRowOutsideTable,
+    tableCellOutsideTable,
+    invalidCharacteristicValue,
 }
