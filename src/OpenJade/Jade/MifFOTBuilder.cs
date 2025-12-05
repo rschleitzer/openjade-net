@@ -2148,7 +2148,7 @@ public class TmpOutputByteStream : OutputByteStream
     }
 
     // Additional convenience methods
-    public new void sputc(byte c)
+    public void sputc(byte c)
     {
         buffer_.WriteByte(c);
     }
@@ -2884,13 +2884,13 @@ public class MifFOTBuilder : FOTBuilder
         }
     }
 
-    public void extension(ExtensionFlowObj fo, NodePtr node)
+    public override void extension(ExtensionFlowObj fo, NodePtr node)
     {
         if (fo is MifExtensionFlowObj mifFo)
             mifFo.atomic(this, node);
     }
 
-    public void start()
+    public override void start()
     {
         NodeInfo.nonEmptyElementsOpened = (uint)nodeStack.Count;
 
@@ -2903,7 +2903,7 @@ public class MifFOTBuilder : FOTBuilder
         formatStack.Insert(0, effectiveFormat);
     }
 
-    public void end()
+    public override void end()
     {
         System.Diagnostics.Debug.Assert(formatStack.Count > 0 && formatStack[0] != null);
         formatStack.RemoveAt(0);
@@ -2917,7 +2917,7 @@ public class MifFOTBuilder : FOTBuilder
         throw new NotImplementedException();
     }
 
-    public void startSimplePageSequenceSerial()
+    public override void startSimplePageSequenceSerial()
     {
         inSimplePageSequence = true;
         firstHeaderFooter = true;
@@ -2966,7 +2966,7 @@ public class MifFOTBuilder : FOTBuilder
         FotSimplePageSequence.paragraphFormat = format();
     }
 
-    public void endSimplePageSequenceSerial()
+    public override void endSimplePageSequenceSerial()
     {
         end();
         mifDoc.exitTextFlow();
@@ -2976,17 +2976,17 @@ public class MifFOTBuilder : FOTBuilder
         bookComponentAvailable = false;
     }
 
-    public void startSimplePageSequenceHeaderFooter(uint hfPart)
+    public override void startSimplePageSequenceHeaderFooter(uint hfPart)
     {
         throw new NotImplementedException();
     }
 
-    public void endSimplePageSequenceHeaderFooter(uint hfPart)
+    public override void endSimplePageSequenceHeaderFooter(uint hfPart)
     {
         throw new NotImplementedException();
     }
 
-    public void endAllSimplePageSequenceHeaderFooter()
+    public override void endAllSimplePageSequenceHeaderFooter()
     {
         throw new NotImplementedException();
     }
@@ -3021,29 +3021,29 @@ public class MifFOTBuilder : FOTBuilder
         NodeInfo.curNodeLevel--;
     }
 
-    public void currentNodePageNumber(NodePtr node)
+    public override void currentNodePageNumber(NodePtr node)
     {
         throw new NotImplementedException();
     }
 
-    public void startLink(Address address)
+    public override void startLink(Address address)
     {
         // TODO: Requires CrossRefInfo.CrossRefType and ElementSet.TReference enums
         throw new NotImplementedException();
     }
 
-    public void endLink()
+    public override void endLink()
     {
         // TODO: Requires LinkInfo implementation
         throw new NotImplementedException();
     }
 
-    public void startLineField(LineFieldNIC nic)
+    public override void startLineField(LineFieldNIC nic)
     {
         throw new NotImplementedException();
     }
 
-    public void endLineField()
+    public override void endLineField()
     {
         throw new NotImplementedException();
     }
@@ -3114,7 +3114,7 @@ public class MifFOTBuilder : FOTBuilder
         endDisplay();
     }
 
-    public void paragraphBreak(ParagraphNIC nic)
+    public override void paragraphBreak(ParagraphNIC nic)
     {
         if (MifDoc.Para.currentlyOpened)
         {
@@ -3129,24 +3129,24 @@ public class MifFOTBuilder : FOTBuilder
         }
     }
 
-    public void externalGraphic(ExternalGraphicNIC nic)
+    public override void externalGraphic(ExternalGraphicNIC nic)
     {
         // TODO: Requires T_pathname/T_keyword constructors and Frame.Objects API
         throw new NotImplementedException();
     }
 
-    public void rule(RuleNIC nic)
+    public override void rule(RuleNIC nic)
     {
         // TODO: Requires T_keyword constructors, Frame.Objects, and PolyLine.Points APIs
         throw new NotImplementedException();
     }
 
-    public void pageNumber()
+    public override void pageNumber()
     {
         mifDoc.outPageNumber();
     }
 
-    public void startScore(Symbol scoreType)
+    public override void startScore(Symbol scoreType)
     {
         checkForParagraphReopening();
 
@@ -3168,12 +3168,12 @@ public class MifFOTBuilder : FOTBuilder
         start();
     }
 
-    public void endScore()
+    public override void endScore()
     {
         end();
     }
 
-    public void startLeader(LeaderNIC nic)
+    public override void startLeader(LeaderNIC nic)
     {
         checkForParagraphReopening();
         lastFlowObjectWasWhitespace = false;
@@ -3183,19 +3183,19 @@ public class MifFOTBuilder : FOTBuilder
         setCurLeaderStream(new MifTmpOutputByteStream());
     }
 
-    public void endLeader()
+    public override void endLeader()
     {
         // TODO: Requires List<TabStop>.Add and ParagraphFormat.fTabStops
         throw new NotImplementedException();
     }
 
-    public void startTable(TableNIC nic)
+    public override void startTable(TableNIC nic)
     {
         // TODO: Requires List<TblFormat>.Add and doStartParagraph with TableNIC
         throw new NotImplementedException();
     }
 
-    public void endTable()
+    public override void endTable()
     {
         bool firstPart, lastPart, hasHeader, hasFooter;
         for (int i = 0; i < curTable().TableParts.Count; i++)
@@ -3220,58 +3220,58 @@ public class MifFOTBuilder : FOTBuilder
         end();
     }
 
-    public void startTablePartSerial(TablePartNIC nic)
+    public override void startTablePartSerial(TablePartNIC nic)
     {
         throw new NotImplementedException();
     }
 
-    public void endTablePartSerial()
+    public override void endTablePartSerial()
     {
         throw new NotImplementedException();
     }
 
-    public void startTablePartHeader()
+    public override void startTablePartHeader()
     {
         throw new NotImplementedException();
     }
 
-    public void endTablePartHeader()
+    public override void endTablePartHeader()
     {
         throw new NotImplementedException();
     }
 
-    public void startTablePartFooter()
+    public override void startTablePartFooter()
     {
         throw new NotImplementedException();
     }
 
-    public void endTablePartFooter()
+    public override void endTablePartFooter()
     {
         throw new NotImplementedException();
     }
 
-    public void tableColumn(TableColumnNIC nic)
+    public override void tableColumn(TableColumnNIC nic)
     {
         // TODO: Requires proper TableLengthSpec handling
         throw new NotImplementedException();
     }
 
-    public void startTableRow()
+    public override void startTableRow()
     {
         curTable().curRows().Resize(curTable().curRows().Count + 1);
     }
 
-    public void endTableRow()
+    public override void endTableRow()
     {
     }
 
-    public void startTableCell(TableCellNIC nic)
+    public override void startTableCell(TableCellNIC nic)
     {
         // TODO: Requires proper Cell/Column handling and computeLengthSpec(TableLengthSpec)
         throw new NotImplementedException();
     }
 
-    public void endTableCell()
+    public override void endTableCell()
     {
         mifDoc.exitTableCell();
         end();
@@ -3280,15 +3280,15 @@ public class MifFOTBuilder : FOTBuilder
     }
 
     // Setters
-    public void setFontSize(long n) { nextFormat.FSize = n; }
-    public void setLineSpacing(LengthSpec l) { nextFormat.FotLineSpacingSpec = l; }
+    public override void setFontSize(long n) { nextFormat.FSize = n; }
+    public override void setLineSpacing(LengthSpec l) { nextFormat.FotLineSpacingSpec = l; }
 
-    public void setFontWeight(Symbol weight)
+    public override void setFontWeight(Symbol weight)
     {
         nextFormat.FWeight = (weight > Symbol.symbolMedium) ? MifDoc.sBold : MifDoc.sRegular;
     }
 
-    public void setFontPosture(Symbol posture)
+    public override void setFontPosture(Symbol posture)
     {
         switch (posture)
         {
@@ -3304,11 +3304,11 @@ public class MifFOTBuilder : FOTBuilder
         }
     }
 
-    public void setStartIndent(LengthSpec l) { nextFormat.FotStartIndentSpec = l; }
-    public void setEndIndent(LengthSpec l) { nextFormat.FotEndIndentSpec = l; }
-    public void setFirstLineStartIndent(LengthSpec l) { nextFormat.FotFirstLineStartIndentSpec = l; }
+    public override void setStartIndent(LengthSpec l) { nextFormat.FotStartIndentSpec = l; }
+    public override void setEndIndent(LengthSpec l) { nextFormat.FotEndIndentSpec = l; }
+    public override void setFirstLineStartIndent(LengthSpec l) { nextFormat.FotFirstLineStartIndentSpec = l; }
 
-    public void setQuadding(Symbol quadding)
+    public override void setQuadding(Symbol quadding)
     {
         switch (quadding)
         {
@@ -3327,42 +3327,42 @@ public class MifFOTBuilder : FOTBuilder
         }
     }
 
-    public void setDisplayAlignment(Symbol alignment) { nextFormat.FotDisplayAlignment = alignment; }
-    public void setFieldAlign(Symbol align) { nextFormat.FotFieldAlign = align; }
+    public override void setDisplayAlignment(Symbol alignment) { nextFormat.FotDisplayAlignment = alignment; }
+    public override void setFieldAlign(Symbol align) { nextFormat.FotFieldAlign = align; }
 
-    public void setColor(DeviceRGBColor color)
+    public override void setColor(DeviceRGBColor color)
     {
         throw new NotImplementedException();
     }
 
-    public void setBackgroundColor(DeviceRGBColor color)
+    public override void setBackgroundColor(DeviceRGBColor color)
     {
         throw new NotImplementedException();
     }
 
-    public void setBackgroundColor()
+    public override void setBackgroundColor()
     {
         throw new NotImplementedException();
     }
 
-    public void setPageWidth(long pWidth) { nextFormat.FotPageWidth = pWidth; }
-    public void setPageHeight(long pHeight) { nextFormat.FotPageHeight = pHeight; }
-    public void setLeftMargin(long leftM) { nextFormat.FotLeftMargin = leftM; }
-    public void setRightMargin(long rightM) { nextFormat.FotRightMargin = rightM; }
-    public void setTopMargin(long topM) { nextFormat.FotTopMargin = topM; }
-    public void setBottomMargin(long bottomM) { nextFormat.FotBottomMargin = bottomM; }
-    public void setHeaderMargin(long headerM) { nextFormat.FotHeaderMargin = headerM; }
-    public void setFooterMargin(long footerM) { nextFormat.FotFooterMargin = footerM; }
+    public override void setPageWidth(long pWidth) { nextFormat.FotPageWidth = pWidth; }
+    public override void setPageHeight(long pHeight) { nextFormat.FotPageHeight = pHeight; }
+    public override void setLeftMargin(long leftM) { nextFormat.FotLeftMargin = leftM; }
+    public override void setRightMargin(long rightM) { nextFormat.FotRightMargin = rightM; }
+    public override void setTopMargin(long topM) { nextFormat.FotTopMargin = topM; }
+    public override void setBottomMargin(long bottomM) { nextFormat.FotBottomMargin = bottomM; }
+    public override void setHeaderMargin(long headerM) { nextFormat.FotHeaderMargin = headerM; }
+    public override void setFooterMargin(long footerM) { nextFormat.FotFooterMargin = footerM; }
 
-    public void setBorderPresent(bool present) { nextFormat.FotBorderPresent = present; }
-    public void setLineThickness(long thickness) { nextFormat.FotLineThickness = thickness; }
-    public void setLineSep(long sep) { nextFormat.FotLineSep = sep; }
-    public void setBorderPriority(long priority) { nextFormat.FotBorderPriority = priority; }
-    public void setLineRepeat(long repeat) { nextFormat.FotLineRepeat = repeat; }
-    public void setSpan(long span) { nextFormat.FotSpan = span; }
-    public void setLineCap(Symbol cap) { nextFormat.FotLineCap = cap; }
+    public override void setBorderPresent(bool present) { nextFormat.FotBorderPresent = present; }
+    public override void setLineThickness(long thickness) { nextFormat.FotLineThickness = thickness; }
+    public override void setLineSep(long sep) { nextFormat.FotLineSep = sep; }
+    public override void setBorderPriority(long priority) { nextFormat.FotBorderPriority = priority; }
+    public override void setLineRepeat(long repeat) { nextFormat.FotLineRepeat = repeat; }
+    public override void setSpan(long span) { nextFormat.FotSpan = span; }
+    public override void setLineCap(Symbol cap) { nextFormat.FotLineCap = cap; }
 
-    public void setFontFamilyName(StringC s)
+    public override void setFontFamilyName(StringC s)
     {
         var sb = new StringBuilder();
         for (nuint i = 0; i < s.size(); i++)
@@ -3370,50 +3370,50 @@ public class MifFOTBuilder : FOTBuilder
         nextFormat.FFamily = sb.ToString();
     }
 
-    public void setWidowCount(long n) { nextFormat.PgfBlockSize = (int)n; }
-    public void setOrphanCount(long n) { nextFormat.PgfBlockSize = (int)n; }
+    public override void setWidowCount(long n) { nextFormat.PgfBlockSize = (int)n; }
+    public override void setOrphanCount(long n) { nextFormat.PgfBlockSize = (int)n; }
 
-    public void setKern(bool kern) { nextFormat.FPairKern = kern; }
+    public override void setKern(bool kern) { nextFormat.FPairKern = kern; }
 
-    public void setLanguage(Letter2 code)
+    public override void setLanguage(Letter2 code)
     {
         nextFormat.FotLanguage = code;
         nextFormat.computePgfLanguage();
     }
 
-    public void setCountry(Letter2 code)
+    public override void setCountry(Letter2 code)
     {
         nextFormat.FotCountry = code;
         nextFormat.computePgfLanguage();
     }
 
-    public void setHyphenate(bool hyphenate) { nextFormat.PgfHyphenate = hyphenate; }
-    public void setHyphenationRemainCharCount(long n) { nextFormat.HyphenMinPrefix = (int)n; }
-    public void setHyphenationPushCharCount(long n) { nextFormat.HyphenMinSuffix = (int)n; }
-    public void setHyphenationLadderCount(long n) { nextFormat.HyphenMaxLines = (int)n; }
+    public override void setHyphenate(bool hyphenate) { nextFormat.PgfHyphenate = hyphenate; }
+    public override void setHyphenationRemainCharCount(long n) { nextFormat.HyphenMinPrefix = (int)n; }
+    public override void setHyphenationPushCharCount(long n) { nextFormat.HyphenMinSuffix = (int)n; }
+    public override void setHyphenationLadderCount(long n) { nextFormat.HyphenMaxLines = (int)n; }
 
-    public void setMinLeading(OptLengthSpec spec) { nextFormat.FotMinLeading = spec; }
-    public void setInputWhitespaceTreatment(Symbol treatment) { nextFormat.FotInputWhitespaceTreatment = treatment; }
-    public void setLines(Symbol lines) { nextFormat.FotLines = lines; }
-    public void setFieldWidth(LengthSpec spec) { nextFormat.FotFieldWidth = spec; }
-    public void setPositionPointShift(LengthSpec spec) { nextFormat.FotPositionPointShiftSpec = spec; }
-    public void setBorderOmitAtBreak(bool omit) { }
-    public void setCellBackground(bool bg) { nextFormat.FotCellBackground = bg; }
-    public void setCellRowAlignment(Symbol alignment) { }
-    public void setCellBeforeRowMargin(long m) { }
-    public void setCellAfterRowMargin(long m) { }
-    public void setCellBeforeColumnMargin(long m) { }
-    public void setCellAfterColumnMargin(long m) { }
+    public override void setMinLeading(OptLengthSpec spec) { nextFormat.FotMinLeading = spec; }
+    public override void setInputWhitespaceTreatment(Symbol treatment) { nextFormat.FotInputWhitespaceTreatment = treatment; }
+    public override void setLines(Symbol lines) { nextFormat.FotLines = lines; }
+    public override void setFieldWidth(LengthSpec spec) { nextFormat.FotFieldWidth = spec; }
+    public override void setPositionPointShift(LengthSpec spec) { nextFormat.FotPositionPointShiftSpec = spec; }
+    public override void setBorderOmitAtBreak(bool omit) { }
+    public override void setCellBackground(bool bg) { nextFormat.FotCellBackground = bg; }
+    public override void setCellRowAlignment(Symbol alignment) { }
+    public override void setCellBeforeRowMargin(long m) { }
+    public override void setCellAfterRowMargin(long m) { }
+    public override void setCellBeforeColumnMargin(long m) { }
+    public override void setCellAfterColumnMargin(long m) { }
 
     // Table border methods
-    public void tableBeforeRowBorder() { throw new NotImplementedException(); }
-    public void tableAfterRowBorder() { throw new NotImplementedException(); }
-    public void tableBeforeColumnBorder() { throw new NotImplementedException(); }
-    public void tableAfterColumnBorder() { throw new NotImplementedException(); }
-    public void tableCellBeforeRowBorder() { throw new NotImplementedException(); }
-    public void tableCellAfterRowBorder() { throw new NotImplementedException(); }
-    public void tableCellBeforeColumnBorder() { throw new NotImplementedException(); }
-    public void tableCellAfterColumnBorder() { throw new NotImplementedException(); }
+    public override void tableBeforeRowBorder() { throw new NotImplementedException(); }
+    public override void tableAfterRowBorder() { throw new NotImplementedException(); }
+    public override void tableBeforeColumnBorder() { throw new NotImplementedException(); }
+    public override void tableAfterColumnBorder() { throw new NotImplementedException(); }
+    public override void tableCellBeforeRowBorder() { throw new NotImplementedException(); }
+    public override void tableCellAfterRowBorder() { throw new NotImplementedException(); }
+    public override void tableCellBeforeColumnBorder() { throw new NotImplementedException(); }
+    public override void tableCellAfterColumnBorder() { throw new NotImplementedException(); }
 
     // Helper methods
     public void synchronizeFontFormat()

@@ -4138,32 +4138,41 @@ public class GroveBuilderMessageEventHandler : ErrorCountEventHandler
             root.assign(new SgmlDocumentNode(grove_, r));
     }
 
-    public override void message(MessageEvent @event)
+    public override void message(MessageEvent? @event)
     {
-        messenger_?.dispatchMessage(@event.message());
-        base.message(@event);
+        if (@event != null)
+        {
+            messenger_?.dispatchMessage(@event.message());
+            base.message(@event);
+        }
     }
 
-    public override void endProlog(EndPrologEvent @event)
+    public override void endProlog(EndPrologEvent? @event)
     {
-        grove_.setDtd(@event.dtdPointer());
+        if (@event != null)
+            grove_.setDtd(@event.dtdPointer());
     }
 
-    public override void appinfo(AppinfoEvent @event)
+    public override void appinfo(AppinfoEvent? @event)
     {
-        StringC? appinfo;
-        if (@event.literal(out appinfo) && appinfo != null)
-            grove_.setAppinfo(appinfo);
+        if (@event != null)
+        {
+            StringC? appinfo;
+            if (@event.literal(out appinfo) && appinfo != null)
+                grove_.setAppinfo(appinfo);
+        }
     }
 
-    public override void sgmlDecl(SgmlDeclEvent @event)
+    public override void sgmlDecl(SgmlDeclEvent? @event)
     {
-        grove_.setSd(@event.sdPointer(), @event.prologSyntaxPointer(), @event.instanceSyntaxPointer());
+        if (@event != null)
+            grove_.setSd(@event.sdPointer(), @event.prologSyntaxPointer(), @event.instanceSyntaxPointer());
     }
 
-    public override void entityDefaulted(EntityDefaultedEvent @event)
+    public override void entityDefaulted(EntityDefaultedEvent? @event)
     {
-        grove_.addDefaultedEntity(@event.entityPointer());
+        if (@event != null)
+            grove_.addDefaultedEntity(@event.entityPointer());
     }
 
     ~GroveBuilderMessageEventHandler()
@@ -4186,44 +4195,51 @@ public class GroveBuilderEventHandler : GroveBuilderMessageEventHandler
     {
     }
 
-    public override void startElement(StartElementEvent @event)
+    public override void startElement(StartElementEvent? @event)
     {
-        ElementNode.add(grove_, @event);
+        if (@event != null)
+            ElementNode.add(grove_, @event);
     }
 
-    public override void endElement(EndElementEvent @event)
+    public override void endElement(EndElementEvent? @event)
     {
         grove_.pop();
     }
 
-    public override void data(DataEvent @event)
+    public override void data(DataEvent? @event)
     {
-        DataNode.add(grove_, @event);
+        if (@event != null)
+            DataNode.add(grove_, @event);
     }
 
-    public override void pi(PiEvent @event)
+    public override void pi(PiEvent? @event)
     {
-        PiNode.add(grove_, @event);
+        if (@event != null)
+            PiNode.add(grove_, @event);
     }
 
-    public override void sdataEntity(SdataEntityEvent @event)
+    public override void sdataEntity(SdataEntityEvent? @event)
     {
-        SdataNode.add(grove_, @event);
+        if (@event != null)
+            SdataNode.add(grove_, @event);
     }
 
-    public override void nonSgmlChar(NonSgmlCharEvent @event)
+    public override void nonSgmlChar(NonSgmlCharEvent? @event)
     {
-        NonSgmlNode.add(grove_, @event);
+        if (@event != null)
+            NonSgmlNode.add(grove_, @event);
     }
 
-    public override void externalDataEntity(ExternalDataEntityEvent @event)
+    public override void externalDataEntity(ExternalDataEntityEvent? @event)
     {
-        ExternalDataNode.add(grove_, @event);
+        if (@event != null)
+            ExternalDataNode.add(grove_, @event);
     }
 
-    public override void subdocEntity(SubdocEntityEvent @event)
+    public override void subdocEntity(SubdocEntityEvent? @event)
     {
-        SubdocNode.add(grove_, @event);
+        if (@event != null)
+            SubdocNode.add(grove_, @event);
     }
 }
 
