@@ -55,32 +55,125 @@ public abstract class DssslApp : GroveApp, IGroveManager
                      NodePtr parent, ref NodePtr rootNode,
                      System.Collections.Generic.List<StringC> architecture)
     {
-        // TODO: Full implementation
-        throw new NotImplementedException();
+        // Check if grove already loaded
+        string sysidKey = sysid.ToString();
+        if (groveTable_.TryGetValue(sysidKey, out NodePtr existingNode))
+        {
+            rootNode = existingNode;
+            return true;
+        }
+
+        // Create params for parsing
+        SgmlParser.Params parms = new SgmlParser.Params();
+        parms.sysid = sysid;
+
+        // Create grove builder
+        var groveBuilder = GroveBuilder.make((uint)(groveTable_.Count + 1), null, null, false, ref rootNode);
+
+        // Parse the document
+        SgmlParser docParser = new SgmlParser(parms);
+        foreach (var linkType in active)
+            docParser.activateLinkType(linkType);
+        docParser.allLinkTypesActivated();
+        docParser.parseAll(groveBuilder);
+
+        // Store in grove table
+        groveTable_[sysidKey] = rootNode;
+        return true;
     }
 
     public bool readEntity(StringC sysid, out StringC content)
     {
         content = new StringC();
-        // TODO: Full implementation
-        throw new NotImplementedException();
+        // Simplified implementation - full implementation would read from entity manager
+        return false;
     }
 
     public void mapSysid(ref StringC sysid)
     {
-        // No-op for now
+        // Map a sysid according to SYSTEM catalog entries
+        // Simplified for now - no-op
     }
 
     public override void processGrove()
     {
-        // TODO: Full implementation
-        throw new NotImplementedException();
+        if (!initSpecParser())
+            return;
+
+        // Create FOT builder
+        FOTBuilder? fotb = makeFOTBuilder(out FOTBuilder.Extension? extensions);
+        if (fotb == null)
+            return;
+
+        // Create style engine adapter for GroveManager
+        GroveManagerAdapter groveManagerAdapter = new GroveManagerAdapter(this);
+
+        // Create and configure style engine
+        StyleEngine se = new StyleEngine(this, groveManagerAdapter, unitsPerInch_, debugMode_,
+                                          dsssl2_, strictMode_, extensions);
+
+        // Define variables from command line
+        foreach (var varDef in defineVars_)
+            se.defineVariable(varDef);
+
+        // Parse the DSSSL specification
+        se.parseSpec(specParser_!, systemCharset(), dssslSpecId_, this);
+
+        // Process the document
+        se.process(rootNode_, fotb);
     }
 
     private Boolean initSpecParser()
     {
-        // TODO: Full implementation
+        // Check if we have a spec or can get one from the grove
+        if (!dssslSpecOption_ && !getDssslSpecFromGrove() && dssslSpecSysid_.size() == 0)
+        {
+            // message(DssslAppMessages::noSpec);
+            return false;
+        }
+
+        // Create spec parser params
+        SgmlParser.Params parms = new SgmlParser.Params();
+        parms.sysid = dssslSpecSysid_;
+
+        specParser_ = new SgmlParser(parms);
+        specParser_.allLinkTypesActivated();
+        return true;
+    }
+
+    private bool getDssslSpecFromGrove()
+    {
+        // Try to get DSSSL specification from processing instruction in grove
+        // For now, return false - would need to search grove for <?xml-stylesheet?>
         return false;
+    }
+
+    // Adapter class to bridge IGroveManager to GroveManager
+    private class GroveManagerAdapter : GroveManager
+    {
+        private DssslApp app_;
+
+        public GroveManagerAdapter(DssslApp app)
+        {
+            app_ = app;
+        }
+
+        public override bool load(StringC sysid, System.Collections.Generic.List<StringC> active,
+                                   NodePtr parent, ref NodePtr rootNode,
+                                   System.Collections.Generic.List<StringC> architecture)
+        {
+            return app_.load(sysid, active, parent, ref rootNode, architecture);
+        }
+
+        public override bool readEntity(StringC name, out StringC content)
+        {
+            return app_.readEntity(name, out content);
+        }
+
+        public override void mapSysid(ref StringC sysid)
+        {
+            app_.mapSysid(ref sysid);
+        }
     }
 
     private static void splitOffId(ref StringC sysid, out StringC id)
