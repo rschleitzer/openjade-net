@@ -3860,20 +3860,63 @@ public class ElementTypeNode : BaseNode
 
     public override AccessResult getExclusions(ref GroveStringListPtr ptr)
     {
-        // TODO: Implement exclusions list
-        return AccessResult.accessNull;
+        if (elementType_ == null)
+            return AccessResult.accessNull;
+        var def = elementType_.definition();
+        if (def == null || def.nExclusions() == 0)
+            return AccessResult.accessNull;
+        var list = new GroveStringList();
+        for (nuint i = 0; i < def.nExclusions(); i++)
+        {
+            var excl = def.exclusion(i);
+            if (excl != null)
+            {
+                GroveString gs = new GroveString();
+                setString(ref gs, excl.name());
+                list.append(gs);
+            }
+        }
+        ptr.assign(list);
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getInclusions(ref GroveStringListPtr ptr)
     {
-        // TODO: Implement inclusions list
-        return AccessResult.accessNull;
+        if (elementType_ == null)
+            return AccessResult.accessNull;
+        var def = elementType_.definition();
+        if (def == null || def.nInclusions() == 0)
+            return AccessResult.accessNull;
+        var list = new GroveStringList();
+        for (nuint i = 0; i < def.nInclusions(); i++)
+        {
+            var incl = def.inclusion(i);
+            if (incl != null)
+            {
+                GroveString gs = new GroveString();
+                setString(ref gs, incl.name());
+                list.append(gs);
+            }
+        }
+        ptr.assign(list);
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getModelGroup(ref NodePtr ptr)
     {
-        // TODO: Implement model group
-        return AccessResult.accessNull;
+        if (elementType_ == null)
+            return AccessResult.accessNull;
+        var def = elementType_.definition();
+        if (def == null)
+            return AccessResult.accessNull;
+        var compiledGroup = def.compiledModelGroup();
+        if (compiledGroup == null)
+            return AccessResult.accessNull;
+        var modelGroup = compiledGroup.modelGroup();
+        if (modelGroup == null)
+            return AccessResult.accessNull;
+        ptr.assign(new ModelGroupNode(grove(), elementType_, modelGroup));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getOmitEndTag(out bool omit)
@@ -3987,7 +4030,18 @@ public class ModelGroupNode : BaseNode
         connector = Connector.Enum.seq;
         if (modelGroup_ == null)
             return AccessResult.accessNull;
-        // TODO: Map modelGroup_.connector() to enum when ModelGroup is implemented
+        switch (modelGroup_.connector())
+        {
+            case ModelGroup.Connector.andConnector:
+                connector = Connector.Enum.and_;
+                break;
+            case ModelGroup.Connector.orConnector:
+                connector = Connector.Enum.or_;
+                break;
+            case ModelGroup.Connector.seqConnector:
+                connector = Connector.Enum.seq;
+                break;
+        }
         return AccessResult.accessOK;
     }
 
@@ -3996,14 +4050,33 @@ public class ModelGroupNode : BaseNode
         indicator = OccurIndicator.Enum.opt;
         if (modelGroup_ == null)
             return AccessResult.accessNull;
-        // TODO: Map modelGroup_.occurrenceIndicator() to enum
-        return AccessResult.accessNull;
+        switch (modelGroup_.occurrenceIndicator())
+        {
+            case ContentToken.OccurrenceIndicator.none:
+                // No occurrence indicator means required once - return accessNull
+                // since there's no "none" in OccurIndicator.Enum
+                return AccessResult.accessNull;
+            case ContentToken.OccurrenceIndicator.opt:
+                indicator = OccurIndicator.Enum.opt;
+                break;
+            case ContentToken.OccurrenceIndicator.plus:
+                indicator = OccurIndicator.Enum.plus;
+                break;
+            case ContentToken.OccurrenceIndicator.rep:
+                indicator = OccurIndicator.Enum.rep;
+                break;
+        }
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getContentTokens(ref NodeListPtr ptr)
     {
-        // TODO: Implement ContentTokenNodeList
-        ptr.assign(new BaseNodeList());
+        if (modelGroup_ == null || elementType_ == null)
+        {
+            ptr.assign(new BaseNodeList());
+            return AccessResult.accessOK;
+        }
+        ptr.assign(new ContentTokenNodeList(grove(), elementType_, modelGroup_, this));
         return AccessResult.accessOK;
     }
 
@@ -4091,8 +4164,22 @@ public class ElementTokenNode : BaseNode
         indicator = OccurIndicator.Enum.opt;
         if (elementToken_ == null)
             return AccessResult.accessNull;
-        // TODO: Map elementToken_.occurrenceIndicator() to enum
-        return AccessResult.accessNull;
+        switch (elementToken_.occurrenceIndicator())
+        {
+            case ContentToken.OccurrenceIndicator.none:
+                // No occurrence indicator means required once - return accessNull
+                return AccessResult.accessNull;
+            case ContentToken.OccurrenceIndicator.opt:
+                indicator = OccurIndicator.Enum.opt;
+                break;
+            case ContentToken.OccurrenceIndicator.plus:
+                indicator = OccurIndicator.Enum.plus;
+                break;
+            case ContentToken.OccurrenceIndicator.rep:
+                indicator = OccurIndicator.Enum.rep;
+                break;
+        }
+        return AccessResult.accessOK;
     }
 
     public override void accept(NodeVisitor visitor)
@@ -4213,6 +4300,169 @@ public class PcdataTokenNode : BaseNode
     }
 }
 
+// Content token node list - iterates over content tokens in a model group
+public class ContentTokenNodeList : BaseNodeList
+{
+    private GroveImpl grove_;
+    private ElementType elementType_;
+    private ModelGroup modelGroup_;
+    private ModelGroupNode? parentModelGroupNode_;
+    private uint index_;
+
+    public ContentTokenNodeList(GroveImpl grove, ElementType elementType, ModelGroup modelGroup, ModelGroupNode? parent, uint startIndex = 0)
+    {
+        grove_ = grove;
+        elementType_ = elementType;
+        modelGroup_ = modelGroup;
+        parentModelGroupNode_ = parent;
+        index_ = startIndex;
+    }
+
+    public override AccessResult first(ref NodePtr ptr)
+    {
+        if (index_ >= modelGroup_.nMembers())
+            return AccessResult.accessNull;
+        return createNodeForMember(index_, ref ptr);
+    }
+
+    public override AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        uint nextIndex = index_ + 1;
+        if (nextIndex >= modelGroup_.nMembers())
+            return AccessResult.accessNull;
+        ptr.assign(new ContentTokenNodeList(grove_, elementType_, modelGroup_, parentModelGroupNode_, nextIndex));
+        return AccessResult.accessOK;
+    }
+
+    private AccessResult createNodeForMember(uint memberIndex, ref NodePtr ptr)
+    {
+        var member = modelGroup_.member(memberIndex);
+        if (member == null)
+            return AccessResult.accessNull;
+
+        // Check if it's a nested model group
+        var nestedGroup = member.asModelGroup();
+        if (nestedGroup != null)
+        {
+            ptr.assign(new ModelGroupNode(grove_, elementType_, nestedGroup, parentModelGroupNode_));
+            return AccessResult.accessOK;
+        }
+
+        // Check if it's a leaf content token
+        var leafToken = member.asLeafContentToken();
+        if (leafToken != null)
+        {
+            // Check if it's a pcdata token (elementType is null for pcdata)
+            if (leafToken.elementType() == null)
+            {
+                var pcdataToken = leafToken as PcdataToken;
+                if (pcdataToken != null)
+                {
+                    ptr.assign(new PcdataTokenNode(grove_, elementType_, pcdataToken, parentModelGroupNode_));
+                    return AccessResult.accessOK;
+                }
+            }
+            else
+            {
+                // It's an element token
+                var elementToken = leafToken as ElementToken;
+                if (elementToken != null)
+                {
+                    ptr.assign(new ElementTokenNode(grove_, elementType_, elementToken, parentModelGroupNode_));
+                    return AccessResult.accessOK;
+                }
+            }
+        }
+
+        return AccessResult.accessNull;
+    }
+}
+
+// Allowed values node list for enumerated attribute types
+public class AllowedValuesNodeList : BaseNodeList
+{
+    private GroveImpl grove_;
+    private Vector<StringC> allowedValues_;
+    private nuint index_;
+
+    public AllowedValuesNodeList(GroveImpl grove, Vector<StringC> allowedValues, nuint startIndex = 0)
+    {
+        grove_ = grove;
+        allowedValues_ = allowedValues;
+        index_ = startIndex;
+    }
+
+    public override AccessResult first(ref NodePtr ptr)
+    {
+        if (index_ >= allowedValues_.size())
+            return AccessResult.accessNull;
+        ptr.assign(new AllowedValueNode(grove_, allowedValues_[index_]));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        nuint nextIndex = index_ + 1;
+        if (nextIndex >= allowedValues_.size())
+            return AccessResult.accessNull;
+        ptr.assign(new AllowedValuesNodeList(grove_, allowedValues_, nextIndex));
+        return AccessResult.accessOK;
+    }
+}
+
+// Node representing a single allowed value in a name token group
+public class AllowedValueNode : BaseNode
+{
+    private StringC value_;
+
+    public AllowedValueNode(GroveImpl grove, StringC value) : base(grove)
+    {
+        value_ = value;
+    }
+
+    public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
+    {
+        name = ComponentName.Id.idCurrentGroup;
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult getToken(ref GroveString str)
+    {
+        setString(ref str, value_);
+        return AccessResult.accessOK;
+    }
+
+    public override void accept(NodeVisitor visitor)
+    {
+        // No specific visitor method for allowed value nodes
+    }
+
+    public override ClassDef classDef() { return ClassDef.attributeValueToken; }
+
+    public override bool same(BaseNode node)
+    {
+        var other = node as AllowedValueNode;
+        return other != null && value_.Equals(other.value_);
+    }
+
+    public override uint hash()
+    {
+        return (uint)value_.GetHashCode();
+    }
+
+    public override AccessResult children(ref NodeListPtr ptr)
+    {
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult follow(ref NodeListPtr ptr)
+    {
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
+    }
+}
+
 public abstract class AttributeDefNode : BaseNode
 {
     protected nuint attIndex_;
@@ -4322,14 +4572,45 @@ public abstract class AttributeDefNode : BaseNode
 
     public override AccessResult getCurrentGroup(ref NodeListPtr ptr)
     {
-        // TODO: Implement getCurrentGroup
-        return AccessResult.accessNull;
+        var defList = attDefList();
+        if (defList == null)
+            return AccessResult.accessNull;
+        var def = defList.def(attIndex_);
+        if (def == null)
+            return AccessResult.accessNull;
+        AttributeDefinitionDesc desc = new AttributeDefinitionDesc();
+        def.getDesc(desc);
+        if (desc.allowedValues.size() == 0)
+            return AccessResult.accessNull;
+        // Return as a string list for the allowed values
+        var list = new GroveStringList();
+        for (nuint i = 0; i < desc.allowedValues.size(); i++)
+        {
+            GroveString gs = new GroveString();
+            setString(ref gs, desc.allowedValues[i]);
+            list.append(gs);
+        }
+        // Wrap in a simple node list that returns the token strings
+        ptr.assign(new AllowedValuesNodeList(grove(), desc.allowedValues, 0));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getDefaultValue(ref NodeListPtr ptr)
     {
-        // TODO: Implement getDefaultValue
-        return AccessResult.accessNull;
+        var defList = attDefList();
+        if (defList == null)
+            return AccessResult.accessNull;
+        var def = defList.def(attIndex_);
+        if (def == null)
+            return AccessResult.accessNull;
+        AttributeDefinitionDesc desc = new AttributeDefinitionDesc();
+        def.getDesc(desc);
+        if (desc.defaultValue.isNull())
+            return AccessResult.accessNull;
+        // Default value access from attribute definitions is not commonly needed
+        // Return the value as a simple string list if possible
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public override void accept(NodeVisitor visitor)

@@ -202,7 +202,16 @@ public class SetImplicitCharInsn : Insn
     public override Insn? execute(VM vm)
     {
         System.Diagnostics.Debug.Assert(vm.sbase[vm.sp - 1]!.asSosofo() != null);
-        // TODO: Get char property from current node
+        if (vm.currentNode.node != null)
+        {
+            ELObjPropertyValue value = new ELObjPropertyValue(vm.interp!, false);
+            Grove.SdataMapper mapper = new Grove.SdataMapper();
+            AccessResult ret = vm.currentNode.node.property(ComponentName.Id.idChar, mapper, value);
+            if (ret == AccessResult.accessOK && value.obj != null)
+            {
+                ((FlowObj)vm.sbase[vm.sp - 1]!).setImplicitChar(value.obj, loc_, vm.interp!);
+            }
+        }
         return next_.pointer();
     }
 }

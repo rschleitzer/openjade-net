@@ -6,6 +6,7 @@ namespace OpenJade.Style;
 using OpenSP;
 using OpenJade.Grove;
 using Char = System.UInt32;
+using GroveChar = System.UInt32;
 using Boolean = System.Boolean;
 
 // Forward declarations as interfaces for circular dependencies
@@ -1525,4 +1526,97 @@ public class LanguageObj : ELObj
     public virtual bool areEquivalent(StringC r, StringC s, Char level) { return r.Equals(s); }
     public virtual bool isLess(StringC r, StringC s) { return false; }
     public virtual bool isLessOrEqual(StringC r, StringC s) { return true; }
+}
+
+// ELObjPropertyValue - converts grove property values to ELObj objects
+public class ELObjPropertyValue : PropertyValue
+{
+    private Interpreter interp_;
+    private bool rcs_;
+    public ELObj? obj;
+
+    public ELObjPropertyValue(Interpreter interp, bool rcs)
+    {
+        interp_ = interp;
+        rcs_ = rcs;
+        obj = null;
+    }
+
+    public override void set(NodePtr ptr)
+    {
+        obj = new NodePtrNodeListObj(ptr);
+    }
+
+    public override void set(NodeListPtr ptr)
+    {
+        obj = new NodeListPtrNodeListObj(ptr);
+    }
+
+    public override void set(NamedNodeListPtr ptr)
+    {
+        obj = new NamedNodeListPtrNodeListObj(ptr);
+    }
+
+    public override void set(bool b)
+    {
+        obj = b ? interp_.makeTrue() : interp_.makeFalse();
+    }
+
+    public override void set(GroveChar c)
+    {
+        obj = interp_.makeChar(c);
+    }
+
+    public override void set(GroveString s)
+    {
+        obj = new StringObj(s.data(), s.size());
+    }
+
+    public override void set(ComponentName.Id id)
+    {
+        string s = rcs_ ? ComponentName.rcsName(id) : ComponentName.sdqlName(id);
+        obj = interp_.makeSymbol(interp_.makeStringC(s));
+    }
+
+    public override void set(GroveStringListPtr gsListPtr)
+    {
+        PairObj head = new PairObj(null, null);
+        PairObj tail = head;
+        if (gsListPtr.list != null)
+        {
+            var iter = new ConstGroveStringListIter(gsListPtr.list);
+            while (!iter.done())
+            {
+                var gs = iter.cur();
+                StringObj strObj = new StringObj(gs.data(), gs.size());
+                PairObj tem = new PairObj(strObj, null);
+                tail.setCdr(tem);
+                tail = tem;
+                iter.next();
+            }
+        }
+        tail.setCdr(interp_.makeNil());
+        obj = head.cdr();
+    }
+
+    public override void set(ComponentName.Id[] names)
+    {
+        PairObj head = new PairObj(null, null);
+        PairObj tail = head;
+        for (int i = 0; i < names.Length && names[i] != ComponentName.Id.noId; i++)
+        {
+            string s = rcs_ ? ComponentName.rcsName(names[i]) : ComponentName.sdqlName(names[i]);
+            SymbolObj sym = interp_.makeSymbol(interp_.makeStringC(s));
+            PairObj tem = new PairObj(sym, null);
+            tail.setCdr(tem);
+            tail = tem;
+        }
+        tail.setCdr(interp_.makeNil());
+        obj = head.cdr();
+    }
+
+    public override void set(long l)
+    {
+        obj = interp_.makeInteger(l);
+    }
 }
