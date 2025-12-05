@@ -417,6 +417,16 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         return mode;
     }
 
+    public ProcessingMode defineProcessingMode(StringC name, Location loc)
+    {
+        string key = name.ToString();
+        if (processingModeTable_.TryGetValue(key, out ProcessingMode? mode))
+            return mode;
+        mode = new ProcessingMode(name, loc);
+        processingModeTable_[key] = mode;
+        return mode;
+    }
+
     // Initial values storage
     private System.Collections.Generic.List<Identifier> initialValueNames_ = new();
     private System.Collections.Generic.List<Expression?> initialValueValues_ = new();
@@ -791,6 +801,8 @@ public enum InterpreterMessages
     unterminatedString,
     invalidCharName,
     invalidCharNumber,
+    invalidUnquoteSplicing,
+    badQuasiquote,
     // Table messages
     tableRowOutsideTable,
     tableCellOutsideTable,

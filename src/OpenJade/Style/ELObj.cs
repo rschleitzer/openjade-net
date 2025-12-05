@@ -291,6 +291,7 @@ public class Identifier : Named
         root,
         id,
         mode,
+        match,
         declareInitialValue,
         declareCharacteristic,
         declareFlowObjectClass,

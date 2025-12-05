@@ -674,3 +674,153 @@ public class Pattern
 public abstract class SdataMapper
 {
 }
+
+// ElementPattern - matches element by GI
+public class ElementPattern : Pattern
+{
+    public ElementPattern(StringC gi)
+        : base(new System.Collections.Generic.List<Pattern.Element> { new Pattern.Element(gi) })
+    {
+    }
+}
+
+// DefaultPattern - matches any element (default rule)
+public class DefaultPattern : Pattern
+{
+    public DefaultPattern()
+        : base(new System.Collections.Generic.List<Pattern.Element> { new Pattern.Element(new StringC()) })
+    {
+    }
+
+    public new bool matches(NodePtr nd, MatchContext context)
+    {
+        // Default pattern matches any element
+        return true;
+    }
+}
+
+// RootPattern - matches the root element
+public class RootPattern : Pattern
+{
+    public RootPattern()
+        : base(new System.Collections.Generic.List<Pattern.Element>())
+    {
+    }
+
+    public new bool matches(NodePtr nd, MatchContext context)
+    {
+        // Root pattern matches when node has no parent element
+        NodePtr parent = new NodePtr();
+        if (nd.node!.getParent(ref parent) != AccessResult.accessOK)
+            return true;
+        // Check if parent is document node (not element)
+        GroveString gi = new GroveString();
+        return parent.getGi(gi) != AccessResult.accessOK;
+    }
+}
+
+// IdPattern - matches element by ID attribute
+public class IdPattern : Pattern
+{
+    private StringC id_;
+
+    public IdPattern(StringC id)
+        : base(new System.Collections.Generic.List<Pattern.Element>())
+    {
+        id_ = id;
+    }
+
+    public new bool matches(NodePtr nd, MatchContext context)
+    {
+        var idAtts = context.idAttributeNames();
+        foreach (var idAtt in idAtts)
+        {
+            NamedNodeListPtr atts = new NamedNodeListPtr();
+            if (nd.node!.getAttributes(ref atts) != AccessResult.accessOK)
+                continue;
+            NodePtr att = new NodePtr();
+            if (atts.list!.namedNode(new GroveString(idAtt.data(), idAtt.size()), ref att) != AccessResult.accessOK)
+                continue;
+            if (att.node!.getImplied(out bool implied) == AccessResult.accessOK && implied)
+                continue;
+            GroveString tokens = new GroveString();
+            if (att.node!.tokens(ref tokens) == AccessResult.accessOK)
+            {
+                if (tokens.size() == id_.size())
+                {
+                    bool match = true;
+                    for (nuint i = 0; i < tokens.size(); i++)
+                    {
+                        if (tokens.data()![i] != id_.data()![i])
+                        {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (match)
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+
+// MatchPattern - matches element with ancestor path
+public class MatchPattern : Pattern
+{
+    private StringC elementName_;
+    private System.Collections.Generic.List<StringC> ancestors_;
+    private bool hasDirectParent_;
+
+    public MatchPattern(StringC elementName, System.Collections.Generic.List<StringC> ancestors, bool hasDirectParent)
+        : base(buildElements(elementName, ancestors, hasDirectParent))
+    {
+        elementName_ = elementName;
+        ancestors_ = ancestors;
+        hasDirectParent_ = hasDirectParent;
+    }
+
+    private static System.Collections.Generic.List<Pattern.Element> buildElements(
+        StringC elementName, System.Collections.Generic.List<StringC> ancestors, bool hasDirectParent)
+    {
+        var elems = new System.Collections.Generic.List<Pattern.Element>();
+
+        // First element matches the target element
+        elems.Add(new Pattern.Element(elementName));
+
+        if (ancestors.Count > 0)
+        {
+            if (hasDirectParent)
+            {
+                // Direct parent relationship - each ancestor is exactly one parent
+                foreach (var anc in ancestors)
+                {
+                    var elem = new Pattern.Element(anc);
+                    elem.setRepeat(1, 1);
+                    elems.Add(elem);
+                }
+            }
+            else
+            {
+                // Ancestor relationship - can have any number of intermediate elements
+                // First add "any element" with 0+ repetition
+                var anyElem = new Pattern.Element(new StringC());
+                anyElem.setRepeat(0, uint.MaxValue);
+                elems.Add(anyElem);
+
+                // Then add each ancestor
+                foreach (var anc in ancestors)
+                {
+                    elems.Add(new Pattern.Element(anc));
+                    // Add "any element" between ancestors
+                    var anyBetween = new Pattern.Element(new StringC());
+                    anyBetween.setRepeat(0, uint.MaxValue);
+                    elems.Add(anyBetween);
+                }
+            }
+        }
+
+        return elems;
+    }
+}

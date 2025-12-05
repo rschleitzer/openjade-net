@@ -40,6 +40,21 @@ public class ProcessingMode : Named
         defined_ = false;
     }
 
+    public ProcessingMode(StringC name, Location loc, ProcessingMode? initial = null)
+        : base(name)
+    {
+        rootRules_ = new System.Collections.Generic.List<Rule>[nRuleType];
+        elementRules_ = new System.Collections.Generic.List<ElementRule>[nRuleType];
+        for (int i = 0; i < nRuleType; i++)
+        {
+            rootRules_[i] = new System.Collections.Generic.List<Rule>();
+            elementRules_[i] = new System.Collections.Generic.List<ElementRule>();
+        }
+        groveRules_ = new System.Collections.Generic.List<GroveRules>();
+        initial_ = initial;
+        defined_ = true;  // Mark as defined when created with location
+    }
+
     public void addRule(bool matchesRoot, System.Collections.Generic.List<Pattern> patterns, Expression expr,
                         RuleType ruleType, Location loc, Interpreter interp)
     {
@@ -62,6 +77,37 @@ public class ProcessingMode : Named
             if (cmp <= 0)
                 break;
             rules[i].swap(rules[i - 1]);
+        }
+    }
+
+    // Simplified addRule for single pattern (called by SchemeParser)
+    public void addRule(bool orRule, Pattern pattern, Expression expr, uint part, Location loc, Interpreter interp)
+    {
+        // For now, treat as styleRule type
+        RuleType ruleType = RuleType.styleRule;
+
+        // Determine if pattern matches root
+        bool matchesRoot = pattern is RootPattern;
+
+        // Create action for the rule
+        Ptr<Action> action = new Ptr<Action>(new Action(part, expr, loc));
+
+        // Add element rule
+        elementRules_[(int)ruleType].Add(new ElementRule(action, pattern));
+
+        // If it's a root pattern, add to root rules
+        if (matchesRoot)
+        {
+            var rules = rootRules_[(int)ruleType];
+            rules.Add(new Rule(action));
+            // Sort by specificity (bubble sort last element into place)
+            for (int i = rules.Count - 1; i > 0; i--)
+            {
+                int cmp = rules[i - 1].compareSpecificity(rules[i]);
+                if (cmp <= 0)
+                    break;
+                rules[i].swap(rules[i - 1]);
+            }
         }
     }
 

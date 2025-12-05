@@ -454,15 +454,177 @@ public class SchemeParser : Messenger
     private bool parseCond(out Expression? expr, bool opt = false)
     {
         expr = null;
-        // TODO: implement cond parsing
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Collect cond clauses
+        for (;;)
+        {
+            if (!getToken(TokenAllow.OpenParen | TokenAllow.CloseParen, out tok))
+                return false;
+            if (tok == Token.CloseParen)
+                break;
+
+            // Parse clause (test expr...)
+            Identifier.SyntacticKey key;
+            Expression? test;
+            if (!parseExpression(TokenAllow.Expr | TokenAllow.KeyElse, out test, out key, out tok))
+                return false;
+
+            bool isElse = false;
+            if (tok == Token.Identifier)
+            {
+                Identifier ident = lookup(currentToken_);
+                if (ident.syntacticKey(out key) && key == Identifier.SyntacticKey.elseKey)
+                    isElse = true;
+            }
+
+            // Parse the result expression(s)
+            System.Collections.Generic.List<Expression> results = new System.Collections.Generic.List<Expression>();
+            for (;;)
+            {
+                Expression? result;
+                if (!parseExpression(TokenAllow.Expr | TokenAllow.CloseParen, out result, out key, out tok))
+                    return false;
+                if (tok == Token.CloseParen)
+                    break;
+                if (result != null)
+                    results.Add(result);
+            }
+
+            Expression? consequent;
+            if (results.Count == 0)
+                consequent = test;  // (cond (test)) returns test if true
+            else if (results.Count == 1)
+                consequent = results[0];
+            else
+                consequent = new SequenceExpression(results, loc);
+
+            if (isElse)
+            {
+                // else clause - this is the final alternate
+                if (expr == null)
+                    expr = consequent;
+                else
+                    expr = new IfExpression(expr, expr, consequent, loc);
+                // Skip to close paren
+                if (!expectCloseParen())
+                    return false;
+                return true;
+            }
+            else
+            {
+                // Regular clause
+                if (expr == null)
+                    expr = new IfExpression(test!, consequent!, new CondFailExpression(loc), loc);
+                else
+                    expr = new IfExpression(test!, consequent!, expr, loc);
+            }
+        }
+
+        // No else clause - add cond fail
+        if (expr == null)
+            expr = new CondFailExpression(loc);
+        return true;
     }
 
     private bool parseCase(out Expression? expr)
     {
         expr = null;
-        // TODO: implement case parsing
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+        Identifier.SyntacticKey key;
+
+        // Parse the key expression
+        Expression? keyExpr;
+        if (!parseExpression(TokenAllow.Expr, out keyExpr, out key, out tok))
+            return false;
+
+        var cases = new System.Collections.Generic.List<CaseExpression.Case>();
+        Expression? elseExpr = null;
+
+        // Parse clauses
+        for (;;)
+        {
+            if (!getToken(TokenAllow.OpenParen | TokenAllow.CloseParen, out tok))
+                return false;
+            if (tok == Token.CloseParen)
+                break;
+
+            // Parse clause - either ((datums...) expr...) or (else expr...)
+            if (!getToken(TokenAllow.OpenParen | TokenAllow.Identifier, out tok))
+                return false;
+
+            if (tok == Token.Identifier)
+            {
+                Identifier ident = lookup(currentToken_);
+                if (ident.syntacticKey(out key) && key == Identifier.SyntacticKey.elseKey)
+                {
+                    // else clause
+                    if (!parseBeginUntilClose(out elseExpr))
+                        return false;
+                    continue;
+                }
+                // Not else - put it back and treat as datum list error
+                return false;
+            }
+
+            // Parse datums list
+            var datums = new System.Collections.Generic.List<ELObj?>();
+            for (;;)
+            {
+                ELObj? datum;
+                Location datumLoc;
+                if (!parseDatum(TokenAllow.Expr | TokenAllow.CloseParen, out datum, out datumLoc, out tok))
+                    return false;
+                if (tok == Token.CloseParen)
+                    break;
+                datums.Add(datum);
+            }
+
+            // Parse result expressions
+            Expression? result;
+            if (!parseBeginUntilClose(out result))
+                return false;
+
+            var caseItem = new CaseExpression.Case
+            {
+                datums = datums,
+                expr = result!
+            };
+            cases.Add(caseItem);
+        }
+
+        expr = new CaseExpression(keyExpr!, cases, elseExpr, loc);
+        return true;
+    }
+
+    private bool parseBeginUntilClose(out Expression? expr)
+    {
+        expr = null;
+        Location loc = in_?.currentLocation() ?? new Location();
+        var exprs = new System.Collections.Generic.List<Expression>();
+        Token tok;
+
+        for (;;)
+        {
+            Identifier.SyntacticKey key;
+            Expression? e;
+            if (!parseExpression(TokenAllow.Expr | TokenAllow.CloseParen, out e, out key, out tok))
+                return false;
+            if (tok == Token.CloseParen)
+                break;
+            if (e != null)
+                exprs.Add(e);
+        }
+
+        if (exprs.Count == 0)
+            expr = new ConstantExpression(interp_.makeUnspecified(), loc);
+        else if (exprs.Count == 1)
+            expr = exprs[0];
+        else
+            expr = new SequenceExpression(exprs, loc);
+        return true;
     }
 
     private bool parseAnd(out Expression? expr, bool opt = false)
@@ -728,36 +890,418 @@ public class SchemeParser : Messenger
     private bool parseSet(out Expression? expr)
     {
         expr = null;
-        // TODO: implement set! parsing
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse variable name
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        Identifier var = lookup(currentToken_);
+
+        // Parse value expression
+        Identifier.SyntacticKey key;
+        Expression? value;
+        if (!parseExpression(TokenAllow.Expr, out value, out key, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        expr = new AssignmentExpression(var, value!, loc);
+        return true;
     }
 
     private bool parseMake(out Expression? expr)
     {
         expr = null;
-        // TODO: implement make parsing for flow objects
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse flow object class name
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        Identifier foc = lookup(currentToken_);
+
+        // Parse keywords and content expressions
+        var keys = new System.Collections.Generic.List<Identifier?>();
+        var exprs = new System.Collections.Generic.List<Expression>();
+
+        for (;;)
+        {
+            Identifier.SyntacticKey key;
+            Expression? e;
+            if (!parseExpression(TokenAllow.Expr | TokenAllow.Keyword | TokenAllow.CloseParen, out e, out key, out tok))
+                return false;
+
+            if (tok == Token.CloseParen)
+                break;
+
+            if (tok == Token.Keyword)
+            {
+                // Remove trailing colon from keyword name
+                StringC keyName = new StringC(currentToken_.data(), currentToken_.size() - 1);
+                keys.Add(lookup(keyName));
+
+                // Parse value expression
+                if (!parseExpression(TokenAllow.Expr, out e, out key, out tok))
+                    return false;
+                exprs.Add(e!);
+            }
+            else if (e != null)
+            {
+                // Content expression - add with null key
+                keys.Add(null);
+                exprs.Add(e);
+            }
+        }
+
+        expr = new MakeExpression(foc, keys, exprs, loc);
+        return true;
     }
 
     private bool parseStyle(out Expression? expr)
     {
         expr = null;
-        // TODO: implement style parsing
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse keyword/value pairs
+        var keys = new System.Collections.Generic.List<Identifier?>();
+        var exprs = new System.Collections.Generic.List<Expression>();
+
+        for (;;)
+        {
+            Identifier.SyntacticKey key;
+            Expression? e;
+            if (!parseExpression(TokenAllow.Keyword | TokenAllow.CloseParen, out e, out key, out tok))
+                return false;
+
+            if (tok == Token.CloseParen)
+                break;
+
+            if (tok == Token.Keyword)
+            {
+                // Remove trailing colon from keyword name
+                StringC keyName = new StringC(currentToken_.data(), currentToken_.size() - 1);
+                keys.Add(lookup(keyName));
+
+                // Parse value expression
+                if (!parseExpression(TokenAllow.Expr, out e, out key, out tok))
+                    return false;
+                exprs.Add(e!);
+            }
+        }
+
+        expr = new StyleExpression(keys, exprs, loc);
+        return true;
     }
 
     private bool parseWithMode(out Expression? expr)
     {
         expr = null;
-        // TODO: implement with-mode parsing
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse mode name
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        StringC modeName = new StringC(currentToken_);
+        ProcessingMode? mode = interp_.lookupProcessingMode(modeName);
+
+        // Parse body expression
+        Identifier.SyntacticKey key;
+        Expression? body;
+        if (!parseExpression(TokenAllow.Expr, out body, out key, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        expr = new WithModeExpression(mode, body!, loc);
+        return true;
     }
 
     private bool parseQuasiquote(out Expression? expr)
     {
         expr = null;
-        // TODO: implement quasiquote
-        return skipForm();
+        return parseQuasiquoteBody(1, out expr);
+    }
+
+    private bool parseQuasiquoteBody(int level, out Expression? expr)
+    {
+        expr = null;
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        if (!getToken(TokenAllow.Expr | TokenAllow.OpenParen | TokenAllow.Unquote | TokenAllow.UnquoteSplicing | TokenAllow.QuasiquoteKey | TokenAllow.Vector, out tok))
+            return false;
+
+        if (tok == Token.Unquote)
+        {
+            if (level == 1)
+            {
+                // Unquote at level 1 - evaluate the expression
+                Identifier.SyntacticKey key;
+                if (!parseExpression(TokenAllow.Expr, out expr, out key, out tok))
+                    return false;
+                return true;
+            }
+            else
+            {
+                // Nested unquote - reduce level
+                Expression? inner;
+                if (!parseQuasiquoteBody(level - 1, out inner))
+                    return false;
+                var members = new System.Collections.Generic.List<Expression>();
+                members.Add(new ConstantExpression(interp_.makeSymbol(interp_.makeStringC("unquote")), loc));
+                members.Add(inner!);
+                var spliced = new System.Collections.Generic.List<bool> { false, false };
+                expr = new QuasiquoteExpression(members, spliced, QuasiquoteExpression.Type.listType, loc);
+                return true;
+            }
+        }
+
+        if (tok == Token.UnquoteSplicing)
+        {
+            // This should only appear within a list context
+            message(InterpreterMessages.invalidUnquoteSplicing);
+            return false;
+        }
+
+        if (tok == Token.Quasiquote)
+        {
+            // Nested quasiquote - increase level
+            Expression? inner;
+            if (!parseQuasiquoteBody(level + 1, out inner))
+                return false;
+            var members = new System.Collections.Generic.List<Expression>();
+            members.Add(new ConstantExpression(interp_.makeSymbol(interp_.makeStringC("quasiquote")), loc));
+            members.Add(inner!);
+            var spliced = new System.Collections.Generic.List<bool> { false, false };
+            expr = new QuasiquoteExpression(members, spliced, QuasiquoteExpression.Type.listType, loc);
+            return true;
+        }
+
+        if (tok == Token.OpenParen)
+        {
+            return parseQuasiquoteList(level, QuasiquoteExpression.Type.listType, out expr);
+        }
+
+        if (tok == Token.Vector)
+        {
+            return parseQuasiquoteList(level, QuasiquoteExpression.Type.vectorType, out expr);
+        }
+
+        // Self-quoting datum
+        switch (tok)
+        {
+            case Token.Number:
+                {
+                    long val = 0;
+                    for (nuint i = 0; i < currentToken_.size(); i++)
+                    {
+                        Char c = currentToken_[i];
+                        if (c >= '0' && c <= '9')
+                            val = val * 10 + (c - '0');
+                    }
+                    expr = new ConstantExpression(interp_.makeInteger(val), loc);
+                    return true;
+                }
+            case Token.String:
+                expr = new ConstantExpression(interp_.makeString(currentToken_), loc);
+                return true;
+            case Token.Identifier:
+                expr = new ConstantExpression(interp_.makeSymbol(currentToken_), loc);
+                return true;
+            case Token.True:
+                expr = new ConstantExpression(interp_.makeTrue(), loc);
+                return true;
+            case Token.False:
+                expr = new ConstantExpression(interp_.makeFalse(), loc);
+                return true;
+            case Token.Char:
+                if (currentToken_.size() > 0)
+                    expr = new ConstantExpression(interp_.makeChar(currentToken_[0]), loc);
+                else
+                    expr = new ConstantExpression(interp_.makeChar(0), loc);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private bool parseQuasiquoteList(int level, QuasiquoteExpression.Type type, out Expression? expr)
+    {
+        expr = null;
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        var members = new System.Collections.Generic.List<Expression>();
+        var spliced = new System.Collections.Generic.List<bool>();
+        bool improper = false;
+
+        for (;;)
+        {
+            if (!getToken(TokenAllow.Expr | TokenAllow.OpenParen | TokenAllow.CloseParen | TokenAllow.Period |
+                          TokenAllow.Unquote | TokenAllow.UnquoteSplicing | TokenAllow.QuasiquoteKey | TokenAllow.Vector, out tok))
+                return false;
+
+            if (tok == Token.CloseParen)
+                break;
+
+            if (tok == Token.Period)
+            {
+                // Improper list
+                if (type == QuasiquoteExpression.Type.vectorType)
+                {
+                    message(InterpreterMessages.badQuasiquote);
+                    return false;
+                }
+                Expression? tail;
+                if (!parseQuasiquoteBody(level, out tail))
+                    return false;
+                members.Add(tail!);
+                spliced.Add(false);
+                improper = true;
+                if (!expectCloseParen())
+                    return false;
+                break;
+            }
+
+            if (tok == Token.UnquoteSplicing)
+            {
+                if (level == 1)
+                {
+                    // Spliced unquote
+                    Identifier.SyntacticKey key;
+                    Expression? e;
+                    if (!parseExpression(TokenAllow.Expr, out e, out key, out tok))
+                        return false;
+                    members.Add(e!);
+                    spliced.Add(true);
+                }
+                else
+                {
+                    // Nested - reduce level
+                    Expression? inner;
+                    if (!parseQuasiquoteBody(level - 1, out inner))
+                        return false;
+                    var subMembers = new System.Collections.Generic.List<Expression>();
+                    subMembers.Add(new ConstantExpression(interp_.makeSymbol(interp_.makeStringC("unquote-splicing")), loc));
+                    subMembers.Add(inner!);
+                    var subSpliced = new System.Collections.Generic.List<bool> { false, false };
+                    members.Add(new QuasiquoteExpression(subMembers, subSpliced, QuasiquoteExpression.Type.listType, loc));
+                    spliced.Add(false);
+                }
+                continue;
+            }
+
+            if (tok == Token.Unquote)
+            {
+                if (level == 1)
+                {
+                    Identifier.SyntacticKey key;
+                    Expression? e;
+                    if (!parseExpression(TokenAllow.Expr, out e, out key, out tok))
+                        return false;
+                    members.Add(e!);
+                    spliced.Add(false);
+                }
+                else
+                {
+                    Expression? inner;
+                    if (!parseQuasiquoteBody(level - 1, out inner))
+                        return false;
+                    var subMembers = new System.Collections.Generic.List<Expression>();
+                    subMembers.Add(new ConstantExpression(interp_.makeSymbol(interp_.makeStringC("unquote")), loc));
+                    subMembers.Add(inner!);
+                    var subSpliced = new System.Collections.Generic.List<bool> { false, false };
+                    members.Add(new QuasiquoteExpression(subMembers, subSpliced, QuasiquoteExpression.Type.listType, loc));
+                    spliced.Add(false);
+                }
+                continue;
+            }
+
+            if (tok == Token.Quasiquote)
+            {
+                Expression? inner;
+                if (!parseQuasiquoteBody(level + 1, out inner))
+                    return false;
+                var subMembers = new System.Collections.Generic.List<Expression>();
+                subMembers.Add(new ConstantExpression(interp_.makeSymbol(interp_.makeStringC("quasiquote")), loc));
+                subMembers.Add(inner!);
+                var subSpliced = new System.Collections.Generic.List<bool> { false, false };
+                members.Add(new QuasiquoteExpression(subMembers, subSpliced, QuasiquoteExpression.Type.listType, loc));
+                spliced.Add(false);
+                continue;
+            }
+
+            if (tok == Token.OpenParen)
+            {
+                Expression? subList;
+                if (!parseQuasiquoteList(level, QuasiquoteExpression.Type.listType, out subList))
+                    return false;
+                members.Add(subList!);
+                spliced.Add(false);
+                continue;
+            }
+
+            if (tok == Token.Vector)
+            {
+                Expression? subVec;
+                if (!parseQuasiquoteList(level, QuasiquoteExpression.Type.vectorType, out subVec))
+                    return false;
+                members.Add(subVec!);
+                spliced.Add(false);
+                continue;
+            }
+
+            // Self-quoting datum
+            Expression? elem;
+            switch (tok)
+            {
+                case Token.Number:
+                    {
+                        long val = 0;
+                        for (nuint i = 0; i < currentToken_.size(); i++)
+                        {
+                            Char c = currentToken_[i];
+                            if (c >= '0' && c <= '9')
+                                val = val * 10 + (c - '0');
+                        }
+                        elem = new ConstantExpression(interp_.makeInteger(val), loc);
+                        break;
+                    }
+                case Token.String:
+                    elem = new ConstantExpression(interp_.makeString(currentToken_), loc);
+                    break;
+                case Token.Identifier:
+                    elem = new ConstantExpression(interp_.makeSymbol(currentToken_), loc);
+                    break;
+                case Token.True:
+                    elem = new ConstantExpression(interp_.makeTrue(), loc);
+                    break;
+                case Token.False:
+                    elem = new ConstantExpression(interp_.makeFalse(), loc);
+                    break;
+                case Token.Char:
+                    if (currentToken_.size() > 0)
+                        elem = new ConstantExpression(interp_.makeChar(currentToken_[0]), loc);
+                    else
+                        elem = new ConstantExpression(interp_.makeChar(0), loc);
+                    break;
+                default:
+                    return false;
+            }
+            members.Add(elem);
+            spliced.Add(false);
+        }
+
+        if (improper)
+            type = QuasiquoteExpression.Type.improperType;
+
+        expr = new QuasiquoteExpression(members, spliced, type, loc);
+        return true;
     }
 
     private bool parseDatum(TokenAllow allowed, out ELObj? datum, out Location loc, out Token tok)
@@ -904,38 +1448,363 @@ public class SchemeParser : Messenger
 
     private bool doElement()
     {
-        // TODO: implement element rule
-        return skipForm();
+        // (element gi-spec action)
+        // gi-spec can be: name, (name ...), (or name ...), (match name (: name)*)
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse gi-spec (element name or list of names)
+        var names = new System.Collections.Generic.List<StringC>();
+        Pattern? pattern = null;
+
+        if (!getToken(TokenAllow.Identifier | TokenAllow.OpenParen, out tok))
+            return false;
+
+        if (tok == Token.Identifier)
+        {
+            // Single element name
+            names.Add(new StringC(currentToken_));
+        }
+        else
+        {
+            // List of names or match pattern
+            if (!getToken(TokenAllow.Identifier, out tok))
+                return false;
+
+            Identifier.SyntacticKey key;
+            Identifier ident = lookup(currentToken_);
+            if (ident.syntacticKey(out key) && key == Identifier.SyntacticKey.match)
+            {
+                // Match pattern - parse element name and optional ancestors
+                pattern = parsePattern();
+                if (pattern == null)
+                    return false;
+            }
+            else
+            {
+                // List of element names
+                names.Add(new StringC(currentToken_));
+                for (;;)
+                {
+                    if (!getToken(TokenAllow.Identifier | TokenAllow.CloseParen, out tok))
+                        return false;
+                    if (tok == Token.CloseParen)
+                        break;
+                    names.Add(new StringC(currentToken_));
+                }
+            }
+        }
+
+        // Parse action expression
+        Identifier.SyntacticKey sk;
+        Expression? action;
+        if (!parseExpression(TokenAllow.Expr, out action, out sk, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        // Register rule with defMode_
+        if (pattern != null)
+        {
+            defMode_?.addRule(false, pattern, action!, 0, loc, interp_);
+        }
+        else
+        {
+            foreach (var name in names)
+            {
+                Pattern p = new ElementPattern(name);
+                defMode_?.addRule(false, p, action!, 0, loc, interp_);
+            }
+        }
+
+        return true;
     }
 
     private bool doOrElement()
     {
-        // TODO: implement or-element rule
-        return skipForm();
+        // (or-element gi-spec action)
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse gi-spec
+        var names = new System.Collections.Generic.List<StringC>();
+        Pattern? pattern = null;
+
+        if (!getToken(TokenAllow.Identifier | TokenAllow.OpenParen, out tok))
+            return false;
+
+        if (tok == Token.Identifier)
+        {
+            names.Add(new StringC(currentToken_));
+        }
+        else
+        {
+            if (!getToken(TokenAllow.Identifier, out tok))
+                return false;
+
+            Identifier.SyntacticKey key;
+            Identifier ident = lookup(currentToken_);
+            if (ident.syntacticKey(out key) && key == Identifier.SyntacticKey.match)
+            {
+                pattern = parsePattern();
+                if (pattern == null)
+                    return false;
+            }
+            else
+            {
+                names.Add(new StringC(currentToken_));
+                for (;;)
+                {
+                    if (!getToken(TokenAllow.Identifier | TokenAllow.CloseParen, out tok))
+                        return false;
+                    if (tok == Token.CloseParen)
+                        break;
+                    names.Add(new StringC(currentToken_));
+                }
+            }
+        }
+
+        // Parse action expression
+        Identifier.SyntacticKey sk;
+        Expression? action;
+        if (!parseExpression(TokenAllow.Expr, out action, out sk, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        // Register as "or" rule (combines with existing rules)
+        if (pattern != null)
+        {
+            defMode_?.addRule(true, pattern, action!, 0, loc, interp_);
+        }
+        else
+        {
+            foreach (var name in names)
+            {
+                Pattern p = new ElementPattern(name);
+                defMode_?.addRule(true, p, action!, 0, loc, interp_);
+            }
+        }
+
+        return true;
     }
 
     private bool doDefault()
     {
-        // TODO: implement default rule
-        return skipForm();
+        // (default action)
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+        Identifier.SyntacticKey key;
+
+        // Parse action expression
+        Expression? action;
+        if (!parseExpression(TokenAllow.Expr, out action, out key, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        // Register default rule
+        Pattern defaultPattern = new DefaultPattern();
+        defMode_?.addRule(false, defaultPattern, action!, 0, loc, interp_);
+
+        return true;
     }
 
     private bool doRoot()
     {
-        // TODO: implement root rule
-        return skipForm();
+        // (root action)
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+        Identifier.SyntacticKey key;
+
+        // Parse action expression
+        Expression? action;
+        if (!parseExpression(TokenAllow.Expr, out action, out key, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        // Register root rule
+        Pattern rootPattern = new RootPattern();
+        defMode_?.addRule(false, rootPattern, action!, 0, loc, interp_);
+
+        return true;
     }
 
     private bool doId()
     {
-        // TODO: implement id rule
-        return skipForm();
+        // (id id-spec action)
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse id-spec (identifier name or list of names)
+        var ids = new System.Collections.Generic.List<StringC>();
+
+        if (!getToken(TokenAllow.Identifier | TokenAllow.OpenParen | TokenAllow.String, out tok))
+            return false;
+
+        if (tok == Token.Identifier || tok == Token.String)
+        {
+            ids.Add(new StringC(currentToken_));
+        }
+        else
+        {
+            // List of IDs
+            for (;;)
+            {
+                if (!getToken(TokenAllow.Identifier | TokenAllow.String | TokenAllow.CloseParen, out tok))
+                    return false;
+                if (tok == Token.CloseParen)
+                    break;
+                ids.Add(new StringC(currentToken_));
+            }
+        }
+
+        // Parse action expression
+        Identifier.SyntacticKey key;
+        Expression? action;
+        if (!parseExpression(TokenAllow.Expr, out action, out key, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        // Register id rules
+        foreach (var id in ids)
+        {
+            Pattern idPattern = new IdPattern(id);
+            defMode_?.addRule(false, idPattern, action!, 0, loc, interp_);
+        }
+
+        return true;
     }
 
     private bool doMode()
     {
-        // TODO: implement mode definition
-        return skipForm();
+        // (mode name body...)
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse mode name
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        StringC modeName = new StringC(currentToken_);
+
+        // Get or create the processing mode
+        ProcessingMode? mode = interp_.lookupProcessingMode(modeName);
+        if (mode == null)
+        {
+            mode = interp_.defineProcessingMode(modeName, loc);
+        }
+
+        // Save current default mode
+        ProcessingMode? savedMode = defMode_;
+        defMode_ = mode;
+
+        // Parse body - can contain element, default, root, id rules
+        for (;;)
+        {
+            if (!getToken(TokenAllow.OpenParen | TokenAllow.CloseParen, out tok))
+            {
+                defMode_ = savedMode;
+                return false;
+            }
+            if (tok == Token.CloseParen)
+                break;
+
+            if (!getToken(TokenAllow.Identifier, out tok))
+            {
+                defMode_ = savedMode;
+                return false;
+            }
+
+            Identifier ident = lookup(currentToken_);
+            Identifier.SyntacticKey key;
+            if (ident.syntacticKey(out key))
+            {
+                bool ok = true;
+                switch (key)
+                {
+                    case Identifier.SyntacticKey.element:
+                        ok = doElement();
+                        break;
+                    case Identifier.SyntacticKey.orElement:
+                        ok = doOrElement();
+                        break;
+                    case Identifier.SyntacticKey.defaultEntity:
+                        ok = doDefault();
+                        break;
+                    case Identifier.SyntacticKey.root:
+                        ok = doRoot();
+                        break;
+                    case Identifier.SyntacticKey.id:
+                        ok = doId();
+                        break;
+                    default:
+                        message(InterpreterMessages.unknownTopLevelForm);
+                        ok = skipForm();
+                        break;
+                }
+                if (!ok)
+                {
+                    defMode_ = savedMode;
+                    return false;
+                }
+            }
+            else
+            {
+                message(InterpreterMessages.unknownTopLevelForm);
+                if (!skipForm())
+                {
+                    defMode_ = savedMode;
+                    return false;
+                }
+            }
+        }
+
+        defMode_ = savedMode;
+        return true;
+    }
+
+    private Pattern? parsePattern()
+    {
+        // Parse (match element-name (: ancestor)*)
+        Token tok;
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return null;
+
+        StringC elementName = new StringC(currentToken_);
+        var ancestors = new System.Collections.Generic.List<StringC>();
+        bool hasDirectParent = false;
+
+        for (;;)
+        {
+            if (!getToken(TokenAllow.OpenParen | TokenAllow.CloseParen, out tok))
+                return null;
+            if (tok == Token.CloseParen)
+                break;
+
+            // Parse (: ancestor)
+            if (!getToken(TokenAllow.Identifier, out tok))
+                return null;
+
+            // Check if it's a : token for direct parent
+            if (currentToken_.size() == 1 && currentToken_[0] == ':')
+                hasDirectParent = true;
+
+            if (!getToken(TokenAllow.Identifier, out tok))
+                return null;
+            ancestors.Add(new StringC(currentToken_));
+
+            if (!expectCloseParen())
+                return null;
+        }
+
+        return new MatchPattern(elementName, ancestors, hasDirectParent);
     }
 
     private bool doDeclareInitialValue()

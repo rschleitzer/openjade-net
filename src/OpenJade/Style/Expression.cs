@@ -905,6 +905,700 @@ public class LetrecExpression : Expression
     }
 }
 
+// Cond fail expression - error when all cond clauses fail
+public class CondFailExpression : Expression
+{
+    public CondFailExpression(Location loc) : base(loc) { }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        return new InsnPtr(new CondFailInsn(location()));
+    }
+
+    public override bool canEval(bool maybeCall) { return true; }
+}
+
+// Case expression
+public class CaseExpression : Expression
+{
+    public struct Case
+    {
+        public System.Collections.Generic.List<ELObj?> datums;
+        public Expression expr;
+    }
+
+    private Expression key_;
+    private System.Collections.Generic.List<Case> cases_;
+    private System.Collections.Generic.List<int> nResolved_;
+    private Expression? else_;
+
+    public CaseExpression(Expression key, System.Collections.Generic.List<Case> cases,
+                          Expression? elseClause, Location loc)
+        : base(loc)
+    {
+        key_ = key;
+        cases_ = cases;
+        else_ = elseClause;
+        nResolved_ = new System.Collections.Generic.List<int>(cases.Count);
+        for (int i = 0; i < cases.Count; i++)
+            nResolved_.Add(0);
+    }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        InsnPtr finish;
+        if (else_ != null)
+            finish = new InsnPtr(new PopInsn(else_.compile(interp, env, stackPos, next)));
+        else
+            finish = new InsnPtr(new CaseFailInsn(location()));
+        for (int i = 0; i < cases_.Count; i++)
+        {
+            InsnPtr match = cases_[i].expr.compile(interp, env, stackPos, next);
+            for (int j = 0; j < nResolved_[i]; j++)
+                finish = new InsnPtr(new CaseInsn(cases_[i].datums[j], match, finish));
+        }
+        return key_.compile(interp, env, stackPos, finish);
+    }
+
+    public override void markBoundVars(BoundVarList vars, bool shared)
+    {
+        key_.markBoundVars(vars, shared);
+        foreach (var c in cases_)
+            c.expr.markBoundVars(vars, shared);
+        else_?.markBoundVars(vars, shared);
+    }
+
+    public override bool canEval(bool maybeCall)
+    {
+        if (!key_.canEval(maybeCall))
+            return false;
+        if (else_ != null && !else_.canEval(maybeCall))
+            return false;
+        for (int i = 0; i < cases_.Count; i++)
+        {
+            if (!cases_[i].expr.canEval(maybeCall))
+                return false;
+            if (nResolved_[i] == cases_[i].datums.Count)
+                return false;
+        }
+        return true;
+    }
+
+    public override void optimize(Interpreter interp, Environment env, ref Expression expr)
+    {
+        key_.optimize(interp, env, ref key_);
+        ELObj? k = key_.constantValue();
+        for (int i = 0; i < nResolved_.Count; i++)
+            nResolved_[i] = 0;
+        bool unresolved = false;
+        for (int i = 0; i < cases_.Count; i++)
+        {
+            Expression e = cases_[i].expr;
+            e.optimize(interp, env, ref e);
+            var c = cases_[i];
+            c.expr = e;
+            cases_[i] = c;
+            int nResolved = 0;
+            for (int j = 0; j < cases_[i].datums.Count; j++)
+            {
+                ELObj? tem = cases_[i].datums[j]?.resolveQuantities(false, interp, location());
+                if (tem != null)
+                {
+                    if (k != null && ELObj.eqv(k, tem))
+                    {
+                        expr = cases_[i].expr;
+                        return;
+                    }
+                    if (j != nResolved)
+                        cases_[i].datums[j] = cases_[i].datums[nResolved];
+                    cases_[i].datums[nResolved++] = tem;
+                }
+                else
+                    unresolved = true;
+            }
+            nResolved_[i] = nResolved;
+        }
+        if (else_ != null)
+        {
+            else_.optimize(interp, env, ref else_);
+            if (k != null && !unresolved)
+                expr = else_;
+        }
+        else if (k != null && !unresolved)
+        {
+            interp.setNextLocation(location());
+            // interp.message(InterpreterMessages.caseFail, ...);
+        }
+        if (unresolved)
+        {
+            interp.setNextLocation(location());
+            // interp.message(InterpreterMessages.caseUnresolvedQuantities);
+        }
+    }
+}
+
+// Quasiquote expression
+public class QuasiquoteExpression : Expression
+{
+    public enum Type
+    {
+        listType,
+        improperType,
+        vectorType
+    }
+
+    private System.Collections.Generic.List<Expression> members_;
+    private System.Collections.Generic.List<bool> spliced_;
+    private Type type_;
+
+    public QuasiquoteExpression(System.Collections.Generic.List<Expression> members,
+                                 System.Collections.Generic.List<bool> spliced,
+                                 Type type, Location loc)
+        : base(loc)
+    {
+        members_ = members;
+        spliced_ = spliced;
+        type_ = type;
+    }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        InsnPtr tem = next;
+        int n = members_.Count;
+        if (type_ == Type.vectorType)
+        {
+            bool splicy = false;
+            for (int i = 0; i < n; i++)
+            {
+                if (spliced_[i])
+                {
+                    splicy = true;
+                    break;
+                }
+            }
+            if (!splicy)
+            {
+                tem = new InsnPtr(new VectorInsn(n, tem));
+                for (int i = n; i > 0; i--)
+                    tem = members_[i - 1].compile(interp, env, stackPos + (i - 1), tem);
+                return tem;
+            }
+            tem = new InsnPtr(new ListToVectorInsn(tem));
+        }
+        else if (type_ == Type.improperType)
+            n--;
+        for (int i = 0; i < n; i++)
+        {
+            if (spliced_[i])
+                tem = new InsnPtr(new AppendInsn(location(), tem));
+            else
+                tem = new InsnPtr(new ConsInsn(tem));
+            tem = members_[i].compile(interp, env, stackPos + 1, tem);
+        }
+        if (type_ == Type.improperType)
+            tem = members_[members_.Count - 1].compile(interp, env, stackPos, tem);
+        else
+            tem = new InsnPtr(new ConstantInsn(interp.makeNil(), tem));
+        return tem;
+    }
+
+    public override void markBoundVars(BoundVarList vars, bool shared)
+    {
+        foreach (var m in members_)
+            m.markBoundVars(vars, shared);
+    }
+
+    public override bool canEval(bool maybeCall)
+    {
+        foreach (var m in members_)
+            if (!m.canEval(maybeCall))
+                return false;
+        return true;
+    }
+
+    public override void optimize(Interpreter interp, Environment env, ref Expression expr)
+    {
+        for (int i = 0; i < members_.Count; i++)
+        {
+            Expression m = members_[i];
+            m.optimize(interp, env, ref m);
+            members_[i] = m;
+        }
+        if (type_ == Type.vectorType)
+            return;
+        if (members_.Count == 0)
+        {
+            expr = new ResolvedConstantExpression(interp.makeNil(), location());
+            return;
+        }
+        ELObj? tail = members_[members_.Count - 1].constantValue();
+        if (tail == null)
+            return;
+        System.Diagnostics.Debug.Assert(!(spliced_[spliced_.Count - 1] && type_ == Type.improperType));
+        if (type_ != Type.improperType && !spliced_[spliced_.Count - 1])
+        {
+            tail = interp.makePair(tail, interp.makeNil());
+            interp.makePermanent(tail);
+        }
+        for (int i = members_.Count - 1; i-- > 0;)
+        {
+            ELObj? tem = members_[i].constantValue();
+            if (tem == null || spliced_[i])
+            {
+                var newMembers = new System.Collections.Generic.List<Expression>(members_.GetRange(0, i + 2));
+                members_ = newMembers;
+                type_ = Type.improperType;
+                members_[i + 1] = new ResolvedConstantExpression(tail, location());
+                return;
+            }
+            tail = interp.makePair(tem, tail);
+            interp.makePermanent(tail);
+        }
+        expr = new ResolvedConstantExpression(tail, location());
+    }
+}
+
+// Assignment expression (set!)
+public class AssignmentExpression : Expression
+{
+    private Identifier var_;
+    private Expression value_;
+
+    public AssignmentExpression(Identifier var, Expression value, Location loc)
+        : base(loc)
+    {
+        var_ = var;
+        value_ = value;
+    }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        bool isFrame;
+        int index;
+        uint flags;
+        if (!env.lookup(var_, out isFrame, out index, out flags))
+        {
+            interp.setNextLocation(location());
+            uint part;
+            Location defLoc;
+            if (var_.defined(out part, out defLoc))
+            {
+                // interp.message(InterpreterMessages.topLevelAssignment, ...);
+            }
+            else
+            {
+                // interp.message(InterpreterMessages.undefinedVariableReference, ...);
+            }
+            return new InsnPtr(new ErrorInsn());
+        }
+        InsnPtr result;
+        if ((flags & BoundVar.uninitFlag) != 0)
+            result = new InsnPtr(new CheckInitInsn(var_, location(), next));
+        else
+            result = next;
+        if (isFrame)
+        {
+            if (BoundVar.flagsBoxed(flags))
+                result = new InsnPtr(new StackSetBoxInsn(index - (stackPos + 1), index, location(), result));
+            else
+                result = new InsnPtr(new StackSetInsn(index - (stackPos + 1), index, result));
+        }
+        else
+        {
+            System.Diagnostics.Debug.Assert(BoundVar.flagsBoxed(flags));
+            result = new InsnPtr(new ClosureSetBoxInsn(index, location(), result));
+        }
+        return optimizeCompile(value_, interp, env, stackPos, result);
+    }
+
+    public override void markBoundVars(BoundVarList vars, bool shared)
+    {
+        vars.mark(var_, BoundVar.usedFlag | BoundVar.assignedFlag | (shared ? BoundVar.sharedFlag : 0u));
+        value_.markBoundVars(vars, shared);
+    }
+
+    public override bool canEval(bool maybeCall)
+    {
+        return value_.canEval(maybeCall);
+    }
+}
+
+// With mode expression
+public class WithModeExpression : Expression
+{
+    private ProcessingMode? mode_;
+    private Expression expr_;
+
+    public WithModeExpression(ProcessingMode? mode, Expression expr, Location loc)
+        : base(loc)
+    {
+        mode_ = mode;
+        expr_ = expr;
+    }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        if (mode_ != null && !mode_.defined())
+        {
+            interp.setNextLocation(location());
+            // interp.message(InterpreterMessages.undefinedMode, ...);
+        }
+        return new InsnPtr(new PushModeInsn(mode_,
+            optimizeCompile(expr_, interp, env, stackPos,
+                new InsnPtr(new PopModeInsn(next)))));
+    }
+
+    public override void markBoundVars(BoundVarList vars, bool shared)
+    {
+        expr_.markBoundVars(vars, shared);
+    }
+
+    public override bool canEval(bool maybeCall)
+    {
+        return expr_.canEval(maybeCall);
+    }
+}
+
+// Style expression
+public class StyleExpression : Expression
+{
+    protected System.Collections.Generic.List<Identifier?> keys_;
+    protected System.Collections.Generic.List<Expression> exprs_;
+
+    public StyleExpression(System.Collections.Generic.List<Identifier?> keys,
+                           System.Collections.Generic.List<Expression> exprs,
+                           Location loc)
+        : base(loc)
+    {
+        keys_ = keys;
+        exprs_ = exprs;
+    }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        var ics = new System.Collections.Generic.List<ConstPtr<InheritedC>?>();
+        var forceIcs = new System.Collections.Generic.List<ConstPtr<InheritedC>?>();
+        var forceKeys = new System.Collections.Generic.List<Identifier?>(keys_.Count);
+        for (int i = 0; i < keys_.Count; i++)
+        {
+            forceKeys.Add(null);
+            if (keys_[i] != null && keys_[i]!.name().size() > 6)
+            {
+                StringC prefix = new StringC(keys_[i]!.name().data(), (nuint)6);
+                if (prefix.Equals(interp.makeStringC("force!")))
+                {
+                    StringC fullName = keys_[i]!.name();
+                    StringC name = new StringC();
+                    for (nuint idx = 6; idx < fullName.size(); idx++)
+                        name.operatorPlusAssign(fullName[idx]);
+                    forceKeys[i] = interp.lookup(name);
+                }
+            }
+        }
+        bool hasUse = false;
+        int useIndex = 0;
+        BoundVarList boundVars = new BoundVarList();
+        env.boundVars(boundVars);
+        for (int i = 0; i < keys_.Count; i++)
+        {
+            Identifier.SyntacticKey sk;
+            if (forceKeys[i] != null
+                && maybeStyleKeyword(forceKeys[i])
+                && forceKeys[i]!.inheritedC() != null)
+            {
+                forceIcs.Add(null);
+                exprs_[i].markBoundVars(boundVars, false);
+            }
+            else if (maybeStyleKeyword(keys_[i])
+                && !(keys_[i]!.syntacticKey(out sk) && sk == Identifier.SyntacticKey.keyUse)
+                && keys_[i]!.inheritedC() != null)
+            {
+                ics.Add(null);
+                exprs_[i].markBoundVars(boundVars, false);
+            }
+        }
+        boundVars.removeUnused();
+        BoundVarList noVars = new BoundVarList();
+        Environment newEnv = new Environment(noVars, boundVars);
+        int j = 0;
+        int k = 0;
+        for (int i = 0; i < keys_.Count; i++)
+        {
+            Identifier.SyntacticKey sk;
+            if (forceKeys[i] != null
+                && maybeStyleKeyword(forceKeys[i])
+                && forceKeys[i]!.inheritedC() != null)
+            {
+                Expression e = exprs_[i];
+                e.optimize(interp, newEnv, ref e);
+                exprs_[i] = e;
+                ELObj? val = exprs_[i].constantValue();
+                if (val != null)
+                {
+                    interp.makePermanent(val);
+                    forceIcs[k] = forceKeys[i]!.inheritedC()!.pointer()!.make(val, exprs_[i].location(), interp);
+                    if (forceIcs[k] == null)
+                        forceIcs.RemoveAt(forceIcs.Count - 1);
+                    else
+                        k++;
+                }
+                else
+                {
+                    forceIcs[k++] = new ConstPtr<InheritedC>(new VarInheritedC(forceKeys[i]!.inheritedC()!,
+                        exprs_[i].compile(interp, newEnv, 0, new InsnPtr()),
+                        exprs_[i].location()));
+                }
+            }
+            else if (!maybeStyleKeyword(keys_[i]))
+                ;
+            else if (keys_[i]!.syntacticKey(out sk) && sk == Identifier.SyntacticKey.keyUse)
+            {
+                if (!hasUse)
+                {
+                    hasUse = true;
+                    useIndex = i;
+                }
+            }
+            else if (keys_[i]!.inheritedC() != null)
+            {
+                Expression e = exprs_[i];
+                e.optimize(interp, newEnv, ref e);
+                exprs_[i] = e;
+                ELObj? val = exprs_[i].constantValue();
+                if (val != null)
+                {
+                    interp.makePermanent(val);
+                    ics[j] = keys_[i]!.inheritedC()!.pointer()!.make(val, exprs_[i].location(), interp);
+                    if (ics[j] == null)
+                        ics.RemoveAt(ics.Count - 1);
+                    else
+                        j++;
+                }
+                else
+                {
+                    ics[j++] = new ConstPtr<InheritedC>(new VarInheritedC(keys_[i]!.inheritedC()!,
+                        exprs_[i].compile(interp, newEnv, 0, new InsnPtr()),
+                        exprs_[i].location()));
+                }
+            }
+            else
+                unknownStyleKeyword(keys_[i]!, interp, location());
+        }
+        InsnPtr result = compilePushVars(interp, env, stackPos + (hasUse ? 1 : 0), boundVars, 0,
+            new InsnPtr(new VarStyleInsn(new ConstPtr<StyleSpec>(new StyleSpec(forceIcs, ics)),
+                boundVars.Count, hasUse,
+                new InsnPtr(new MaybeOverrideStyleInsn(next)))));
+        if (!hasUse)
+            return result;
+        else
+        {
+            result = new InsnPtr(new CheckStyleInsn(location(), result));
+            return optimizeCompile(exprs_[useIndex], interp, env, stackPos, result);
+        }
+    }
+
+    public override void markBoundVars(BoundVarList vars, bool shared)
+    {
+        foreach (var expr in exprs_)
+            expr.markBoundVars(vars, true);
+    }
+
+    public override bool canEval(bool maybeCall)
+    {
+        foreach (var expr in exprs_)
+            if (!expr.canEval(maybeCall))
+                return false;
+        return true;
+    }
+
+    protected virtual void unknownStyleKeyword(Identifier ident, Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        StringC tem = new StringC(ident.name());
+        tem.operatorPlusAssign((Char)':');
+        // interp.message(InterpreterMessages.invalidStyleKeyword, ...);
+    }
+
+    protected virtual bool maybeStyleKeyword(Identifier? ident)
+    {
+        return true;
+    }
+}
+
+// Make expression (make flow-object-class ...)
+public class MakeExpression : StyleExpression
+{
+    private Identifier foc_;
+
+    public MakeExpression(Identifier foc, System.Collections.Generic.List<Identifier?> keys,
+                          System.Collections.Generic.List<Expression> exprs, Location loc)
+        : base(keys, exprs, loc)
+    {
+        foc_ = foc;
+    }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        FlowObj? flowObj = foc_.flowObj();
+        if (flowObj == null)
+        {
+            interp.setNextLocation(location());
+            // interp.message(InterpreterMessages.unknownFlowObjectClass, ...);
+            flowObj = new SequenceFlowObj();
+            interp.makePermanent(flowObj);
+        }
+        Expression? contentMapExpr = null;
+        InsnPtr rest = next;
+        for (int i = 0; i < keys_.Count; i++)
+        {
+            Identifier.SyntacticKey syn;
+            if (!flowObj.hasNonInheritedC(keys_[i]) && keys_[i] != null && keys_[i]!.syntacticKey(out syn))
+            {
+                if (syn == Identifier.SyntacticKey.keyLabel)
+                    rest = optimizeCompile(exprs_[i], interp, env, stackPos + 1,
+                        new InsnPtr(new LabelSosofoInsn(exprs_[i].location(), rest)));
+                else if (syn == Identifier.SyntacticKey.keyContentMap)
+                    contentMapExpr = exprs_[i];
+            }
+        }
+        flowObj = applyConstNonInheritedCs(flowObj, interp, env);
+        int nContent = exprs_.Count - keys_.Count;
+        CompoundFlowObj? cFlowObj = flowObj.asCompoundFlowObj();
+        if (cFlowObj == null && nContent > 0)
+        {
+            interp.setNextLocation(location());
+            // interp.message(InterpreterMessages.atomicContent, ...);
+            nContent = 0;
+        }
+        rest = compileNonInheritedCs(interp, env, stackPos + 1, rest);
+        for (int i = 0; i < keys_.Count; i++)
+        {
+            if (flowObj.hasPseudoNonInheritedC(keys_[i])
+                && exprs_[i].constantValue() == null)
+            {
+                rest = exprs_[i].compile(interp, env, stackPos + 1,
+                    new InsnPtr(new SetPseudoNonInheritedCInsn(keys_[i],
+                        exprs_[i].location(), rest)));
+            }
+        }
+        rest = base.compile(interp, env, stackPos + 1, new InsnPtr(new SetStyleInsn(rest)));
+        if (nContent == 0 && contentMapExpr == null)
+        {
+            if (cFlowObj != null)
+                return new InsnPtr(new SetDefaultContentInsn(cFlowObj, location(), rest));
+            else
+                return new InsnPtr(new CopyFlowObjInsn(flowObj, rest));
+        }
+        rest = new InsnPtr(new SetContentInsn(cFlowObj, rest));
+        if (contentMapExpr != null)
+        {
+            rest = optimizeCompile(contentMapExpr, interp, env, stackPos + 1,
+                new InsnPtr(new ContentMapSosofoInsn(contentMapExpr.location(), rest)));
+            if (nContent == 0)
+                return new InsnPtr(new MakeDefaultContentInsn(location(), rest));
+        }
+        if (nContent == 1)
+            return optimizeCompile(exprs_[exprs_.Count - 1], interp, env, stackPos,
+                new InsnPtr(new CheckSosofoInsn(exprs_[exprs_.Count - 1].location(), rest)));
+        rest = new InsnPtr(new SosofoAppendInsn(nContent, rest));
+        for (int i = 1; i <= nContent; i++)
+            rest = optimizeCompile(exprs_[exprs_.Count - i], interp, env, stackPos + nContent - i,
+                new InsnPtr(new CheckSosofoInsn(exprs_[exprs_.Count - i].location(), rest)));
+        return rest;
+    }
+
+    private FlowObj applyConstNonInheritedCs(FlowObj flowObj, Interpreter interp, Environment env)
+    {
+        FlowObj result = flowObj;
+        for (int i = 0; i < keys_.Count; i++)
+        {
+            if (flowObj.hasNonInheritedC(keys_[i]) || flowObj.hasPseudoNonInheritedC(keys_[i]))
+            {
+                Expression e = exprs_[i];
+                e.optimize(interp, env, ref e);
+                exprs_[i] = e;
+                ELObj? val = exprs_[i].constantValue();
+                if (val != null)
+                {
+                    if (result == flowObj)
+                    {
+                        result = flowObj.copy(interp);
+                        interp.makePermanent(result);
+                    }
+                    result.setNonInheritedC(keys_[i], val, exprs_[i].location(), interp);
+                }
+            }
+        }
+        return result;
+    }
+
+    private InsnPtr compileNonInheritedCs(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        FlowObj? flowObj = foc_.flowObj();
+        if (flowObj == null)
+            return next;
+        bool gotOne = flowObj.isCharacter();
+        BoundVarList boundVars = new BoundVarList();
+        env.boundVars(boundVars);
+        for (int i = 0; i < keys_.Count; i++)
+        {
+            if (flowObj.hasNonInheritedC(keys_[i]) && exprs_[i].constantValue() == null)
+            {
+                exprs_[i].markBoundVars(boundVars, false);
+                gotOne = true;
+            }
+        }
+        if (!gotOne)
+            return next;
+        boundVars.removeUnused();
+        BoundVarList noVars = new BoundVarList();
+        Environment newEnv = new Environment(noVars, boundVars);
+        InsnPtr code = new InsnPtr();
+        for (int i = 0; i < keys_.Count; i++)
+            if (flowObj.hasNonInheritedC(keys_[i]) && exprs_[i].constantValue() == null)
+                code = exprs_[i].compile(interp, newEnv, 1,
+                    new InsnPtr(new SetNonInheritedCInsn(keys_[i], exprs_[i].location(), code)));
+        InsnPtr rest = new InsnPtr(new SetNonInheritedCsSosofoInsn(code, boundVars.Count, next));
+        if (flowObj.isCharacter())
+            rest = new InsnPtr(new SetImplicitCharInsn(new Location(), rest));
+        return compilePushVars(interp, env, stackPos, boundVars, 0, rest);
+    }
+
+    protected override void unknownStyleKeyword(Identifier ident, Interpreter interp, Location loc)
+    {
+        FlowObj? flowObj = foc_.flowObj();
+        if (flowObj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyLabel:
+                case Identifier.SyntacticKey.keyContentMap:
+                    return;
+                default:
+                    break;
+            }
+        }
+        if (flowObj.hasNonInheritedC(ident) || flowObj.hasPseudoNonInheritedC(ident))
+            return;
+        interp.setNextLocation(loc);
+        StringC tem = new StringC(ident.name());
+        tem.operatorPlusAssign((Char)':');
+        // interp.message(InterpreterMessages.invalidMakeKeyword, ...);
+    }
+
+    protected override bool maybeStyleKeyword(Identifier? ident)
+    {
+        if (ident == null) return true;
+        FlowObj? flowObj = foc_.flowObj();
+        if (flowObj == null)
+            return true;
+        return !flowObj.hasNonInheritedC(ident) && !flowObj.hasPseudoNonInheritedC(ident);
+    }
+}
+
 // Lambda expression
 public class LambdaExpression : Expression
 {
