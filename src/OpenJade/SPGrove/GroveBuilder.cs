@@ -4254,20 +4254,63 @@ public abstract class AttributeDefNode : BaseNode
     public override AccessResult getDeclValueType(out DeclValueType.Enum type)
     {
         type = DeclValueType.Enum.cdata;
-        // TODO: Implement full getDeclValueType
-        return AccessResult.accessNull;
+        var defList = attDefList();
+        if (defList == null)
+            return AccessResult.accessNull;
+        var def = defList.def(attIndex_);
+        if (def == null)
+            return AccessResult.accessNull;
+        AttributeDefinitionDesc desc = new AttributeDefinitionDesc();
+        def.getDesc(desc);
+        switch (desc.declaredValue)
+        {
+            case AttributeDefinitionDesc.DeclaredValue.cdata: type = DeclValueType.Enum.cdata; break;
+            case AttributeDefinitionDesc.DeclaredValue.name: type = DeclValueType.Enum.name; break;
+            case AttributeDefinitionDesc.DeclaredValue.number: type = DeclValueType.Enum.number; break;
+            case AttributeDefinitionDesc.DeclaredValue.nmtoken: type = DeclValueType.Enum.nmtoken; break;
+            case AttributeDefinitionDesc.DeclaredValue.nutoken: type = DeclValueType.Enum.nutoken; break;
+            case AttributeDefinitionDesc.DeclaredValue.names: type = DeclValueType.Enum.names; break;
+            case AttributeDefinitionDesc.DeclaredValue.numbers: type = DeclValueType.Enum.numbers; break;
+            case AttributeDefinitionDesc.DeclaredValue.nmtokens: type = DeclValueType.Enum.nmtokens; break;
+            case AttributeDefinitionDesc.DeclaredValue.nutokens: type = DeclValueType.Enum.nutokens; break;
+            case AttributeDefinitionDesc.DeclaredValue.entity: type = DeclValueType.Enum.entity; break;
+            case AttributeDefinitionDesc.DeclaredValue.entities: type = DeclValueType.Enum.entities; break;
+            case AttributeDefinitionDesc.DeclaredValue.idrefs: type = DeclValueType.Enum.idrefs; break;
+            case AttributeDefinitionDesc.DeclaredValue.id: type = DeclValueType.Enum.id; break;
+            case AttributeDefinitionDesc.DeclaredValue.notation: type = DeclValueType.Enum.notation; break;
+            case AttributeDefinitionDesc.DeclaredValue.nameTokenGroup: type = DeclValueType.Enum.nmtkgrp; break;
+            default: return AccessResult.accessNull;
+        }
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getDefaultValueType(out DefaultValueType.Enum type)
     {
         type = DefaultValueType.Enum.implied;
-        // TODO: Implement full getDefaultValueType
-        return AccessResult.accessNull;
+        var defList = attDefList();
+        if (defList == null)
+            return AccessResult.accessNull;
+        var def = defList.def(attIndex_);
+        if (def == null)
+            return AccessResult.accessNull;
+        AttributeDefinitionDesc desc = new AttributeDefinitionDesc();
+        def.getDesc(desc);
+        switch (desc.defaultValueType)
+        {
+            case AttributeDefinitionDesc.DefaultValueType.required: type = DefaultValueType.Enum.required; break;
+            case AttributeDefinitionDesc.DefaultValueType.current: type = DefaultValueType.Enum.current; break;
+            case AttributeDefinitionDesc.DefaultValueType.implied: type = DefaultValueType.Enum.implied; break;
+            case AttributeDefinitionDesc.DefaultValueType.conref: type = DefaultValueType.Enum.conref; break;
+            case AttributeDefinitionDesc.DefaultValueType.defaulted: type = DefaultValueType.Enum.value; break;
+            case AttributeDefinitionDesc.DefaultValueType.@fixed: type = DefaultValueType.Enum.@fixed; break;
+            default: return AccessResult.accessNull;
+        }
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getTokens(ref GroveStringListPtr ptr)
     {
-        // TODO: Implement getTokens
+        // Token list not commonly needed
         return AccessResult.accessNull;
     }
 
