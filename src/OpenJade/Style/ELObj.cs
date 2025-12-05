@@ -331,11 +331,67 @@ public class Identifier : Named
         keyCoalesceId,
         // Character and rule keywords
         keyCh,
+        keyChar,
         keyGlyphId,
         keyIsBreakBeforePriority,
         keyIsBreakAfterPriority,
+        keyBreakBeforePriority,
+        keyBreakAfterPriority,
         keyOrientation,
         keyLength,
+        // Display and box keywords
+        keyIsDisplay,
+        keyScale,
+        keyMaxWidth,
+        keyMaxHeight,
+        keyEntitySystemId,
+        keyNotationSystemId,
+        keyPositionPointX,
+        keyPositionPointY,
+        keyEscapementDirection,
+        // Character flow object keywords
+        keyIsSpace,
+        keyIsRecordEnd,
+        keyIsInputTab,
+        keyIsInputWhitespace,
+        keyIsPunct,
+        keyIsDropAfterLineBreak,
+        keyIsDropUnlessBeforeLineBreak,
+        keyScript,
+        keyMathClass,
+        keyMathFontPosture,
+        keyStretchFactor,
+        // Link keywords
+        keyDestination,
+        // Multi-mode keywords
+        keyMultiModes,
+        // Score keywords
+        keyType,
+        // Page sequence keywords
+        keyLeftHeader,
+        keyCenterHeader,
+        keyRightHeader,
+        keyLeftFooter,
+        keyCenterFooter,
+        keyRightFooter,
+        // Table keywords
+        keyBeforeRowBorder,
+        keyAfterRowBorder,
+        keyBeforeColumnBorder,
+        keyAfterColumnBorder,
+        keyTableWidth,
+        keyColumnNumber,
+        keyRowNumber,
+        keyNColumnsSpanned,
+        keyNRowsSpanned,
+        keyWidth,
+        keyIsStartsRow,
+        keyIsEndsRow,
+        // Grid keywords
+        keyGridNColumns,
+        keyGridNRows,
+        // Radical keyword
+        keyRadical,
     }
 
     public Identifier(StringC name) : base(name)

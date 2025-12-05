@@ -529,6 +529,64 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     {
         unitTable_[name.ToString().ToLowerInvariant()] = value;
     }
+
+    // Address support
+    private AddressObj? addressNone_;
+
+    public AddressObj makeAddressNone()
+    {
+        if (addressNone_ == null)
+        {
+            FOTBuilder.Address addr = new FOTBuilder.Address();
+            addr.type = FOTBuilder.Address.Type.none;
+            addressNone_ = new AddressObj(addr);
+            makePermanent(addressNone_);
+        }
+        return addressNone_;
+    }
+
+    // String conversion
+    public bool convertStringC(ELObj obj, Identifier? ident, Location loc, out StringC result)
+    {
+        Char[]? s;
+        nuint n;
+        if (obj.stringData(out s, out n) && s != null)
+        {
+            result = new StringC(s, n);
+            return true;
+        }
+        result = new StringC();
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    // Character conversion
+    public bool convertCharC(ELObj obj, Identifier? ident, Location loc, out Char result)
+    {
+        result = 0;
+        if (obj.charValue(out result))
+            return true;
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    // Real number conversion
+    public bool convertRealC(ELObj obj, Identifier? ident, Location loc, out double result)
+    {
+        result = 0;
+        if (obj.realValue(out result))
+            return true;
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    // Public ID storage
+    public string? storePublicId(Char[] data, nuint size, Location loc)
+    {
+        if (data == null)
+            return null;
+        return new string(Array.ConvertAll(data, c => (char)c), 0, (int)size);
+    }
 }
 
 // Interpreter error messages

@@ -86,8 +86,8 @@ public class FlowObj : SosofoObj
     }
 
     // Set display-related NIC
-    public static bool setDisplayNIC(ref FOTBuilder.DisplayNIC nic, Identifier? ident,
-                                     ELObj? obj, Location loc, Interpreter interp)
+    public static bool setDisplayNIC<T>(ref T nic, Identifier? ident,
+                                     ELObj? obj, Location loc, Interpreter interp) where T : FOTBuilder.DisplayNIC
     {
         if (ident == null || obj == null)
             return false;
@@ -207,6 +207,7 @@ public class ParagraphFlowObj : CompoundFlowObj
         ParagraphFlowObj c = new ParagraphFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -216,6 +217,45 @@ public class ParagraphFlowObj : CompoundFlowObj
         fotb.startParagraph(nic_);
         base.processInner(context);
         fotb.endParagraph();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        return isDisplayNIC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp)
+    {
+        setDisplayNIC(ref nic_, ident, value, loc, interp);
+    }
+}
+
+// Paragraph break flow object
+public class ParagraphBreakFlowObj : FlowObj
+{
+    private FOTBuilder.ParagraphNIC nic_ = new FOTBuilder.ParagraphNIC();
+
+    public override FlowObj copy(Interpreter interp)
+    {
+        ParagraphBreakFlowObj c = new ParagraphBreakFlowObj();
+        c.setStyle(style());
+        c.nic_ = nic_;
+        return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        context.currentFOTBuilder().paragraphBreak(nic_);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        return isDisplayNIC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp)
+    {
+        setDisplayNIC(ref nic_, ident, value, loc, interp);
     }
 }
 
@@ -229,6 +269,7 @@ public class DisplayGroupFlowObj : CompoundFlowObj
         DisplayGroupFlowObj c = new DisplayGroupFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -238,6 +279,29 @@ public class DisplayGroupFlowObj : CompoundFlowObj
         fotb.startDisplayGroup(nic_);
         base.processInner(context);
         fotb.endDisplayGroup();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key) && key == Identifier.SyntacticKey.keyCoalesceId)
+            return true;
+        return isDisplayNIC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp)
+    {
+        if (setDisplayNIC(ref nic_, ident, value, loc, interp))
+            return;
+        Char[]? s;
+        nuint n;
+        if (value == null || !value.stringData(out s, out n) || s == null)
+        {
+            interp.invalidCharacteristicValue(ident, loc);
+            return;
+        }
+        nic_.hasCoalesceId = true;
+        nic_.coalesceId = new StringC(s, n);
     }
 }
 
@@ -297,6 +361,57 @@ public class ScoreFlowObj : CompoundFlowObj
         base.processInner(context);
         fotb.endScore();
     }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key) && key == Identifier.SyntacticKey.keyType)
+            return true;
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (obj == null)
+            return;
+        Char c;
+        if (obj.charValue(out c))
+        {
+            scoreType_ = ScoreType.TypeChar;
+            charType_ = c;
+            return;
+        }
+        long n;
+        double d;
+        int dim;
+        switch (obj.quantityValue(out n, out d, out dim))
+        {
+            case ELObj.QuantityType.longQuantity:
+                if (dim == 1)
+                {
+                    scoreType_ = ScoreType.TypeLength;
+                    lengthType_ = new FOTBuilder.LengthSpec(n);
+                    return;
+                }
+                break;
+            case ELObj.QuantityType.doubleQuantity:
+                if (dim == 1)
+                {
+                    scoreType_ = ScoreType.TypeLength;
+                    lengthType_ = new FOTBuilder.LengthSpec((long)d);
+                    return;
+                }
+                break;
+            default:
+                break;
+        }
+        FOTBuilder.Symbol sym;
+        if (interp.convertEnumC(obj, ident, loc, out sym))
+        {
+            scoreType_ = ScoreType.TypeSymbol;
+            symbolType_ = sym;
+        }
+    }
 }
 
 // Box flow object
@@ -309,6 +424,7 @@ public class BoxFlowObj : CompoundFlowObj
         BoxFlowObj c = new BoxFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -319,12 +435,57 @@ public class BoxFlowObj : CompoundFlowObj
         base.processInner(context);
         fotb.endBox();
     }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyIsDisplay:
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return isDisplayNIC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (setDisplayNIC(ref nic_, ident, obj, loc, interp))
+            return;
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyIsDisplay:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isDisplay);
+                    return;
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakBeforePriority);
+                    return;
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakAfterPriority);
+                    return;
+                default:
+                    break;
+            }
+        }
+    }
 }
 
 // Simple page sequence flow object
 public class SimplePageSequenceFlowObj : CompoundFlowObj
 {
     public const int nHeaderFooterParts = 6;
+    private const int nPageTypeBits = 2;
     private SosofoObj?[] headerFooter_ = new SosofoObj?[nHeaderFooterParts];
 
     public SimplePageSequenceFlowObj()
@@ -355,6 +516,66 @@ public class SimplePageSequenceFlowObj : CompoundFlowObj
         for (int i = 0; i < nHeaderFooterParts; i++)
             if (headerFooter_[i] != null)
                 c.trace(headerFooter_[i]);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyLeftHeader:
+                case Identifier.SyntacticKey.keyCenterHeader:
+                case Identifier.SyntacticKey.keyRightHeader:
+                case Identifier.SyntacticKey.keyLeftFooter:
+                case Identifier.SyntacticKey.keyCenterFooter:
+                case Identifier.SyntacticKey.keyRightFooter:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (obj == null)
+            return;
+        SosofoObj? sosofo = obj.asSosofo();
+        if (sosofo == null)
+        {
+            interp.invalidCharacteristicValue(ident, loc);
+            return;
+        }
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyLeftHeader:
+                    headerFooter_[((int)FOTBuilder.HF.leftHF | (int)FOTBuilder.HF.headerHF) >> nPageTypeBits] = sosofo;
+                    return;
+                case Identifier.SyntacticKey.keyCenterHeader:
+                    headerFooter_[((int)FOTBuilder.HF.centerHF | (int)FOTBuilder.HF.headerHF) >> nPageTypeBits] = sosofo;
+                    return;
+                case Identifier.SyntacticKey.keyRightHeader:
+                    headerFooter_[((int)FOTBuilder.HF.rightHF | (int)FOTBuilder.HF.headerHF) >> nPageTypeBits] = sosofo;
+                    return;
+                case Identifier.SyntacticKey.keyLeftFooter:
+                    headerFooter_[((int)FOTBuilder.HF.leftHF | (int)FOTBuilder.HF.footerHF) >> nPageTypeBits] = sosofo;
+                    return;
+                case Identifier.SyntacticKey.keyCenterFooter:
+                    headerFooter_[((int)FOTBuilder.HF.centerHF | (int)FOTBuilder.HF.footerHF) >> nPageTypeBits] = sosofo;
+                    return;
+                case Identifier.SyntacticKey.keyRightFooter:
+                    headerFooter_[((int)FOTBuilder.HF.rightHF | (int)FOTBuilder.HF.footerHF) >> nPageTypeBits] = sosofo;
+                    return;
+                default:
+                    break;
+            }
+        }
     }
 }
 
@@ -406,6 +627,38 @@ public class LinkFlowObj : CompoundFlowObj
         base.processInner(context);
         fotb.endLink();
     }
+
+    public override void traceSubObjects(Collector c)
+    {
+        base.traceSubObjects(c);
+        if (addressObj_ != null)
+            c.trace(addressObj_);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key) && key == Identifier.SyntacticKey.keyDestination)
+            return true;
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (obj == null)
+            return;
+        AddressObj? address = obj.asAddress();
+        if (address == null)
+        {
+            if (obj != interp.makeFalse())
+            {
+                interp.invalidCharacteristicValue(ident, loc);
+                return;
+            }
+            address = interp.makeAddressNone();
+        }
+        addressObj_ = address;
+    }
 }
 
 // Character flow object
@@ -447,12 +700,117 @@ public class ExternalGraphicFlowObj : FlowObj
     {
         ExternalGraphicFlowObj c = new ExternalGraphicFlowObj();
         c.setStyle(style());
+        c.nic_ = nic_;
         return c;
     }
 
     public override void processInner(ProcessContext context)
     {
         context.currentFOTBuilder().externalGraphic(nic_);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyIsDisplay:
+                case Identifier.SyntacticKey.keyScale:
+                case Identifier.SyntacticKey.keyMaxWidth:
+                case Identifier.SyntacticKey.keyMaxHeight:
+                case Identifier.SyntacticKey.keyEntitySystemId:
+                case Identifier.SyntacticKey.keyNotationSystemId:
+                case Identifier.SyntacticKey.keyPositionPointX:
+                case Identifier.SyntacticKey.keyPositionPointY:
+                case Identifier.SyntacticKey.keyEscapementDirection:
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return isDisplayNIC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (setDisplayNIC(ref nic_, ident, obj, loc, interp))
+            return;
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyIsDisplay:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isDisplay);
+                    return;
+                case Identifier.SyntacticKey.keyScale:
+                    {
+                        double d;
+                        if (obj.realValue(out d))
+                        {
+                            nic_.scaleType = FOTBuilder.Symbol.symbolFalse;
+                            nic_.scale[0] = d;
+                            nic_.scale[1] = d;
+                        }
+                        else if (obj.asSymbol() != null)
+                        {
+                            interp.convertEnumC(obj, ident, loc, out nic_.scaleType);
+                        }
+                        else
+                        {
+                            PairObj? pair = obj.asPair();
+                            if (pair != null && pair.car()!.realValue(out nic_.scale[0]))
+                            {
+                                pair = pair.cdr()?.asPair();
+                                if (pair != null && pair.car()!.realValue(out nic_.scale[1]) && pair.cdr()!.isNil())
+                                    nic_.scaleType = FOTBuilder.Symbol.symbolFalse;
+                                else
+                                    interp.invalidCharacteristicValue(ident, loc);
+                            }
+                            else
+                                interp.invalidCharacteristicValue(ident, loc);
+                        }
+                    }
+                    return;
+                case Identifier.SyntacticKey.keyMaxWidth:
+                    if (interp.convertLengthSpecC(obj, ident, loc, ref nic_.maxWidth))
+                        nic_.hasMaxWidth = true;
+                    return;
+                case Identifier.SyntacticKey.keyMaxHeight:
+                    if (interp.convertLengthSpecC(obj, ident, loc, ref nic_.maxHeight))
+                        nic_.hasMaxHeight = true;
+                    return;
+                case Identifier.SyntacticKey.keyEntitySystemId:
+                    interp.convertStringC(obj, ident, loc, out nic_.entitySystemId);
+                    return;
+                case Identifier.SyntacticKey.keyNotationSystemId:
+                    interp.convertStringC(obj, ident, loc, out nic_.notationSystemId);
+                    return;
+                case Identifier.SyntacticKey.keyPositionPointX:
+                    interp.convertLengthSpecC(obj, ident, loc, ref nic_.positionPointX);
+                    return;
+                case Identifier.SyntacticKey.keyPositionPointY:
+                    interp.convertLengthSpecC(obj, ident, loc, ref nic_.positionPointY);
+                    return;
+                case Identifier.SyntacticKey.keyEscapementDirection:
+                    interp.convertEnumC(obj, ident, loc, out nic_.escapementDirection);
+                    return;
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakBeforePriority);
+                    return;
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakAfterPriority);
+                    return;
+                default:
+                    break;
+            }
+        }
     }
 }
 
@@ -465,6 +823,7 @@ public class RuleFlowObj : FlowObj
     {
         RuleFlowObj c = new RuleFlowObj();
         c.setStyle(style());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -474,10 +833,65 @@ public class RuleFlowObj : FlowObj
     {
         context.currentFOTBuilder().rule(nic_);
     }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyOrientation:
+                case Identifier.SyntacticKey.keyLength:
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return isDisplayNIC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (setDisplayNIC(ref nic_, ident, obj, loc, interp))
+            return;
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyOrientation:
+                    interp.convertEnumC(obj, ident, loc, out nic_.orientation);
+                    return;
+                case Identifier.SyntacticKey.keyLength:
+                    if (interp.convertLengthSpecC(obj, ident, loc, ref nic_.length))
+                        nic_.hasLength = true;
+                    return;
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakBeforePriority);
+                    return;
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakAfterPriority);
+                    return;
+                default:
+                    break;
+            }
+        }
+    }
+
+    public new bool ruleStyle(ProcessContext context, out StyleObj? style)
+    {
+        style = base.style();
+        return true;
+    }
 }
 
 // Leader flow object
-public class LeaderFlowObj : FlowObj
+public class LeaderFlowObj : CompoundFlowObj
 {
     private FOTBuilder.LeaderNIC nic_ = new FOTBuilder.LeaderNIC();
 
@@ -485,6 +899,8 @@ public class LeaderFlowObj : FlowObj
     {
         LeaderFlowObj c = new LeaderFlowObj();
         c.setStyle(style());
+        c.setContent(content());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -492,7 +908,51 @@ public class LeaderFlowObj : FlowObj
     {
         FOTBuilder fotb = context.currentFOTBuilder();
         fotb.startLeader(nic_);
+        base.processInner(context);
         fotb.endLeader();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyLength:
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyLength:
+                    if (interp.convertLengthSpecC(obj, ident, loc, ref nic_.length))
+                        nic_.hasLength = true;
+                    return;
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakBeforePriority);
+                    return;
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakAfterPriority);
+                    return;
+                default:
+                    break;
+            }
+        }
     }
 }
 
@@ -506,6 +966,7 @@ public class LineFieldFlowObj : CompoundFlowObj
         LineFieldFlowObj c = new LineFieldFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -515,6 +976,44 @@ public class LineFieldFlowObj : CompoundFlowObj
         fotb.startLineField(nic_);
         base.processInner(context);
         fotb.endLineField();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakBeforePriority);
+                    return;
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakAfterPriority);
+                    return;
+                default:
+                    break;
+            }
+        }
     }
 }
 
