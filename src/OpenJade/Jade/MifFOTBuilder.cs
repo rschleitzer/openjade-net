@@ -4010,6 +4010,7 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void currentNodePageNumber(NodePtr node)
     {
+        // TODO: Requires CrossRefInfo.CrossRefType and ElementSet.TReference enums
         throw new NotImplementedException();
     }
 
