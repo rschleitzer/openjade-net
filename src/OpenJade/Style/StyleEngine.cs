@@ -165,9 +165,35 @@ public class ProcessContextImpl : ProcessContext
 
         currentFOTBuilder().startNode(node, mode.name());
 
-        // For simplicity, just process children
-        // Full implementation would find matching rules and evaluate them
-        processChildren(mode);
+        // Find matching rule and execute it
+        var context = new Pattern.MatchContext();
+        var rule = mode.findMatch(node, context, vm_.interp, ref matchSpecificity_);
+        if (rule != null)
+        {
+            // Get the action's instruction and sosofo
+            InsnPtr? insn;
+            SosofoObj? sosofo;
+            rule.action().get(out insn, out sosofo);
+
+            if (sosofo != null)
+            {
+                // Use pre-compiled sosofo directly
+                sosofo.process(this);
+            }
+            else if (insn != null)
+            {
+                // Evaluate the instruction to get a sosofo
+                ELObj? result = vm_.eval(insn.pointer(), null, null);
+                SosofoObj? resultSosofo = result?.asSosofo();
+                if (resultSosofo != null)
+                    resultSosofo.process(this);
+            }
+        }
+        else
+        {
+            // No matching rule - process children by default
+            processChildren(mode);
+        }
 
         currentFOTBuilder().endNode();
         matchSpecificity_ = saveSpecificity;
@@ -257,9 +283,104 @@ public class ProcessContextImpl : ProcessContext
 
     public override void processChildrenTrim(ProcessingMode? mode)
     {
-        // Simplified: just process children without trimming for now
-        // Full implementation would trim leading/trailing whitespace
-        processChildren(mode);
+        NodePtr origNode = vm_.currentNode;
+        if (vm_.currentNode.assignFirstChild() == AccessResult.accessOK)
+        {
+            bool atStart = true;
+            do
+            {
+                NodePtr curNode = vm_.currentNode;
+                GroveString str = new GroveString();
+                if (curNode.charChunk(null, str) == AccessResult.accessOK)
+                {
+                    Char[] data = str.data() ?? Array.Empty<Char>();
+                    nuint len = str.size();
+                    nuint startIdx = 0;
+
+                    if (atStart)
+                    {
+                        // Skip leading whitespace
+                        for (; startIdx < len; startIdx++)
+                        {
+                            if (!isWhiteSpace(data[startIdx]))
+                                break;
+                        }
+                        if (startIdx >= len)
+                        {
+                            // Entire chunk was whitespace
+                            continue;
+                        }
+                        atStart = false;
+                    }
+
+                    if (len > 0)
+                    {
+                        // Check if we need to trim trailing whitespace
+                        if (isWhiteSpace(data[len - 1]) && onlyWhiteSpaceFollows(curNode))
+                        {
+                            nuint endIdx = len;
+                            for (; endIdx > startIdx; endIdx--)
+                            {
+                                if (!isWhiteSpace(data[endIdx - 1]))
+                                    break;
+                            }
+                            if (endIdx > startIdx)
+                                currentFOTBuilder().charactersFromNode(curNode, data, startIdx, endIdx - startIdx);
+                            return;
+                        }
+                        currentFOTBuilder().charactersFromNode(curNode, data, startIdx, len - startIdx);
+                    }
+                }
+                else
+                {
+                    GroveString gi = new GroveString();
+                    if (atStart && vm_.currentNode.getGi(gi) == AccessResult.accessOK)
+                        atStart = false;
+                    processNode(vm_.currentNode, mode);
+                }
+            } while (vm_.currentNode.assignNextChunkSibling() == AccessResult.accessOK);
+        }
+        else
+        {
+            NodePtr docElement = new NodePtr();
+            if (origNode.getDocumentElement(ref docElement) == AccessResult.accessOK)
+                processNode(docElement, mode);
+        }
+        vm_.currentNode = origNode;
+    }
+
+    private bool isWhiteSpace(Char c)
+    {
+        // Check if character is whitespace per DSSSL semantics
+        return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+    }
+
+    private bool onlyWhiteSpaceFollows(NodePtr node)
+    {
+        NodePtr tem = new NodePtr();
+        if (node.nextChunkSibling(ref tem) == AccessResult.accessOK)
+        {
+            do
+            {
+                GroveString str = new GroveString();
+                if (tem.charChunk(null, str) == AccessResult.accessOK)
+                {
+                    Char[] data = str.data() ?? Array.Empty<Char>();
+                    for (nuint i = 0; i < str.size(); i++)
+                    {
+                        if (!isWhiteSpace(data[i]))
+                            return false;
+                    }
+                }
+                else
+                {
+                    GroveString gi = new GroveString();
+                    if (tem.getGi(gi) == AccessResult.accessOK)
+                        return false;
+                }
+            } while (tem.assignNextChunkSibling() == AccessResult.accessOK);
+        }
+        return true;
     }
 
     public override void startFlowObj()

@@ -477,6 +477,17 @@ public class FOTBuilder
 
     public virtual void characters(Char[] data, nuint size) { }
     public virtual void charactersFromNode(NodePtr nd, Char[] data, nuint size) { characters(data, size); }
+    public virtual void charactersFromNode(NodePtr nd, Char[] data, nuint start, nuint length)
+    {
+        if (start == 0)
+            characters(data, length);
+        else
+        {
+            Char[] subset = new Char[length];
+            Array.Copy(data, (int)start, subset, 0, (int)length);
+            characters(subset, length);
+        }
+    }
     public virtual void character(CharacterNIC nic) { atomic(); }
     public virtual void paragraphBreak(ParagraphNIC nic) { atomic(); }
     public virtual void externalGraphic(ExternalGraphicNIC nic) { atomic(); }

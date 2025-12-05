@@ -1490,6 +1490,20 @@ public class NodePtr
         return node.children(ref ptr);
     }
 
+    public AccessResult charChunk(SdataMapper? mapper, GroveString str)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.charChunk(mapper ?? new SdataMapper(), ref str);
+    }
+
+    public AccessResult nextChunkSibling(ref NodePtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.nextChunkSibling(ref ptr);
+    }
+
     private void addRef() { if (node != null) node.addRef(); }
     private void release() { if (node != null) node.release(); }
 }
