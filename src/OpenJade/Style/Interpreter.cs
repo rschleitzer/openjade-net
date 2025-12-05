@@ -807,4 +807,9 @@ public enum InterpreterMessages
     tableRowOutsideTable,
     tableCellOutsideTable,
     invalidCharacteristicValue,
+    // DSSSL spec messages
+    missingPart,
+    useLoop,
+    specNotArc,
+    noParts,
 }
