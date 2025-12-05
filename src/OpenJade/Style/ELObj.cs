@@ -105,6 +105,8 @@ public class ELObj : Collector.Object
     public virtual BoxObj? asBox() { return null; }
     public virtual VectorObj? asVector() { return null; }
     public virtual LanguageObj? asLanguage() { return null; }
+    public virtual LengthObj? asLength() { return null; }
+    public virtual LengthSpecObj? asLengthSpec() { return null; }
     public virtual bool charValue(out Char c) { c = 0; return false; }
     public virtual bool stringData(out Char[]? data, out nuint size) { data = null; size = 0; return false; }
     public virtual void print(Interpreter interp, OutputCharStream os)
@@ -259,6 +261,7 @@ public class Identifier : Named
 {
     private StringC name_;
     private ELObj? value_;
+    private Expression? expression_;  // Uncompiled expression for lazy evaluation
     private uint defPart_;
     private Location defLoc_;
     private bool isDefined_;
@@ -273,12 +276,48 @@ public class Identifier : Named
         keyUse,
         keyLabel,
         keyContentMap,
+        // Top-level forms
+        define,
+        defineUnit,
+        element,
+        orElement,
+        defaultEntity,
+        root,
+        id,
+        mode,
+        declareInitialValue,
+        declareCharacteristic,
+        declareFlowObjectClass,
+        declareDefaultLanguage,
+        // Expression keywords
+        quote,
+        quasiquote,
+        unquote,
+        unquoteSplicing,
+        ifKey,
+        cond,
+        caseKey,
+        and,
+        or,
+        let,
+        letStar,
+        letrec,
+        lambda,
+        begin,
+        set,
+        make,
+        style,
+        withMode,
+        elseKey,
+        arrowKey,
+        external,
     }
 
     public Identifier(StringC name) : base(name)
     {
         name_ = name;
         value_ = null;
+        expression_ = null;
         defPart_ = 0;
         defLoc_ = new Location();
         isDefined_ = false;
@@ -305,6 +344,17 @@ public class Identifier : Named
         isDefined_ = true;
         evaluated_ = (value != null);
     }
+
+    public void setExpression(Expression? expr, uint part, Location loc)
+    {
+        defPart_ = part;
+        defLoc_ = loc;
+        expression_ = expr;
+        isDefined_ = true;
+        evaluated_ = false;
+    }
+
+    public Expression? expression() { return expression_; }
 
     public ELObj? computeValue(bool force, Interpreter interp)
     {
@@ -812,6 +862,10 @@ public class LengthObj : ELObj
 
     public LengthObj(long units) { n_ = units; }
 
+    public long value() { return n_; }
+
+    public override LengthObj? asLength() { return this; }
+
     public override bool lengthValue(out long value)
     {
         value = n_;
@@ -932,6 +986,8 @@ public class LengthSpec
         val_[(int)u] = d;
     }
 
+    public double[] val() { return val_; }
+
     public void add(LengthSpec other)
     {
         for (int i = 0; i < nVals; i++)
@@ -983,13 +1039,32 @@ public class LengthSpec
 public class LengthSpecObj : ELObj
 {
     private LengthSpec lengthSpec_;
+    private FOTBuilder.LengthSpec? fotLengthSpec_;
 
     public LengthSpecObj(LengthSpec spec)
     {
         lengthSpec_ = spec;
+        fotLengthSpec_ = null;
+    }
+
+    public LengthSpecObj(FOTBuilder.LengthSpec spec)
+    {
+        // Convert FOTBuilder.LengthSpec to ELObj.LengthSpec
+        lengthSpec_ = new LengthSpec(spec.length);
+        fotLengthSpec_ = spec;
     }
 
     public override LengthSpec? lengthSpec() { return lengthSpec_; }
+
+    public override LengthSpecObj? asLengthSpec() { return this; }
+
+    public FOTBuilder.LengthSpec lengthSpecFOT()
+    {
+        if (fotLengthSpec_.HasValue)
+            return fotLengthSpec_.Value;
+        // Convert ELObj.LengthSpec to FOTBuilder.LengthSpec
+        return new FOTBuilder.LengthSpec((long)lengthSpec_.val()[0]);
+    }
 }
 
 public class DisplaySpaceObj : ELObj
@@ -1125,6 +1200,8 @@ public abstract class SosofoObj : ELObj
 {
     public override SosofoObj? asSosofo() { return this; }
     public abstract void process(ProcessContext context);
+    public virtual bool isRule() { return false; }
+    public virtual bool tableBorderStyle(out StyleObj? style) { style = null; return false; }
 }
 
 public class AppendSosofoObj : SosofoObj
@@ -1148,6 +1225,8 @@ public class AppendSosofoObj : SosofoObj
 public class ColorObj : ELObj
 {
     public override ColorObj? asColor() { return this; }
+    public virtual void set(FOTBuilder fotb) { }
+    public virtual void setBackground(FOTBuilder fotb) { }
 }
 
 public class ColorSpaceObj : ELObj
@@ -1166,6 +1245,11 @@ public class NodeListObj : ELObj
     public override NodeListObj? asNodeList() { return this; }
     public virtual NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp) { return null; }
     public virtual NodeListObj nodeListRest(EvalContext ctx, Interpreter interp) { return new EmptyNodeListObj(); }
+    public virtual NodeListObj nodeListChunkRest(EvalContext ctx, Interpreter interp, ref bool chunk)
+    {
+        chunk = true;
+        return nodeListRest(ctx, interp);
+    }
     public virtual NodeListObj nodeListNoOrder(Interpreter interp) { return this; }
 }
 

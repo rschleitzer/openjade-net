@@ -483,6 +483,8 @@ public class FOTBuilder
     public virtual void rule(RuleNIC nic) { atomic(); }
     public virtual void alignmentPoint() { atomic(); }
     public virtual void formattingInstruction(StringC data) { atomic(); }
+    public virtual void pageNumber() { atomic(); }
+    public virtual void currentNodePageNumber(NodePtr node) { atomic(); }
 
     public virtual void startSequence() { start(); }
     public virtual void endSequence() { end(); }

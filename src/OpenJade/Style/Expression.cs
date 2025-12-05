@@ -525,6 +525,52 @@ public class OrExpression : Expression
     }
 }
 
+// And expression
+public class AndExpression : Expression
+{
+    private Expression test1_;
+    private Expression test2_;
+
+    public AndExpression(Expression test1, Expression test2, Location loc) : base(loc)
+    {
+        test1_ = test1;
+        test2_ = test2;
+    }
+
+    public override bool canEval(bool maybeCall)
+    {
+        return test1_.canEval(maybeCall) && test2_.canEval(maybeCall);
+    }
+
+    public override void optimize(Interpreter interp, Environment env, ref Expression expr)
+    {
+        test1_.optimize(interp, env, ref test1_);
+        ELObj? obj = test1_.constantValue();
+        if (obj != null)
+        {
+            if (!obj.isTrue())
+                expr = new ConstantExpression(interp.makeFalse(), location());
+            else
+            {
+                expr = test2_;
+                expr.optimize(interp, env, ref expr);
+            }
+        }
+    }
+
+    public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
+    {
+        return test1_.compile(interp, env, stackPos,
+            new InsnPtr(new AndInsn(optimizeCompile(test2_, interp, env, stackPos, next), next)));
+    }
+
+    public override void markBoundVars(BoundVarList vars, bool shared)
+    {
+        test1_.markBoundVars(vars, shared);
+        test2_.markBoundVars(vars, shared);
+    }
+}
+
 // Call expression
 public class CallExpression : Expression
 {

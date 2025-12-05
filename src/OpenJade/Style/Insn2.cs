@@ -455,45 +455,82 @@ public class SetNonInheritedCsSosofoObj : SosofoObj
         node_ = node;
     }
 
+    public ELObj? resolve(ProcessContext context)
+    {
+        VM vm = context.vm();
+        using var cns = new CurrentNodeSetter(node_, null, vm);
+        StyleStack? saveStyleStack = vm.styleStack;
+        vm.styleStack = context.currentStyleStack();
+        uint saveSpecLevel = vm.specLevel;
+        vm.specLevel = vm.styleStack?.level() ?? 0;
+        var dep = new System.Collections.Generic.List<nuint>();
+        vm.actualDependencies = dep;
+        ELObj? obj = vm.eval(code_?.pointer(), display_, flowObj_.copy(vm.interp));
+        vm.styleStack = saveStyleStack;
+        vm.specLevel = saveSpecLevel;
+        if (vm.interp.isError(obj))
+            return null;
+        return obj;
+    }
+
     public override void process(ProcessContext context)
     {
-        // TODO: implement
-        throw new NotImplementedException();
+        context.startFlowObj();
+        uint flags = 0;
+        flowObj_.pushStyle(context, ref flags);
+        ELObj? obj = resolve(context);
+        if (obj != null)
+            ((FlowObj)obj).processInner(context);
+        flowObj_.popStyle(context, flags);
+        context.endFlowObj();
+    }
+
+    public virtual bool isCharacter()
+    {
+        return flowObj_.isCharacter();
+    }
+
+    public virtual bool isRule()
+    {
+        return flowObj_.isRule();
     }
 }
 
 public class ProcessChildrenSosofoObj : SosofoObj
 {
-    private ProcessingMode processingMode_;
+    private ProcessingMode? mode_;
 
-    public ProcessChildrenSosofoObj(ProcessingMode mode)
+    public ProcessChildrenSosofoObj(ProcessingMode? mode)
     {
-        processingMode_ = mode;
+        mode_ = mode;
     }
 
     public override void process(ProcessContext context)
     {
-        context.processChildren(processingMode_);
+        NodePtr node = context.vm().currentNode;
+        context.processChildren(mode_);
+        context.vm().currentNode = node;
     }
 }
 
 public class LabelSosofoObj : SosofoObj
 {
-    private SymbolObj sym_;
+    private SymbolObj label_;
     private Location loc_;
     private SosofoObj content_;
 
-    public LabelSosofoObj(SymbolObj sym, Location loc, SosofoObj content)
+    public LabelSosofoObj(SymbolObj label, Location loc, SosofoObj content)
     {
-        sym_ = sym;
+        label_ = label;
         loc_ = loc;
         content_ = content;
     }
 
     public override void process(ProcessContext context)
     {
-        // TODO: implement
-        throw new NotImplementedException();
+        context.startConnection(label_, loc_);
+        content_.process(context);
+        context.endConnection();
     }
 }
 
@@ -512,8 +549,9 @@ public class ContentMapSosofoObj : SosofoObj
 
     public override void process(ProcessContext context)
     {
-        // TODO: implement
-        throw new NotImplementedException();
+        ((ProcessContextImpl)context).startMapContent(contentMap_, loc_);
+        content_.process(context);
+        ((ProcessContextImpl)context).endMapContent();
     }
 }
 
@@ -532,7 +570,7 @@ public class LiteralSosofoObj : SosofoObj
         Char[]? s = null;
         nuint n = 0;
         if (str_.stringData(out s, out n))
-            context.characters(s!, 0, n);
+            context.currentFOTBuilder().characters(s!, n);
     }
 }
 
@@ -548,8 +586,9 @@ public class ProcessChildrenTrimSosofoObj : SosofoObj
 
     public override void process(ProcessContext context)
     {
-        // TODO: implement trim logic
-        throw new NotImplementedException();
+        NodePtr node = context.vm().currentNode;
+        context.processChildrenTrim(mode_);
+        context.vm().currentNode = node;
     }
 }
 
@@ -565,8 +604,125 @@ public class NextMatchSosofoObj : SosofoObj
 
     public override void process(ProcessContext context)
     {
-        // TODO: implement
-        throw new NotImplementedException();
+        context.nextMatch(style_);
+    }
+}
+
+// ProcessNodeSosofoObj - processes a specific node
+public class ProcessNodeSosofoObj : SosofoObj
+{
+    private NodePtr node_;
+    private ProcessingMode? mode_;
+
+    public ProcessNodeSosofoObj(NodePtr node, ProcessingMode? mode)
+    {
+        node_ = node;
+        mode_ = mode;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        context.processNode(node_, mode_);
+    }
+}
+
+// ProcessNodeListSosofoObj - processes a node list
+public class ProcessNodeListSosofoObj : SosofoObj
+{
+    private NodeListObj nodeList_;
+    private ProcessingMode? mode_;
+
+    public ProcessNodeListSosofoObj(NodeListObj nodeList, ProcessingMode? mode)
+    {
+        nodeList_ = nodeList;
+        mode_ = mode;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        NodeListObj nl = nodeList_;
+        Interpreter interp = context.vm().interp;
+        for (;;)
+        {
+            NodePtr? node = nl.nodeListFirst(context.vm(), interp);
+            if (node == null)
+                break;
+            bool chunk = true;
+            nl = nl.nodeListChunkRest(context.vm(), interp, ref chunk);
+            ((ProcessContextImpl)context).processNodeSafe(node, mode_, chunk);
+        }
+    }
+}
+
+// CurrentNodePageNumberSosofoObj - outputs page number of a node
+public class CurrentNodePageNumberSosofoObj : SosofoObj
+{
+    private NodePtr node_;
+
+    public CurrentNodePageNumberSosofoObj(NodePtr node)
+    {
+        node_ = node;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        context.currentFOTBuilder().currentNodePageNumber(node_);
+    }
+}
+
+// PageNumberSosofoObj - outputs current page number
+public class PageNumberSosofoObj : SosofoObj
+{
+    public override void process(ProcessContext context)
+    {
+        context.currentFOTBuilder().pageNumber();
+    }
+}
+
+// DiscardLabeledSosofoObj - discards labeled content
+public class DiscardLabeledSosofoObj : SosofoObj
+{
+    private SymbolObj? label_;
+    private SosofoObj content_;
+
+    public DiscardLabeledSosofoObj(SymbolObj? label, SosofoObj content)
+    {
+        label_ = label;
+        content_ = content;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        ((ProcessContextImpl)context).startDiscardLabeled(label_);
+        content_.process(context);
+        ((ProcessContextImpl)context).endDiscardLabeled();
+    }
+}
+
+// PageTypeSosofoObj - conditional sosofo based on page type
+public class PageTypeSosofoObj : SosofoObj
+{
+    private uint pageTypeFlag_;
+    private SosofoObj match_;
+    private SosofoObj noMatch_;
+
+    public PageTypeSosofoObj(uint pageTypeFlag, SosofoObj match, SosofoObj noMatch)
+    {
+        pageTypeFlag_ = pageTypeFlag;
+        match_ = match;
+        noMatch_ = noMatch;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        uint pageType;
+        if (((ProcessContextImpl)context).getPageType(out pageType))
+        {
+            if ((pageType & pageTypeFlag_) != 0)
+                match_.process(context);
+            else
+                noMatch_.process(context);
+        }
     }
 }
 

@@ -29,15 +29,35 @@ public class FlowObj : SosofoObj
     public virtual bool hasPseudoNonInheritedC(Identifier? ident) { return false; }
     public virtual void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp) { }
     public virtual bool isCharacter() { return false; }
+    public virtual bool isRule() { return false; }
     public virtual CompoundFlowObj? asCompoundFlowObj() { return null; }
+
+    public virtual void pushStyle(ProcessContext context, ref uint flags)
+    {
+        if (style_ != null)
+        {
+            context.currentStyleStack().push(style_, context.vm(), context.currentFOTBuilder());
+            flags |= 1;
+        }
+    }
+
+    public virtual void popStyle(ProcessContext context, uint flags)
+    {
+        if ((flags & 1) != 0)
+            context.currentStyleStack().pop();
+    }
 
     public override void process(ProcessContext context)
     {
-        // Default: process as atomic flow object
+        context.startFlowObj();
+        uint flags = 0;
+        pushStyle(context, ref flags);
         processInner(context);
+        popStyle(context, flags);
+        context.endFlowObj();
     }
 
-    protected virtual void processInner(ProcessContext context)
+    public virtual void processInner(ProcessContext context)
     {
         // To be overridden by concrete flow objects
     }
@@ -63,10 +83,8 @@ public class CompoundFlowObj : FlowObj
         return c;
     }
 
-    public override void process(ProcessContext context)
+    public override void processInner(ProcessContext context)
     {
-        // Process compound flow object
-        processInner(context);
         if (content_ != null)
             content_.process(context);
     }

@@ -212,6 +212,189 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         string objStr = obj?.ToString() ?? "null";
         message(MessageType.Severity.error, new Location(), $"{msg}: argument {argIndex}: {objStr}");
     }
+
+    // Conversion methods for inherited characteristics
+    public LengthSpecObj? makeLengthSpec(FOTBuilder.LengthSpec ls)
+    {
+        return new LengthSpecObj(ls);
+    }
+
+    public SymbolObj? cValueSymbol(FOTBuilder.Symbol sym)
+    {
+        // Map FOTBuilder.Symbol to SymbolObj
+        return makeSymbol(makeStringC(sym.ToString().Replace("symbol", "")));
+    }
+
+    public bool convertBooleanC(ELObj obj, Identifier? ident, Location loc, out bool result)
+    {
+        result = false;
+        if (obj == makeTrue())
+        {
+            result = true;
+            return true;
+        }
+        if (obj == makeFalse())
+        {
+            result = false;
+            return true;
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertLengthC(ELObj obj, Identifier? ident, Location loc, out long result)
+    {
+        result = 0;
+        LengthObj? l = obj.asLength();
+        if (l != null)
+        {
+            result = l.value();
+            return true;
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertIntegerC(ELObj obj, Identifier? ident, Location loc, out long result)
+    {
+        result = 0;
+        long n;
+        if (obj.exactIntegerValue(out n))
+        {
+            result = n;
+            return true;
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertOptPositiveIntegerC(ELObj obj, Identifier? ident, Location loc, out long result)
+    {
+        result = 0;
+        if (obj == makeFalse())
+            return true;
+        long n;
+        if (obj.exactIntegerValue(out n) && n > 0)
+        {
+            result = n;
+            return true;
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertLengthSpecC(ELObj obj, Identifier? ident, Location loc, ref FOTBuilder.LengthSpec result)
+    {
+        LengthObj? l = obj.asLength();
+        if (l != null)
+        {
+            result = new FOTBuilder.LengthSpec(l.value());
+            return true;
+        }
+        LengthSpecObj? ls = obj.asLengthSpec();
+        if (ls != null)
+        {
+            result = ls.lengthSpecFOT();
+            return true;
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertOptLengthSpecC(ELObj obj, Identifier? ident, Location loc, ref FOTBuilder.OptLengthSpec result)
+    {
+        if (obj == makeFalse())
+        {
+            result.hasLength = false;
+            return true;
+        }
+        if (convertLengthSpecC(obj, ident, loc, ref result.length))
+        {
+            result.hasLength = true;
+            return true;
+        }
+        return false;
+    }
+
+    public bool convertEnumC(ELObj obj, Identifier? ident, Location loc, out FOTBuilder.Symbol result)
+    {
+        result = FOTBuilder.Symbol.symbolFalse;
+        SymbolObj? sym = obj.asSymbol();
+        if (sym == null)
+        {
+            invalidCharacteristicValue(ident, loc);
+            return false;
+        }
+        // Map symbol name to FOTBuilder.Symbol
+        string name = sym.name().ToString().ToLower().Replace("-", "");
+        if (Enum.TryParse<FOTBuilder.Symbol>("symbol" + name, true, out result))
+            return true;
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertPublicIdC(ELObj obj, Identifier? ident, Location loc, out string? result)
+    {
+        result = null;
+        if (obj == makeFalse())
+            return true;
+        Char[]? s;
+        nuint n;
+        if (obj.stringData(out s, out n) && s != null)
+        {
+            result = new string(Array.ConvertAll(s, c => (char)c), 0, (int)n);
+            return true;
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertLetter2C(ELObj obj, Identifier? ident, Location loc, out ushort result)
+    {
+        result = 0;
+        if (obj == makeFalse())
+            return true;
+        SymbolObj? sym = obj.asSymbol();
+        if (sym != null)
+        {
+            StringC name = sym.name();
+            if (name.size() == 2)
+            {
+                result = (ushort)((name[0] << 8) | name[1]);
+                return true;
+            }
+        }
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertColorC(ELObj obj, Identifier? ident, Location loc, out ColorObj? result)
+    {
+        result = obj.asColor();
+        if (result != null)
+            return true;
+        invalidCharacteristicValue(ident, loc);
+        return false;
+    }
+
+    public bool convertOptColorC(ELObj obj, Identifier? ident, Location loc, out ColorObj? result)
+    {
+        result = null;
+        if (obj == makeFalse())
+            return true;
+        return convertColorC(obj, ident, loc, out result);
+    }
+
+    public void invalidCharacteristicValue(Identifier? ident, Location loc)
+    {
+        string name = ident?.name().ToString() ?? "unknown";
+        message(MessageType.Severity.error, loc, $"Invalid value for characteristic {name}");
+    }
+
+    public void makeReadOnly(ELObj? obj)
+    {
+        // Mark object as read-only (GC semantics - in C# we don't need to do anything special)
+    }
 }
 
 // Interpreter error messages
@@ -233,5 +416,15 @@ public enum InterpreterMessages
     notAKeyword,
     outOfRange,
     divideByZero,
-    errorProc
+    errorProc,
+    notInCharacteristicValue,
+    // Parser messages
+    unknownTopLevelForm,
+    badTopLevelForm,
+    badDeclaration,
+    badExpression,
+    unexpectedToken,
+    unterminatedString,
+    invalidCharName,
+    invalidCharNumber,
 }
