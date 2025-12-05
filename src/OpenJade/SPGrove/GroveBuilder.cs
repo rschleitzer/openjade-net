@@ -2213,6 +2213,63 @@ public class ElementAttributeOrigin : AttributeOrigin
     }
 }
 
+// Element type attribute def origin - provides attribute definition context from element type
+public class ElementTypeAttributeDefOrigin : AttributeDefOrigin
+{
+    protected ElementType elementType_;
+
+    public ElementTypeAttributeDefOrigin(ElementType elementType) : base(0)
+    {
+        elementType_ = elementType;
+    }
+
+    public override AttributeDefinitionList? attDefList()
+    {
+        return elementType_.attributeDefTemp();
+    }
+
+    public override AccessResult makeAttributeDefNode(GroveImpl grove, ref NodePtr ptr, nuint attributeDefIdx)
+    {
+        ptr.assign(new ElementTypeAttributeDefNode(grove, elementType_, attributeDefIdx));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult makeAttributeDefList(GroveImpl grove, ref NodeListPtr ptr, nuint firstAttDefIdx)
+    {
+        ptr.assign(new ElementTypeAttributeDefsNodeList(grove, elementType_, firstAttDefIdx));
+        return AccessResult.accessOK;
+    }
+
+    public override Node makeCdataAttributeValueNode(
+        GroveImpl grove,
+        AttributeValue? value,
+        nuint attIndex,
+        TextIter iter,
+        nuint charIndex = 0)
+    {
+        return new ElementTypeCdataAttributeValueNode(grove, value, attIndex, iter, charIndex, elementType_);
+    }
+
+    public override Node makeAttributeValueTokenNode(
+        GroveImpl grove,
+        TokenizedAttributeValue? value,
+        nuint attIndex,
+        nuint tokenIndex)
+    {
+        return new ElementTypeAttributeValueTokenNode(grove, value, attIndex, tokenIndex, elementType_);
+    }
+
+    public override Node makeOriginNode(GroveImpl grove, nuint attIndex)
+    {
+        return new ElementTypeAttributeDefNode(grove, elementType_, attIndex_);
+    }
+
+    public override object? attributeOriginId()
+    {
+        return elementType_;
+    }
+}
+
 // Element attribute assignment node
 public class ElementAttributeAsgnNode : AttributeAsgnNode
 {
@@ -2264,11 +2321,10 @@ public class ElementAttributeAsgnNode : AttributeAsgnNode
 
     public override AccessResult makeAttributeDefNode(GroveImpl grove, ref NodePtr ptr, nuint attributeDefIdx)
     {
-        // TODO: Implement ElementTypeAttributeDefNode
         if (chunk_.elementType() == null)
             return AccessResult.accessNull;
-        // ptr.assign(new ElementTypeAttributeDefNode(grove, chunk_.elementType()!, attributeDefIdx));
-        return AccessResult.accessNull;
+        ptr.assign(new ElementTypeAttributeDefNode(grove, chunk_.elementType()!, attributeDefIdx));
+        return AccessResult.accessOK;
     }
 }
 
@@ -2863,9 +2919,8 @@ public abstract class EntityNodeBase : BaseNode
         var x = entity_.asExternalEntity();
         if (x == null)
             return AccessResult.accessNull;
-        // TODO: Implement EntityExternalIdNode
-        // ptr.assign(new EntityExternalIdNode(grove(), x));
-        return AccessResult.accessNull;
+        ptr.assign(new EntityExternalIdNode(grove(), x));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getNotation(ref NodePtr ptr)
@@ -3108,9 +3163,8 @@ public class NotationNode : BaseNode
     {
         if (notation_ == null)
             return AccessResult.accessNull;
-        // TODO: Implement NotationExternalIdNode
-        // ptr.assign(new NotationExternalIdNode(grove(), notation_));
-        return AccessResult.accessNull;
+        ptr.assign(new NotationExternalIdNode(grove(), notation_));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getAttributeDefs(ref NamedNodeListPtr ptr)
@@ -3267,6 +3321,58 @@ public abstract class ExternalIdNode : BaseNode
     }
 }
 
+public class EntityExternalIdNode : ExternalIdNode
+{
+    private ExternalEntity entity_;
+
+    public EntityExternalIdNode(GroveImpl grove, ExternalEntity entity) : base(grove)
+    {
+        entity_ = entity;
+    }
+
+    public override ExternalId externalId()
+    {
+        return entity_.externalId();
+    }
+
+    public override AccessResult getOrigin(ref NodePtr ptr)
+    {
+        ptr.assign(new EntityNode(grove(), entity_));
+        return AccessResult.accessOK;
+    }
+
+    public override uint hash()
+    {
+        return secondHash((uint)entity_.GetHashCode());
+    }
+}
+
+public class NotationExternalIdNode : ExternalIdNode
+{
+    private Notation notation_;
+
+    public NotationExternalIdNode(GroveImpl grove, Notation notation) : base(grove)
+    {
+        notation_ = notation;
+    }
+
+    public override ExternalId externalId()
+    {
+        return notation_.externalId();
+    }
+
+    public override AccessResult getOrigin(ref NodePtr ptr)
+    {
+        ptr.assign(new NotationNode(grove(), notation_));
+        return AccessResult.accessOK;
+    }
+
+    public override uint hash()
+    {
+        return secondHash((uint)notation_.GetHashCode());
+    }
+}
+
 public class DocumentTypeNode : BaseNode
 {
     private Dtd? dtd_;
@@ -3294,27 +3400,24 @@ public class DocumentTypeNode : BaseNode
     {
         if (dtd_ == null)
             return AccessResult.accessNull;
-        // TODO: Implement GeneralEntitiesNamedNodeList
-        // ptr.assign(new GeneralEntitiesNamedNodeList(grove(), dtd_));
-        return AccessResult.accessNull;
+        ptr.assign(new GeneralEntitiesNamedNodeList(grove(), dtd_));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getNotations(ref NamedNodeListPtr ptr)
     {
         if (dtd_ == null)
             return AccessResult.accessNull;
-        // TODO: Implement NotationsNamedNodeList
-        // ptr.assign(new NotationsNamedNodeList(grove(), dtd_));
-        return AccessResult.accessNull;
+        ptr.assign(new NotationsNamedNodeList(grove(), dtd_));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getElementTypes(ref NamedNodeListPtr ptr)
     {
         if (dtd_ == null)
             return AccessResult.accessNull;
-        // TODO: Implement ElementTypesNamedNodeList
-        // ptr.assign(new ElementTypesNamedNodeList(grove(), dtd_));
-        return AccessResult.accessNull;
+        ptr.assign(new ElementTypesNamedNodeList(grove(), dtd_));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getDefaultEntity(ref NodePtr ptr)
@@ -3332,9 +3435,8 @@ public class DocumentTypeNode : BaseNode
     {
         if (dtd_ == null)
             return AccessResult.accessNull;
-        // TODO: Implement ParameterEntitiesNamedNodeList
-        // ptr.assign(new ParameterEntitiesNamedNodeList(grove(), dtd_));
-        return AccessResult.accessNull;
+        ptr.assign(new ParameterEntitiesNamedNodeList(grove(), dtd_));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getOrigin(ref NodePtr ptr)
@@ -3674,8 +3776,10 @@ public class ElementTypeNode : BaseNode
 
     public override AccessResult getAttributeDefs(ref NamedNodeListPtr ptr)
     {
-        // TODO: Implement ElementTypeAttributeDefsNamedNodeList
-        return AccessResult.accessNull;
+        if (elementType_ == null)
+            return AccessResult.accessNull;
+        ptr.assign(new ElementTypeAttributeDefsNamedNodeList(grove(), elementType_));
+        return AccessResult.accessOK;
     }
 
     public override void accept(NodeVisitor visitor)
@@ -4106,6 +4210,419 @@ public abstract class AttributeDefNode : BaseNode
         }
         return ret;
     }
+}
+
+// Element type attribute def node
+public class ElementTypeAttributeDefNode : AttributeDefNode
+{
+    protected ElementType elementType_;
+
+    public ElementTypeAttributeDefNode(GroveImpl grove, ElementType elementType, nuint attributeDefIdx)
+        : base(grove, attributeDefIdx)
+    {
+        elementType_ = elementType;
+    }
+
+    public override AttributeDefinitionList? attDefList()
+    {
+        return elementType_.attributeDefTemp();
+    }
+
+    public override Node makeOriginNode(GroveImpl grove, nuint attIndex)
+    {
+        return new ElementTypeNode(grove, elementType_);
+    }
+
+    public override object? attributeOriginId()
+    {
+        return elementType_;
+    }
+
+    public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
+    {
+        name = ComponentName.Id.idAttributeDefs;
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult getCurrentGroup(ref NodeListPtr ptr)
+    {
+        // Would implement attribute group node list
+        return AccessResult.accessNull;
+    }
+
+    public override AccessResult getLocation(ref Location location)
+    {
+        // AttributeDefinition doesn't expose location in C# port
+        return AccessResult.accessNull;
+    }
+
+    public override AccessResult getDefaultValue(ref NodeListPtr ptr)
+    {
+        // Would implement default value node list
+        return AccessResult.accessNull;
+    }
+}
+
+// Element type attribute defs node list
+public class ElementTypeAttributeDefsNodeList : BaseNodeList
+{
+    private GroveImpl grove_;
+    private ElementType elementType_;
+    private nuint firstAttDefIdx_;
+
+    public ElementTypeAttributeDefsNodeList(GroveImpl grove, ElementType elementType, nuint firstAttDefIdx)
+    {
+        grove_ = grove;
+        elementType_ = elementType;
+        firstAttDefIdx_ = firstAttDefIdx;
+    }
+
+    public override AccessResult first(ref NodePtr ptr)
+    {
+        var defList = elementType_.attributeDefTemp();
+        if (defList == null || firstAttDefIdx_ >= defList.size())
+            return AccessResult.accessNull;
+        ptr.assign(new ElementTypeAttributeDefNode(grove_, elementType_, firstAttDefIdx_));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        var defList = elementType_.attributeDefTemp();
+        nuint nextIdx = firstAttDefIdx_ + 1;
+        if (defList == null || nextIdx >= defList.size())
+            return AccessResult.accessNull;
+        ptr.assign(new ElementTypeAttributeDefsNodeList(grove_, elementType_, nextIdx));
+        return AccessResult.accessOK;
+    }
+}
+
+// Element type cdata attribute value node
+public class ElementTypeCdataAttributeValueNode : CdataAttributeValueNode
+{
+    protected ElementType elementType_;
+
+    public ElementTypeCdataAttributeValueNode(
+        GroveImpl grove,
+        AttributeValue? value,
+        nuint attIndex,
+        TextIter iter,
+        nuint charIndex,
+        ElementType elementType)
+        : base(grove, value, attIndex, iter, charIndex)
+    {
+        elementType_ = elementType;
+    }
+}
+
+// Element type attribute value token node
+public class ElementTypeAttributeValueTokenNode : AttributeValueTokenNode
+{
+    protected ElementType elementType_;
+
+    public ElementTypeAttributeValueTokenNode(
+        GroveImpl grove,
+        TokenizedAttributeValue? value,
+        nuint attIndex,
+        nuint tokenIndex,
+        ElementType elementType)
+        : base(grove, value, attIndex, tokenIndex)
+    {
+        elementType_ = elementType;
+    }
+}
+
+// Base class for named node lists
+public abstract class BaseNamedNodeList : NamedNodeList
+{
+    protected GroveImpl grove_;
+    protected SubstTable? substTable_;
+    private uint refCount_;
+
+    public BaseNamedNodeList(GroveImpl grove, SubstTable? substTable)
+    {
+        grove_ = grove;
+        substTable_ = substTable;
+        refCount_ = 0;
+    }
+
+    public override void addRef() { ++refCount_; }
+
+    public bool canReuse(NamedNodeListPtr ptr)
+    {
+        return ptr.list == this && refCount_ == 1;
+    }
+
+    public override void release()
+    {
+        System.Diagnostics.Debug.Assert(refCount_ != 0);
+        --refCount_;
+    }
+
+    public override nuint normalize(uint[] s, nuint n)
+    {
+        if (substTable_ != null)
+        {
+            for (nuint i = 0; i < n; i++)
+                substTable_.subst(ref s[i]);
+        }
+        return n;
+    }
+
+    public GroveImpl grove() { return grove_; }
+
+    public override AccessResult namedNode(GroveString str, ref NodePtr node)
+    {
+        StringC tem = new StringC(str.data() ?? Array.Empty<uint>(), str.size());
+        var chars = tem.data()?.ToArray() ?? Array.Empty<uint>();
+        normalize(chars, (nuint)chars.Length);
+        for (int i = 0; i < chars.Length; i++)
+            tem[(nuint)i] = chars[i];
+        return namedNodeU(tem, ref node);
+    }
+
+    public abstract AccessResult namedNodeU(StringC str, ref NodePtr ptr);
+}
+
+// General entities named node list
+public class GeneralEntitiesNamedNodeList : BaseNamedNodeList
+{
+    private Dtd dtd_;
+
+    public GeneralEntitiesNamedNodeList(GroveImpl grove, Dtd dtd)
+        : base(grove, grove.entitySubstTable())
+    {
+        dtd_ = dtd;
+    }
+
+    public override NodeListPtr nodeList()
+    {
+        return new NodeListPtr(new EntitiesNodeList(grove_, dtd_.generalEntityIter()));
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        var entity = dtd_.lookupEntityTemp(false, str);
+        if (entity == null)
+            return AccessResult.accessNull;
+        ptr.assign(new EntityNode(grove_, entity));
+        return AccessResult.accessOK;
+    }
+
+    public override Type type() { return Type.entities; }
+}
+
+// Parameter entities named node list
+public class ParameterEntitiesNamedNodeList : BaseNamedNodeList
+{
+    private Dtd dtd_;
+
+    public ParameterEntitiesNamedNodeList(GroveImpl grove, Dtd dtd)
+        : base(grove, grove.entitySubstTable())
+    {
+        dtd_ = dtd;
+    }
+
+    public override NodeListPtr nodeList()
+    {
+        return new NodeListPtr(new EntitiesNodeList(grove_, dtd_.parameterEntityIter()));
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        var entity = dtd_.lookupEntityTemp(true, str);
+        if (entity == null)
+            return AccessResult.accessNull;
+        ptr.assign(new EntityNode(grove_, entity));
+        return AccessResult.accessOK;
+    }
+
+    public override Type type() { return Type.entities; }
+}
+
+// Notations named node list
+public class NotationsNamedNodeList : BaseNamedNodeList
+{
+    private Dtd dtd_;
+
+    public NotationsNamedNodeList(GroveImpl grove, Dtd dtd)
+        : base(grove, grove.generalSubstTable())
+    {
+        dtd_ = dtd;
+    }
+
+    public override NodeListPtr nodeList()
+    {
+        return new NodeListPtr(new NotationsNodeList(grove_, dtd_.notationIter()));
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        var notation = dtd_.lookupNotationTemp(str);
+        if (notation == null)
+            return AccessResult.accessNull;
+        ptr.assign(new NotationNode(grove_, notation));
+        return AccessResult.accessOK;
+    }
+
+    public override Type type() { return Type.notations; }
+}
+
+// Element types named node list
+public class ElementTypesNamedNodeList : BaseNamedNodeList
+{
+    private Dtd dtd_;
+
+    public ElementTypesNamedNodeList(GroveImpl grove, Dtd dtd)
+        : base(grove, grove.generalSubstTable())
+    {
+        dtd_ = dtd;
+    }
+
+    public override NodeListPtr nodeList()
+    {
+        return new NodeListPtr(new ElementTypesNodeList(grove_, dtd_.elementTypeIter()));
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        var elementType = dtd_.lookupElementType(str);
+        if (elementType == null)
+            return AccessResult.accessNull;
+        ptr.assign(new ElementTypeNode(grove_, elementType));
+        return AccessResult.accessOK;
+    }
+
+    public override Type type() { return Type.elementTypes; }
+}
+
+// Entities node list (iterator-based)
+public class EntitiesNodeList : BaseNodeList
+{
+    private GroveImpl grove_;
+    private NamedResourceTableIter<Entity> iter_;
+
+    public EntitiesNodeList(GroveImpl grove, NamedResourceTableIter<Entity> iter)
+    {
+        grove_ = grove;
+        iter_ = iter;
+    }
+
+    public override AccessResult first(ref NodePtr ptr)
+    {
+        var entityPtr = iter_.next();
+        if (entityPtr == null || entityPtr.isNull())
+            return AccessResult.accessNull;
+        ptr.assign(new EntityNode(grove_, entityPtr.pointer()));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        var entityPtr = iter_.next();
+        if (entityPtr == null || entityPtr.isNull())
+            return AccessResult.accessNull;
+        ptr.assign(new EntitiesNodeList(grove_, iter_));
+        return AccessResult.accessOK;
+    }
+}
+
+// Notations node list (iterator-based)
+public class NotationsNodeList : BaseNodeList
+{
+    private GroveImpl grove_;
+    private NamedResourceTableIter<Notation> iter_;
+
+    public NotationsNodeList(GroveImpl grove, NamedResourceTableIter<Notation> iter)
+    {
+        grove_ = grove;
+        iter_ = iter;
+    }
+
+    public override AccessResult first(ref NodePtr ptr)
+    {
+        var notationPtr = iter_.next();
+        if (notationPtr == null || notationPtr.isNull())
+            return AccessResult.accessNull;
+        ptr.assign(new NotationNode(grove_, notationPtr.pointer()));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        var notationPtr = iter_.next();
+        if (notationPtr == null || notationPtr.isNull())
+            return AccessResult.accessNull;
+        ptr.assign(new NotationsNodeList(grove_, iter_));
+        return AccessResult.accessOK;
+    }
+}
+
+// Element types node list (iterator-based)
+public class ElementTypesNodeList : BaseNodeList
+{
+    private GroveImpl grove_;
+    private NamedTableIter<ElementType> iter_;
+
+    public ElementTypesNodeList(GroveImpl grove, NamedTableIter<ElementType> iter)
+    {
+        grove_ = grove;
+        iter_ = iter;
+    }
+
+    public override AccessResult first(ref NodePtr ptr)
+    {
+        var elementType = iter_.next();
+        if (elementType == null)
+            return AccessResult.accessNull;
+        ptr.assign(new ElementTypeNode(grove_, elementType));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        var elementType = iter_.next();
+        if (elementType == null)
+            return AccessResult.accessNull;
+        ptr.assign(new ElementTypesNodeList(grove_, iter_));
+        return AccessResult.accessOK;
+    }
+}
+
+// Element type attribute defs named node list
+public class ElementTypeAttributeDefsNamedNodeList : BaseNamedNodeList
+{
+    private ElementType elementType_;
+
+    public ElementTypeAttributeDefsNamedNodeList(GroveImpl grove, ElementType elementType)
+        : base(grove, grove.generalSubstTable())
+    {
+        elementType_ = elementType;
+    }
+
+    public override NodeListPtr nodeList()
+    {
+        return new NodeListPtr(new ElementTypeAttributeDefsNodeList(grove_, elementType_, 0));
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        var defList = elementType_.attributeDefTemp();
+        if (defList == null)
+            return AccessResult.accessNull;
+        for (nuint i = 0; i < defList.size(); i++)
+        {
+            var def = defList.def(i);
+            if (def != null && def.name().Equals(str))
+            {
+                ptr.assign(new ElementTypeAttributeDefNode(grove_, elementType_, i));
+                return AccessResult.accessOK;
+            }
+        }
+        return AccessResult.accessNull;
+    }
+
+    public override Type type() { return Type.attributeDefs; }
 }
 
 // Grove builder message event handler - handles messages and validation
