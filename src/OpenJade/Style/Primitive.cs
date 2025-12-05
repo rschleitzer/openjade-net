@@ -3616,3 +3616,248 @@ public class NodeListAddressPrimitiveObj : PrimitiveObj
     }
 }
 
+// IsQuantity? primitive
+public class IsQuantityPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsQuantityPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long lval = 0;
+        double dval = 0;
+        int dim = 0;
+        if (args[0]!.quantityValue(out lval, out dval, out dim) != ELObj.QuantityType.noQuantity)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// IsOdd? primitive
+public class IsOddPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsOddPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long n = 0;
+        if (!args[0]!.exactIntegerValue(out n))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        if ((n % 2) != 0)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// IsEven? primitive
+public class IsEvenPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsEvenPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long n = 0;
+        if (!args[0]!.exactIntegerValue(out n))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        if ((n % 2) == 0)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// IsZero? primitive
+public class IsZeroPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsZeroPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long lval = 0;
+        double dval = 0;
+        int dim = 0;
+        var qt = args[0]!.quantityValue(out lval, out dval, out dim);
+        if (qt == ELObj.QuantityType.noQuantity)
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        double v = (qt == ELObj.QuantityType.doubleQuantity) ? dval : lval;
+        if (v == 0)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// IsPositive? primitive
+public class IsPositivePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsPositivePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long lval = 0;
+        double dval = 0;
+        int dim = 0;
+        var qt = args[0]!.quantityValue(out lval, out dval, out dim);
+        if (qt == ELObj.QuantityType.noQuantity)
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        double v = (qt == ELObj.QuantityType.doubleQuantity) ? dval : lval;
+        if (v > 0)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// IsNegative? primitive
+public class IsNegativePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsNegativePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long lval = 0;
+        double dval = 0;
+        int dim = 0;
+        var qt = args[0]!.quantityValue(out lval, out dval, out dim);
+        if (qt == ELObj.QuantityType.noQuantity)
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        double v = (qt == ELObj.QuantityType.doubleQuantity) ? dval : lval;
+        if (v < 0)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// StringToList primitive
+public class StringToListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public StringToListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        ELObj? result = interp.makeNil();
+        for (int i = (int)n - 1; i >= 0; i--)
+            result = interp.makePair(interp.makeChar(s![i]), result);
+        return result;
+    }
+}
+
+// ListToString primitive
+public class ListToStringPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ListToStringPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        var chars = new System.Collections.Generic.List<Char>();
+        ELObj? lst = args[0];
+        while (lst != null && !lst.isNil())
+        {
+            PairObj? pair = lst.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 0, args[0]);
+            Char c = 0;
+            if (!pair.car()!.charValue(out c))
+                return argError(interp, loc, InterpreterMessages.notAChar, 0, args[0]);
+            chars.Add(c);
+            lst = pair.cdr();
+        }
+        return interp.makeString(chars.ToArray(), (nuint)chars.Count);
+    }
+}
+
+// VectorToList primitive
+public class VectorToListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public VectorToListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        VectorObj? vec = args[0]?.asVector();
+        if (vec == null)
+            return argError(interp, loc, InterpreterMessages.notAVector, 0, args[0]);
+        ELObj? result = interp.makeNil();
+        for (int i = (int)vec.size() - 1; i >= 0; i--)
+            result = interp.makePair(vec[i], result);
+        return result;
+    }
+}
+
+// ListToVector primitive
+public class ListToVectorPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ListToVectorPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        var elements = new System.Collections.Generic.List<ELObj?>();
+        ELObj? lst = args[0];
+        while (lst != null && !lst.isNil())
+        {
+            PairObj? pair = lst.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 0, args[0]);
+            elements.Add(pair.car());
+            lst = pair.cdr();
+        }
+        return interp.makeVector(elements);
+    }
+}
+
+// Memq primitive (compare with eq?)
+public class MemqPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public MemqPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        ELObj? key = args[0];
+        ELObj? lst = args[1];
+        while (lst != null && !lst.isNil())
+        {
+            PairObj? pair = lst.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 1, args[1]);
+            if (pair.car() == key)
+                return lst;
+            lst = pair.cdr();
+        }
+        return interp.makeFalse();
+    }
+}
+
+// Assq primitive (compare keys with eq?)
+public class AssqPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public AssqPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        ELObj? key = args[0];
+        ELObj? lst = args[1];
+        while (lst != null && !lst.isNil())
+        {
+            PairObj? pair = lst.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 1, args[1]);
+            PairObj? entry = pair.car()?.asPair();
+            if (entry != null && entry.car() == key)
+                return entry;
+            lst = pair.cdr();
+        }
+        return interp.makeFalse();
+    }
+}
+
