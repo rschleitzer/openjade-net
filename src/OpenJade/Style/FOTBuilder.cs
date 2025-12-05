@@ -411,7 +411,10 @@ public class FOTBuilder
         public LengthSpec width = new LengthSpec();
     }
 
-    public class TablePartNIC : DisplayNIC { }
+    public class TablePartNIC : DisplayNIC
+    {
+        public bool isExplicit;
+    }
 
     public class TableColumnNIC
     {
@@ -645,6 +648,78 @@ public class FOTBuilder
     public virtual void endSimplePageSequenceHeaderFooter() { }
     public virtual void endSimplePageSequence() { end(); }
 
+    // Simple page sequence serial form (for output backends)
+    public virtual void startSimplePageSequenceSerial() { start(); }
+    public virtual void endSimplePageSequenceSerial() { end(); }
+    public virtual void startSimplePageSequenceHeaderFooter(uint flags) { start(); }
+    public virtual void endSimplePageSequenceHeaderFooter(uint flags) { end(); }
+    public virtual void endAllSimplePageSequenceHeaderFooter() { }
+
+    // Multi-mode serial form
+    public virtual void startMultiModeSerial(MultiMode? principalMode) { start(); }
+    public virtual void endMultiModeSerial() { end(); }
+    public virtual void startMultiModeMode(MultiMode mode) { start(); }
+    public virtual void endMultiModeMode() { end(); }
+
+    // Math flow objects serial form
+    public virtual void startFractionSerial() { start(); }
+    public virtual void endFractionSerial() { end(); }
+    public virtual void startFractionNumerator() { start(); }
+    public virtual void endFractionNumerator() { end(); }
+    public virtual void startFractionDenominator() { start(); }
+    public virtual void endFractionDenominator() { end(); }
+
+    public virtual void startScriptSerial() { start(); }
+    public virtual void endScriptSerial() { end(); }
+    public virtual void startScriptPreSup() { start(); }
+    public virtual void endScriptPreSup() { end(); }
+    public virtual void startScriptPreSub() { start(); }
+    public virtual void endScriptPreSub() { end(); }
+    public virtual void startScriptPostSup() { start(); }
+    public virtual void endScriptPostSup() { end(); }
+    public virtual void startScriptPostSub() { start(); }
+    public virtual void endScriptPostSub() { end(); }
+    public virtual void startScriptMidSup() { start(); }
+    public virtual void endScriptMidSup() { end(); }
+    public virtual void startScriptMidSub() { start(); }
+    public virtual void endScriptMidSub() { end(); }
+
+    public virtual void startMarkSerial() { start(); }
+    public virtual void endMarkSerial() { end(); }
+    public virtual void startMarkOver() { start(); }
+    public virtual void endMarkOver() { end(); }
+    public virtual void startMarkUnder() { start(); }
+    public virtual void endMarkUnder() { end(); }
+
+    public virtual void startFenceSerial() { start(); }
+    public virtual void endFenceSerial() { end(); }
+    public virtual void startFenceOpen() { start(); }
+    public virtual void endFenceOpen() { end(); }
+    public virtual void startFenceClose() { start(); }
+    public virtual void endFenceClose() { end(); }
+
+    public virtual void startRadicalSerial() { start(); }
+    public virtual void endRadicalSerial() { end(); }
+    public virtual void startRadicalDegree() { start(); }
+    public virtual void endRadicalDegree() { end(); }
+
+    public virtual void startMathOperatorSerial() { start(); }
+    public virtual void endMathOperatorSerial() { end(); }
+    public virtual void startMathOperatorOperator() { start(); }
+    public virtual void endMathOperatorOperator() { end(); }
+    public virtual void startMathOperatorLowerLimit() { start(); }
+    public virtual void endMathOperatorLowerLimit() { end(); }
+    public virtual void startMathOperatorUpperLimit() { start(); }
+    public virtual void endMathOperatorUpperLimit() { end(); }
+
+    // Table part serial form
+    public virtual void startTablePartSerial(TablePartNIC nic) { start(); }
+    public virtual void endTablePartSerial() { end(); }
+    public virtual void startTablePartHeader() { start(); }
+    public virtual void endTablePartHeader() { end(); }
+    public virtual void startTablePartFooter() { start(); }
+    public virtual void endTablePartFooter() { end(); }
+
     // Page sequence
     public virtual void startPageSequence() { start(); }
     public virtual void endPageSequence() { end(); }
@@ -686,6 +761,14 @@ public class FOTBuilder
     public virtual void setLineSep(LengthSpec sep) { }
     public virtual void setBoxSizeBefore(LengthSpec size) { }
     public virtual void setBoxSizeAfter(LengthSpec size) { }
+    // Length (long) overloads for above
+    public virtual void setCellBeforeRowMargin(long margin) { }
+    public virtual void setCellAfterRowMargin(long margin) { }
+    public virtual void setCellBeforeColumnMargin(long margin) { }
+    public virtual void setCellAfterColumnMargin(long margin) { }
+    public virtual void setLineSep(long sep) { }
+    public virtual void setBoxSizeBefore(long size) { }
+    public virtual void setBoxSizeAfter(long size) { }
     public virtual void setPositionPointShift(LengthSpec shift) { }
     public virtual void setStartMargin(LengthSpec margin) { }
     public virtual void setEndMargin(LengthSpec margin) { }
@@ -726,6 +809,7 @@ public class FOTBuilder
     public virtual void setLineDash(System.Collections.Generic.List<LengthSpec> dashes, LengthSpec offset) { }
     public virtual void setLineDash(System.Collections.Generic.List<long> dashes, long offset) { }
     public virtual void setLineRepeat(uint repeat) { }
+    public virtual void setLineRepeat(long repeat) { }
     public virtual void setGlyphAlignmentMode(Symbol mode) { }
     public virtual void setInputWhitespaceTreatment(Symbol treatment) { }
     public virtual void setFillingDirection(Symbol direction) { }
@@ -744,6 +828,7 @@ public class FOTBuilder
     public virtual void setBoxType(Symbol type) { }
     public virtual void setGlyphSubstTable(ConstPtr<GlyphSubstTable> table) { }
     public virtual void setGlyphReorderMethod(Symbol method) { }
+    public virtual void setGlyphReorderMethod(string? pubid) { }
     public virtual void setHyphenationKeep(Symbol keep) { }
     public virtual void setFontStructure(Symbol structure) { }
     public virtual void setFontProportionateWidth(Symbol width) { }
@@ -751,6 +836,7 @@ public class FOTBuilder
     public virtual void setBorderAlignment(Symbol alignment) { }
     public virtual void setSidelineSide(Symbol side) { }
     public virtual void setHyphenationLadderCount(Symbol count) { }
+    public virtual void setHyphenationLadderCount(long count) { }
     public virtual void setBackgroundLayer(long layer) { }
     public virtual void setBorderPriority(long priority) { }
     public virtual void setLineRepeatCount(long count) { }
