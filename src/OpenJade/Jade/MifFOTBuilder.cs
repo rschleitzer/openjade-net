@@ -1920,6 +1920,17 @@ public class MifDoc : IDisposable
     // Tbl class
     public class Tbl
     {
+        [Flags]
+        public enum TblFlags : uint
+        {
+            fNone = 0,
+            fTblID = 0x1,
+            fTblTag = 0x2,
+            fTblNumColumns = 0x4,
+            fTblColumnWidths = 0x8,
+            fTblFormat = 0x200
+        }
+
         public uint setProperties;
         public uint TblID;
         public string TblTag = "";
@@ -3132,7 +3143,27 @@ public class MifFOTBuilder : FOTBuilder
 
         public string makeMifRuling(MifDoc mifDoc)
         {
-            throw new NotImplementedException();
+            string result = "";
+
+            if (borderPresent)
+            {
+                MifDoc.Ruling mifRuling = new MifDoc.Ruling();
+
+                mifRuling.setRulingPenWidth(new MifDoc.T_dimension(lineThickness));
+                mifRuling.setRulingLines((int)(lineRepeat >= 2 ? 2 : lineRepeat));
+                mifRuling.setRulingGap(new MifDoc.T_dimension(lineRepeat >= 2 ? lineSep - lineThickness : 0));
+                mifRuling.setRulingColor(new MifDoc.T_tagstring(color));
+
+                result = MifDoc.Ruling.key(mifRuling);
+                mifRuling.setRulingTag(new MifDoc.T_tagstring(result));
+
+                if (!mifDoc.rulingCatalog().Rulings.ContainsKey(result))
+                {
+                    mifDoc.rulingCatalog().Rulings[result] = mifRuling;
+                }
+            }
+
+            return result;
         }
 
         public void resolve(Border adjacentBorder)
@@ -3155,7 +3186,13 @@ public class MifFOTBuilder : FOTBuilder
 
         public void setFromFot()
         {
-            throw new NotImplementedException();
+            Format f = MifFOTBuilder.curInstance().format();
+            borderPriority = f.FotBorderPriority;
+            borderPresent = f.FotBorderPresent;
+            lineThickness = f.FotLineThickness;
+            lineRepeat = f.FotLineRepeat;
+            lineSep = f.FotLineSep;
+            color = f.FColor;
         }
     }
 
@@ -3202,7 +3239,23 @@ public class MifFOTBuilder : FOTBuilder
 
         public void translate(MifDoc.Cell mifCell, MifDoc mifDoc)
         {
-            throw new NotImplementedException();
+            MifDoc.T_tagstring rulingTag;
+
+            rulingTag = new MifDoc.T_tagstring(beforeRowBorder.makeMifRuling(mifDoc));
+            if (rulingTag.size() > 0)
+                mifCell.setCellTRuling(rulingTag);
+
+            rulingTag = new MifDoc.T_tagstring(afterRowBorder.makeMifRuling(mifDoc));
+            if (rulingTag.size() > 0)
+                mifCell.setCellBRuling(rulingTag);
+
+            rulingTag = new MifDoc.T_tagstring(beforeColumnBorder.makeMifRuling(mifDoc));
+            if (rulingTag.size() > 0)
+                mifCell.setCellLRuling(rulingTag);
+
+            rulingTag = new MifDoc.T_tagstring(afterColumnBorder.makeMifRuling(mifDoc));
+            if (rulingTag.size() > 0)
+                mifCell.setCellRRuling(rulingTag);
         }
     }
 
@@ -3213,7 +3266,17 @@ public class MifFOTBuilder : FOTBuilder
 
         public void translate(System.Collections.Generic.List<MifDoc.Row> mifRows, MifDoc mifDoc)
         {
-            throw new NotImplementedException();
+            mifRows.Add(new MifDoc.Row());
+            MifDoc.Row mifRow = mifRows[mifRows.Count - 1];
+            mifRow.Cells = new System.Collections.Generic.List<MifDoc.Cell>();
+            for (int i = 0; i < Cells.Count; i++)
+                mifRow.Cells.Add(new MifDoc.Cell());
+
+            for (int i = 0; i + 1 < Cells.Count; i++)
+            {
+                Cells[i].translate(Cells[i].mifCell(), mifDoc);
+                mifRow.Cells[i] = Cells[i].mifCell();
+            }
         }
     }
 
@@ -3237,10 +3300,151 @@ public class MifFOTBuilder : FOTBuilder
             needsColumnReprocessing = false;
         }
 
-        public void translate(MifDoc mifDoc) { throw new NotImplementedException(); }
-        public void processColumns() { throw new NotImplementedException(); }
-        public void normalizeRows() { throw new NotImplementedException(); }
-        public void begin(Table parentTable, MifDoc mifDoc) { throw new NotImplementedException(); }
+        public void translate(MifDoc mifDoc)
+        {
+            if (needsColumnReprocessing)
+                processColumns();
+
+            MifDoc.Tbl mifTbl = mifTable(mifDoc);
+            if (parentTable().startIndent != 0)  // DSSSL default
+            {
+                mifTbl.tblFormat.setTblLIndent(new MifDoc.T_dimension(parentTable().startIndent));
+                mifTbl.setProperties |= (uint)MifDoc.Tbl.TblFlags.fTblFormat;
+            }
+
+            if (parentTable().displayAlignment != Symbol.symbolStart)
+            {
+                mifTbl.setProperties |= (uint)MifDoc.Tbl.TblFlags.fTblFormat;
+                MifDoc.T_keyword mifAlignment = new MifDoc.T_keyword(MifDoc.sLeft);
+                switch (parentTable().displayAlignment)
+                {
+                    case Symbol.symbolStart: mifAlignment = new MifDoc.T_keyword(MifDoc.sLeft); break;
+                    case Symbol.symbolEnd: mifAlignment = new MifDoc.T_keyword(MifDoc.sRight); break;
+                    case Symbol.symbolCenter: mifAlignment = new MifDoc.T_keyword(MifDoc.sCenter); break;
+                    case Symbol.symbolInside: mifAlignment = new MifDoc.T_keyword(MifDoc.sInside); break;
+                    case Symbol.symbolOutside: mifAlignment = new MifDoc.T_keyword(MifDoc.sOutside); break;
+                    default: System.Diagnostics.Debug.Assert(false); break;
+                }
+                mifTbl.tblFormat.setTblAlignment(mifAlignment);
+            }
+
+            bool putHeaderInBody = Body.Count == 0 && Header.Count > 0;
+            bool putFooterInBody = !putHeaderInBody && Body.Count == 0 && Footer.Count > 0;
+            for (int i = 0; i < Header.Count; i++)
+                Header[i].translate(putHeaderInBody ? mifTbl.TblBody : mifTbl.TblH, mifDoc);
+            for (int i = 0; i < Body.Count; i++)
+                Body[i].translate(mifTbl.TblBody, mifDoc);
+            for (int i = 0; i < Footer.Count; i++)
+                Footer[i].translate(putFooterInBody ? mifTbl.TblBody : mifTbl.TblF, mifDoc);
+        }
+
+        public void processColumns()
+        {
+            MifDoc.Tbl mifTbl = mifTable(MifDoc.CurInstance!);
+            mifTbl.setTblNumColumns(0);
+            mifTbl.setTblNumColumns(Columns.Count);
+            mifTbl.TblColumnWidths.Clear();
+            for (int i = 0; i < Columns.Count; i++)
+                mifTbl.TblColumnWidths.Add(0);
+            mifTbl.TblColumnWidthsAreSet();
+
+            long totalNonproportionalWidth = 0L;
+            double totalProportionalUnits = 0.0;
+            for (int i = 0; i < Columns.Count; i++)
+            {
+                if (Columns[i].hasWidth)
+                {
+                    if (Columns[i].width.tableUnitFactor != 0.0)
+                    {
+                        totalProportionalUnits += Columns[i].width.tableUnitFactor;
+                    }
+                    else
+                    {
+                        mifTbl.TblColumnWidths[i]
+                            = MifFOTBuilder.curInstance().computeLengthSpec(Columns[i].width);
+                        totalNonproportionalWidth += mifTbl.TblColumnWidths[i];
+                    }
+                }
+            }
+
+            double proportionalUnit = 0.0;
+            if (totalProportionalUnits != 0.0)
+                proportionalUnit
+                    = (parentTable().tableWidth - totalNonproportionalWidth) / totalProportionalUnits;
+
+            for (int i = 0; i < Columns.Count; i++)
+            {
+                if (Columns[i].hasWidth)
+                {
+                    if (Columns[i].width.tableUnitFactor != 0.0)
+                        mifTbl.TblColumnWidths[i]
+                            = (long)(proportionalUnit * Columns[i].width.tableUnitFactor);
+                }
+                else
+                    mifTbl.TblColumnWidths[i] = (long)proportionalUnit;
+            }
+
+            columnsProcessed = true;
+        }
+
+        public void normalizeRows()
+        {
+            int maxCellsInRow = Columns.Count + 1;
+            System.Collections.Generic.List<Row>? rows;
+            for (int step = 0; step < 2; step++)
+            {
+                for (int rowType = 0; rowType < 3; rowType++)
+                {
+                    switch (rowType)
+                    {
+                        case 0: rows = Header; break;
+                        case 1: rows = Body; break;
+                        default: rows = Footer; break;
+                    }
+                    for (int r = 0; r < rows.Count; r++)
+                    {
+                        if (step == 0)
+                        {
+                            if (rows[r].Cells.Count > 1)
+                            {
+                                int lastCellIdx = rows[r].Cells.Count - 2;
+                                Cell lastCell = rows[r].Cells[lastCellIdx];
+                                if (!lastCell.missing
+                                    && lastCellIdx + (int)lastCell.nColumnsSpanned + 1 > maxCellsInRow)
+                                    maxCellsInRow = lastCellIdx + (int)lastCell.nColumnsSpanned + 1;
+                            }
+                        }
+                        else if (rows[r].Cells.Count < maxCellsInRow)
+                        {
+                            while (rows[r].Cells.Count < maxCellsInRow)
+                                rows[r].Cells.Add(new Cell());
+                        }
+                    }
+                }
+            }
+        }
+
+        public void begin(Table parent, MifDoc mifDoc)
+        {
+            Columns.Clear();
+            Header.Clear();
+            Body.Clear();
+            Footer.Clear();
+
+            columnsProcessed = false;
+            needsColumnReprocessing = false;
+
+            ParentTable = parent;
+            parentTable().CurRows = Body;
+            parentTable().CurTablePart = this;
+
+            if (MifTableNum == 0)
+            {
+                mifDoc.tbls().Add(new MifDoc.Tbl());
+                MifTableNum = (nuint)mifDoc.tbls().Count;
+                MifDoc.CurInstance?.setCurTblNum(MifTableNum);
+            }
+        }
 
         public MifDoc.Tbl mifTable(MifDoc mifDoc)
         {
@@ -3286,10 +3490,88 @@ public class MifFOTBuilder : FOTBuilder
 
         public void resolveBorders(System.Collections.Generic.List<Row> rows, bool hasFirstTableRow, bool hasLastTableRow)
         {
-            throw new NotImplementedException();
+            bool isFirstRow;
+            bool isLastRow;
+            bool isFirstColumn;
+            bool isLastColumn;
+            Cell? cell = null;
+            int r, c, rr, cc;
+            bool leftEdge, topEdge;
+
+            for (r = 0; r < rows.Count; r++)
+            {
+                for (c = 0; c < rows[r].Cells.Count - 1; c++)
+                {
+                    cell = rows[r].Cells[c];
+                    if (cell.OverlappingCell == null)
+                    {
+                        for (rr = r; rr < r + (int)cell.nRowsSpanned; rr++)
+                        {
+                            for (cc = c, leftEdge = true; cc < c + (int)cell.nColumnsSpanned; cc++)
+                            {
+                                rows[rr].Cells[cc].OverlappingCell = cell;
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (r = 0; r < rows.Count; r++)
+            {
+                for (c = 0; c < rows[r].Cells.Count - 1; c++)
+                {
+                    cell = rows[r].Cells[c];
+                    if (cell.OverlappingCell == cell)
+                    {
+                        for (rr = r, topEdge = true; rr < r + (int)cell.nRowsSpanned; rr++)
+                        {
+                            isFirstRow = (rr == 0);
+                            isLastRow = (rr == rows.Count - 1);
+                            for (cc = c, leftEdge = true; cc < c + (int)cell.nColumnsSpanned; cc++)
+                            {
+                                isFirstColumn = (cc == 0);
+                                isLastColumn = (cc == rows[rr].Cells.Count - 2);
+
+                                if (leftEdge)
+                                    if (isFirstColumn)
+                                    {
+                                        cell.beforeColumnBorder.resolve(beforeColumnBorder);
+                                    }
+                                    else
+                                        cell.beforeColumnBorder.resolve(
+                                            rows[rr].Cells[cc - 1].OverlappingCell!.afterColumnBorder);
+
+                                if (topEdge)
+                                    if (isFirstRow && hasFirstTableRow)
+                                        cell.beforeRowBorder.resolve(beforeRowBorder);
+                                    else if (!isFirstRow)
+                                        cell.beforeRowBorder.resolve(
+                                            rows[rr - 1].Cells[cc].OverlappingCell!.afterRowBorder);
+
+                                if (isLastColumn)
+                                    cell.afterColumnBorder.resolve(afterColumnBorder);
+
+                                if (isLastRow && hasLastTableRow)
+                                    cell.afterRowBorder.resolve(afterRowBorder);
+
+                                leftEdge = false;
+                            }
+                            topEdge = false;
+                        }
+                    }
+                }
+            }
         }
 
-        public void begin(MifDoc mifDoc) { throw new NotImplementedException(); }
+        public void begin(MifDoc mifDoc)
+        {
+            CurCell = null;
+            NoTablePartsSeen = true;
+
+            TableParts.Clear();
+            TableParts.Add(new TablePart());
+            TableParts[TableParts.Count - 1].begin(this, mifDoc);
+        }
         public System.Collections.Generic.List<Row> curRows() { System.Diagnostics.Debug.Assert(CurRows != null); return CurRows!; }
         public TablePart curTablePart() { System.Diagnostics.Debug.Assert(CurTablePart != null); return CurTablePart!; }
         public Cell curCell() { System.Diagnostics.Debug.Assert(CurCell != null); return CurCell!; }
@@ -3613,17 +3895,62 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void startSimplePageSequenceHeaderFooter(uint hfPart)
     {
-        throw new NotImplementedException();
+        if (firstHeaderFooter) { setupSimplePageSequence(); firstHeaderFooter = false; }
+
+        MifDoc.TextFlow? curTextFlow;
+
+        const uint firstHF = (uint)HF.firstHF;
+        const uint frontHF = (uint)HF.frontHF;
+        const uint headerHF = (uint)HF.headerHF;
+        const uint centerHF = (uint)HF.centerHF;
+        const uint rightHF = (uint)HF.rightHF;
+
+        if ((hfPart & firstHF) != 0)
+            if ((hfPart & frontHF) != 0)
+                if ((hfPart & headerHF) != 0)
+                    curTextFlow = FotSimplePageSequence.FirstHeaderTextFlow;
+                else
+                    curTextFlow = FotSimplePageSequence.FirstFooterTextFlow;
+            else
+                return;
+        else
+            if ((hfPart & frontHF) != 0)
+                if ((hfPart & headerHF) != 0)
+                    curTextFlow = FotSimplePageSequence.RightHeaderTextFlow;
+                else
+                    curTextFlow = FotSimplePageSequence.RightFooterTextFlow;
+            else
+                if ((hfPart & headerHF) != 0)
+                    curTextFlow = FotSimplePageSequence.LeftHeaderTextFlow;
+                else
+                    curTextFlow = FotSimplePageSequence.LeftFooterTextFlow;
+
+        mifDoc.enterTextFlow(curTextFlow!);
+
+        if ((hfPart & (centerHF | rightHF)) != 0)
+            mifDoc.outSpecialChar(MifDoc.sTab);
+        else // leftHF
+            if ((hfPart & headerHF) != 0) beginHeader(); else beginFooter();
     }
 
     public override void endSimplePageSequenceHeaderFooter(uint hfPart)
     {
-        throw new NotImplementedException();
+        const uint firstHF = (uint)HF.firstHF;
+        const uint frontHF = (uint)HF.frontHF;
+        const uint rightHF = (uint)HF.rightHF;
+
+        if ((hfPart & rightHF) != 0 && ((hfPart & frontHF) != 0 || (hfPart & firstHF) == 0))
+        {
+            endHeaderFooter(hfPart);
+        }
+
+        if ((hfPart & firstHF) == 0 || (hfPart & frontHF) != 0)
+            mifDoc.exitTextFlow();
     }
 
     public override void endAllSimplePageSequenceHeaderFooter()
     {
-        throw new NotImplementedException();
+        // mifDoc.enterTextFlow( *FotSimplePageSequence.BodyTextFlow );
     }
 
     public void setPageNColumns(long n)
@@ -3857,43 +4184,76 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void startTablePartSerial(TablePartNIC nic)
     {
-        throw new NotImplementedException();
+        startDisplay(nic);
+        start();
+
+        if (curTable().NoTablePartsSeen)
+            curTable().NoTablePartsSeen = false;
+        else
+            curTable().TableParts.Add(new TablePart());
+
+        curTable().TableParts[curTable().TableParts.Count - 1].begin(curTable(), mifDoc);
+
+        // Create a ParagraphNIC from the TablePartNIC base class
+        ParagraphNIC pnic = new ParagraphNIC();
+        pnic.spaceBefore = nic.spaceBefore;
+        pnic.spaceAfter = nic.spaceAfter;
+        pnic.keep = nic.keep;
+        pnic.breakBefore = nic.breakBefore;
+        pnic.breakAfter = nic.breakAfter;
+        pnic.keepWithPrevious = nic.keepWithPrevious;
+        pnic.keepWithNext = nic.keepWithNext;
+        pnic.mayViolateKeepBefore = nic.mayViolateKeepBefore;
+        pnic.mayViolateKeepAfter = nic.mayViolateKeepAfter;
+        doStartParagraph(pnic, true, 0);
+        endParagraph();
     }
 
     public override void endTablePartSerial()
     {
-        throw new NotImplementedException();
+        curTable().CurTablePart = null;
+        endDisplay();
+        end();
     }
 
     public override void startTablePartHeader()
     {
-        throw new NotImplementedException();
+        curTable().CurRows = curTable().curTablePart().Header;
     }
 
     public override void endTablePartHeader()
     {
-        throw new NotImplementedException();
+        curTable().CurRows = curTable().curTablePart().Body;
     }
 
     public override void startTablePartFooter()
     {
-        throw new NotImplementedException();
+        curTable().CurRows = curTable().curTablePart().Footer;
     }
 
     public override void endTablePartFooter()
     {
-        throw new NotImplementedException();
+        curTable().CurRows = curTable().curTablePart().Body;
     }
 
     public override void tableColumn(TableColumnNIC nic)
     {
-        // TODO: Requires proper TableLengthSpec handling
-        throw new NotImplementedException();
+        if ((int)nic.columnIndex >= curTable().curTablePart().Columns.Count)
+        {
+            while (curTable().curTablePart().Columns.Count <= (int)nic.columnIndex)
+                curTable().curTablePart().Columns.Add(new Column());
+        }
+
+        curTable().curTablePart().Columns[(int)nic.columnIndex].hasWidth = nic.hasWidth;
+        if (nic.hasWidth)
+        {
+            curTable().curTablePart().Columns[(int)nic.columnIndex].width = nic.width;
+        }
     }
 
     public override void startTableRow()
     {
-        curTable().curRows().Resize(curTable().curRows().Count + 1);
+        curTable().curRows().Add(new Row());
     }
 
     public override void endTableRow()
@@ -4041,14 +4401,61 @@ public class MifFOTBuilder : FOTBuilder
     public override void setCellAfterColumnMargin(long m) { }
 
     // Table border methods
-    public override void tableBeforeRowBorder() { throw new NotImplementedException(); }
-    public override void tableAfterRowBorder() { throw new NotImplementedException(); }
-    public override void tableBeforeColumnBorder() { throw new NotImplementedException(); }
-    public override void tableAfterColumnBorder() { throw new NotImplementedException(); }
-    public override void tableCellBeforeRowBorder() { throw new NotImplementedException(); }
-    public override void tableCellAfterRowBorder() { throw new NotImplementedException(); }
-    public override void tableCellBeforeColumnBorder() { throw new NotImplementedException(); }
-    public override void tableCellAfterColumnBorder() { throw new NotImplementedException(); }
+    public override void tableBeforeRowBorder()
+    {
+        start();
+        curTable().beforeRowBorder.setFromFot();
+        end();
+    }
+
+    public override void tableAfterRowBorder()
+    {
+        start();
+        curTable().afterRowBorder.setFromFot();
+        end();
+    }
+
+    public override void tableBeforeColumnBorder()
+    {
+        start();
+        curTable().beforeColumnBorder.setFromFot();
+        end();
+    }
+
+    public override void tableAfterColumnBorder()
+    {
+        start();
+        curTable().afterColumnBorder.setFromFot();
+        end();
+    }
+
+    public override void tableCellBeforeRowBorder()
+    {
+        start();
+        curTable().curCell().beforeRowBorder.setFromFot();
+        end();
+    }
+
+    public override void tableCellAfterRowBorder()
+    {
+        start();
+        curTable().curCell().afterRowBorder.setFromFot();
+        end();
+    }
+
+    public override void tableCellBeforeColumnBorder()
+    {
+        start();
+        curTable().curCell().beforeColumnBorder.setFromFot();
+        end();
+    }
+
+    public override void tableCellAfterColumnBorder()
+    {
+        start();
+        curTable().curCell().afterColumnBorder.setFromFot();
+        end();
+    }
 
     // Helper methods
     public void synchronizeFontFormat()
@@ -4067,6 +4474,64 @@ public class MifFOTBuilder : FOTBuilder
             double tem = format().FotCurDisplaySize * spec.displaySizeFactor;
             return spec.length + (long)(tem >= 0.0 ? tem + 0.5 : tem - 0.5);
         }
+    }
+
+    public long computeLengthSpec(TableLengthSpec spec)
+    {
+        // TableLengthSpec has tableUnitFactor - handle it
+        // For now, just use the base length
+        return spec.length;
+    }
+
+    protected void setupSimplePageSequence()
+    {
+        // TODO: Full implementation requires Page, TextRect, and TextFlow setup
+        // For now, just set up the text flow for the body
+        if (FotSimplePageSequence.BodyTextFlow != null)
+            mifDoc.enterTextFlow(FotSimplePageSequence.BodyTextFlow);
+    }
+
+    protected void beginHeader()
+    {
+        beginHeaderFooter(true);
+    }
+
+    protected void beginFooter()
+    {
+        beginHeaderFooter(false);
+    }
+
+    protected void beginHeaderFooter(bool header)
+    {
+        start();
+
+        MifDoc.Para p = new MifDoc.Para();
+        p.setPgfTag(header ? MifDoc.sHeader : MifDoc.sFooter);
+        p.setProperties &= ~0x2u;  // ~fParagraphFormat
+        p.outProlog(mifDoc.os());
+
+        MifDoc.FontFormat ff = new MifDoc.FontFormat();
+        ff.setFSize(format().FSize);
+        ff.@out(mifDoc.os(), (uint)MifDoc.FontFormat.Flags.fFSize, MifDoc.FontFormat.FontStatement.stFont);
+
+        mifDoc.beginParaLine();
+    }
+
+    protected void endHeaderFooter(uint hfPart)
+    {
+        const uint rightHF = (uint)HF.rightHF;
+
+        mifDoc.endParaLine();
+        MifDoc.Para.outEpilog(mifDoc.os());
+
+        // Right header missing because the prev stmt has set
+        // currentlyOpened flag to false for a right footer. So reset it.
+        if ((hfPart & rightHF) != 0)
+        {
+            MifDoc.Para.currentlyOpened = true;
+        }
+
+        end();
     }
 
     public Format format()
