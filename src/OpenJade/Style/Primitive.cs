@@ -2195,3 +2195,161 @@ public class StringToSymbolPrimitiveObj : PrimitiveObj
         return interp.makeSymbol(new StringC(s!, n));
     }
 }
+
+// Format-number primitive
+public class FormatNumberPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public FormatNumberPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long n;
+        if (!args[0]!.exactIntegerValue(out n))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+
+        Char[]? s = null;
+        nuint len = 0;
+        if (!args[1]!.stringData(out s, out len))
+            return argError(interp, loc, InterpreterMessages.notAString, 1, args[1]);
+
+        StringC result = new StringC();
+        formatNumber(n, s!, len, result);
+        return interp.makeString(result);
+    }
+
+    private static void formatNumber(long n, Char[] s, nuint len, StringC result)
+    {
+        if (len > 0)
+        {
+            switch ((char)s[len - 1])
+            {
+                case 'a':
+                    result.append(formatNumberLetter(n, "abcdefghijklmnopqrstuvwxyz"));
+                    return;
+                case 'A':
+                    result.append(formatNumberLetter(n, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"));
+                    return;
+                case 'i':
+                    result.append(formatNumberRoman(n, "mdclxvi"));
+                    return;
+                case 'I':
+                    result.append(formatNumberRoman(n, "MDCLXVI"));
+                    return;
+                case '1':
+                    result.append(formatNumberDecimal(n, len));
+                    return;
+            }
+        }
+        result.append(formatNumberDecimal(n, 1));
+    }
+
+    private static StringC formatNumberDecimal(long n, nuint minWidth)
+    {
+        string numStr = Math.Abs(n).ToString();
+        while ((nuint)numStr.Length < minWidth)
+            numStr = "0" + numStr;
+        if (n < 0)
+            numStr = "-" + numStr;
+        StringC result = new StringC();
+        result.append(numStr);
+        return result;
+    }
+
+    private static StringC formatNumberLetter(long n, string letters)
+    {
+        var chars = new System.Collections.Generic.List<char>();
+        int nLetters = letters.Length;
+        bool neg = n < 0;
+        if (neg) n = -n;
+        if (n == 0)
+            n = 1;
+        while (n > 0)
+        {
+            n--;
+            chars.Insert(0, letters[(int)(n % nLetters)]);
+            n /= nLetters;
+        }
+        if (neg)
+            chars.Insert(0, '-');
+        StringC result = new StringC();
+        result.append(new string(chars.ToArray()));
+        return result;
+    }
+
+    private static StringC formatNumberRoman(long n, string letters)
+    {
+        StringC result = new StringC();
+        if (n <= 0) return result;
+        // letters: m,d,c,l,x,v,i (for lowercase) or M,D,C,L,X,V,I (for uppercase)
+        int[] values = { 1000, 500, 100, 50, 10, 5, 1 };
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < 7; i += 2)
+        {
+            int count = (int)(n / values[i]);
+            n %= values[i];
+            switch (count)
+            {
+                case 0: break;
+                case 1: case 2: case 3:
+                    for (int j = 0; j < count; j++)
+                        sb.Append(letters[i]);
+                    break;
+                case 4:
+                    sb.Append(letters[i]);
+                    sb.Append(letters[i - 1]);
+                    break;
+                case 5: case 6: case 7: case 8:
+                    sb.Append(letters[i - 1]);
+                    for (int j = 5; j < count; j++)
+                        sb.Append(letters[i]);
+                    break;
+                case 9:
+                    sb.Append(letters[i]);
+                    sb.Append(letters[i - 2]);
+                    break;
+            }
+        }
+        result.append(sb.ToString());
+        return result;
+    }
+}
+
+// Display-size primitive
+public class DisplaySizePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public DisplaySizePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        FOTBuilder.LengthSpec spec = new FOTBuilder.LengthSpec();
+        spec.displaySizeFactor = 1.0;
+        return new LengthSpecObj(spec);
+    }
+}
+
+// Table-unit primitive
+public class TableUnitPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public TableUnitPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long k;
+        if (!args[0]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        FOTBuilder.TableLengthSpec spec = new FOTBuilder.TableLengthSpec();
+        spec.tableUnitFactor = (double)k;
+        return new TableLengthSpecObj(spec);
+    }
+}
+
+// TableLengthSpec object
+public class TableLengthSpecObj : ELObj
+{
+    private FOTBuilder.TableLengthSpec spec_;
+    public TableLengthSpecObj(FOTBuilder.TableLengthSpec spec) { spec_ = spec; }
+    public FOTBuilder.TableLengthSpec spec() { return spec_; }
+}
