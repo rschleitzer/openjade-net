@@ -1376,7 +1376,11 @@ public class ElementNode : ChunkNode
 
     public static void add(GroveImpl grove, StartElementEvent @event)
     {
-        throw new NotImplementedException();
+        grove.setLocOrigin(@event.location().origin());
+        ElementChunk chunk = new ElementChunk();
+        chunk.type = @event.elementType();
+        chunk.locIndex = @event.location().index();
+        grove.push(chunk, false);
     }
 
     public void reuseFor(ElementChunk chunk)
@@ -1402,6 +1406,11 @@ public class CharsChunk : LocChunk
     public Char[]? data()
     {
         return chars_;
+    }
+
+    public void setData(Char[] data)
+    {
+        chars_ = data;
     }
 
     public static nuint allocSize(nuint nChars)
@@ -1587,7 +1596,19 @@ public class DataNode : ChunkNode
 
     public static void add(GroveImpl grove, DataEvent @event)
     {
-        throw new NotImplementedException();
+        nuint dataLen = @event.dataLength();
+        if (dataLen > 0)
+        {
+            grove.setLocOrigin(@event.location().origin());
+            DataChunk chunk = new DataChunk();
+            chunk.size = dataLen;
+            chunk.locIndex = @event.location().index();
+            Char[] data = new Char[dataLen];
+            if (@event.data() != null)
+                Array.Copy(@event.data()!, 0, data, 0, (int)dataLen);
+            chunk.setData(data);
+            grove.appendSibling(chunk);
+        }
     }
 
     public void reuseFor(DataChunk chunk, nuint index)
@@ -1640,7 +1661,18 @@ public class PiNode : ChunkNode
 
     public static void add(GroveImpl grove, PiEvent @event)
     {
-        throw new NotImplementedException();
+        grove.setLocOrigin(@event.location().origin());
+        nuint dataLen = @event.dataLength();
+        PiChunk chunk = new PiChunk();
+        chunk.size = dataLen;
+        chunk.locIndex = @event.location().index();
+        if (dataLen > 0 && @event.data() != null)
+        {
+            Char[] data = new Char[dataLen];
+            Array.Copy(@event.data()!, 0, data, 0, (int)dataLen);
+            chunk.setData(data);
+        }
+        grove.appendSibling(chunk);
     }
 }
 
@@ -1743,7 +1775,11 @@ public class SdataNode : EntityRefNode
 
     public static void add(GroveImpl grove, SdataEntityEvent @event)
     {
-        throw new NotImplementedException();
+        grove.setLocOrigin(@event.location().origin());
+        SdataChunk chunk = new SdataChunk();
+        chunk.entity = @event.entity();
+        chunk.locIndex = @event.location().index();
+        grove.appendSibling(chunk);
     }
 }
 
@@ -1794,7 +1830,11 @@ public class NonSgmlNode : ChunkNode
 
     public static void add(GroveImpl grove, NonSgmlCharEvent @event)
     {
-        throw new NotImplementedException();
+        grove.setLocOrigin(@event.location().origin());
+        NonSgmlChunk chunk = new NonSgmlChunk();
+        chunk.c = @event.character();
+        chunk.locIndex = @event.location().index();
+        grove.appendSibling(chunk);
     }
 }
 
@@ -1822,7 +1862,11 @@ public class ExternalDataNode : EntityRefNode
 
     public static void add(GroveImpl grove, ExternalDataEntityEvent @event)
     {
-        throw new NotImplementedException();
+        grove.setLocOrigin(@event.location().origin());
+        ExternalDataChunk chunk = new ExternalDataChunk();
+        chunk.entity = @event.entity();
+        chunk.locIndex = @event.location().index();
+        grove.appendSibling(chunk);
     }
 }
 
@@ -1850,7 +1894,11 @@ public class SubdocNode : EntityRefNode
 
     public static void add(GroveImpl grove, SubdocEntityEvent @event)
     {
-        throw new NotImplementedException();
+        grove.setLocOrigin(@event.location().origin());
+        SubdocChunk chunk = new SubdocChunk();
+        chunk.entity = @event.entity();
+        chunk.locIndex = @event.location().index();
+        grove.appendSibling(chunk);
     }
 }
 
@@ -1882,17 +1930,19 @@ public abstract class AttributeDefOrigin
 
     public virtual AccessResult makeAttributeValueNode(GroveImpl grove, ref NodePtr ptr, AttributeValue? value)
     {
-        throw new NotImplementedException();
+        // Base implementation - returns null for now
+        return AccessResult.accessNull;
     }
 
     public virtual AccessResult makeAttributeValueNodeList(GroveImpl grove, ref NodeListPtr ptr, AttributeValue? value)
     {
-        throw new NotImplementedException();
+        ptr.assign(new BaseNodeList());
+        return AccessResult.accessOK;
     }
 
     public virtual AccessResult makeAttributeDefNode(GroveImpl grove, ref NodePtr ptr, nuint attributeDefIdx)
     {
-        throw new NotImplementedException();
+        return AccessResult.accessNull;
     }
 
     public virtual AccessResult makeAttributeDefList(GroveImpl grove, ref NodeListPtr ptr, nuint firstIdx)
@@ -1902,7 +1952,7 @@ public abstract class AttributeDefOrigin
 
     public AccessResult makeAttributeDefNode(GroveImpl grove, ref NodePtr ptr, StringC name)
     {
-        throw new NotImplementedException();
+        return AccessResult.accessNull;
     }
 
     public abstract object? attributeOriginId();
@@ -4058,6 +4108,125 @@ public abstract class AttributeDefNode : BaseNode
     }
 }
 
+// Grove builder message event handler - handles messages and validation
+public class GroveBuilderMessageEventHandler : ErrorCountEventHandler
+{
+    protected GroveImpl grove_;
+    protected Messenger? messenger_;
+    protected MessageFormatter? formatter_;
+
+    public GroveBuilderMessageEventHandler(uint index, Messenger? messenger, MessageFormatter? formatter)
+    {
+        grove_ = new GroveImpl(index);
+        messenger_ = messenger;
+        formatter_ = formatter;
+    }
+
+    public GroveBuilderMessageEventHandler(uint index, Messenger? messenger, MessageFormatter? formatter,
+        ConstPtr<Sd> sd, ConstPtr<Syntax> prologSyntax, ConstPtr<Syntax> instanceSyntax)
+    {
+        grove_ = new GroveImpl(index);
+        grove_.setSd(sd, prologSyntax, instanceSyntax);
+        messenger_ = messenger;
+        formatter_ = formatter;
+    }
+
+    public void makeInitialRoot(ref NodePtr root)
+    {
+        var r = grove_.root();
+        if (r != null)
+            root.assign(new SgmlDocumentNode(grove_, r));
+    }
+
+    public override void message(MessageEvent @event)
+    {
+        messenger_?.dispatchMessage(@event.message());
+        base.message(@event);
+    }
+
+    public override void endProlog(EndPrologEvent @event)
+    {
+        grove_.setDtd(@event.dtdPointer());
+    }
+
+    public override void appinfo(AppinfoEvent @event)
+    {
+        StringC? appinfo;
+        if (@event.literal(out appinfo) && appinfo != null)
+            grove_.setAppinfo(appinfo);
+    }
+
+    public override void sgmlDecl(SgmlDeclEvent @event)
+    {
+        grove_.setSd(@event.sdPointer(), @event.prologSyntaxPointer(), @event.instanceSyntaxPointer());
+    }
+
+    public override void entityDefaulted(EntityDefaultedEvent @event)
+    {
+        grove_.addDefaultedEntity(@event.entityPointer());
+    }
+
+    ~GroveBuilderMessageEventHandler()
+    {
+        grove_.setComplete();
+    }
+}
+
+// Grove builder event handler - extends message handler with actual grove construction
+public class GroveBuilderEventHandler : GroveBuilderMessageEventHandler
+{
+    public GroveBuilderEventHandler(uint index, Messenger? messenger, MessageFormatter? formatter)
+        : base(index, messenger, formatter)
+    {
+    }
+
+    public GroveBuilderEventHandler(uint index, Messenger? messenger, MessageFormatter? formatter,
+        ConstPtr<Sd> sd, ConstPtr<Syntax> prologSyntax, ConstPtr<Syntax> instanceSyntax)
+        : base(index, messenger, formatter, sd, prologSyntax, instanceSyntax)
+    {
+    }
+
+    public override void startElement(StartElementEvent @event)
+    {
+        ElementNode.add(grove_, @event);
+    }
+
+    public override void endElement(EndElementEvent @event)
+    {
+        grove_.pop();
+    }
+
+    public override void data(DataEvent @event)
+    {
+        DataNode.add(grove_, @event);
+    }
+
+    public override void pi(PiEvent @event)
+    {
+        PiNode.add(grove_, @event);
+    }
+
+    public override void sdataEntity(SdataEntityEvent @event)
+    {
+        SdataNode.add(grove_, @event);
+    }
+
+    public override void nonSgmlChar(NonSgmlCharEvent @event)
+    {
+        NonSgmlNode.add(grove_, @event);
+    }
+
+    public override void externalDataEntity(ExternalDataEntityEvent @event)
+    {
+        ExternalDataNode.add(grove_, @event);
+    }
+
+    public override void subdocEntity(SubdocEntityEvent @event)
+    {
+        SubdocNode.add(grove_, @event);
+    }
+}
+
 // Main GroveBuilder class - factory for creating grove event handlers
 public class GroveBuilder
 {
@@ -4077,7 +4246,13 @@ public class GroveBuilder
         bool validateOnly,
         ref NodePtr root)
     {
-        throw new NotImplementedException();
+        GroveBuilderMessageEventHandler eh;
+        if (validateOnly)
+            eh = new GroveBuilderMessageEventHandler(index, messenger, formatter);
+        else
+            eh = new GroveBuilderEventHandler(index, messenger, formatter);
+        eh.makeInitialRoot(ref root);
+        return eh;
     }
 
     public static ErrorCountEventHandler make(
@@ -4090,7 +4265,13 @@ public class GroveBuilder
         ConstPtr<Syntax> instanceSyntax,
         ref NodePtr root)
     {
-        throw new NotImplementedException();
+        GroveBuilderMessageEventHandler eh;
+        if (validateOnly)
+            eh = new GroveBuilderMessageEventHandler(index, messenger, formatter, sd, prologSyntax, instanceSyntax);
+        else
+            eh = new GroveBuilderEventHandler(index, messenger, formatter, sd, prologSyntax, instanceSyntax);
+        eh.makeInitialRoot(ref root);
+        return eh;
     }
 }
 
