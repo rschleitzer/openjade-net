@@ -957,8 +957,105 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os, uint properties, uint fontProperties, bool excludeCellProperties = true)
         {
-            // TODO: implement full paragraph format output
-            throw new NotImplementedException();
+            bool outPgfTag = false;
+            string pgfTag = "";
+
+            if ((properties & (uint)Flags.fPgfTag) == 0)
+            {
+                TagStream? ts = MifDoc.CurInstance?.curTagStream();
+                if (ts != null && !ts.PgfTagUsed)
+                {
+                    pgfTag = ts.InitialPgfTag;
+                    outPgfTag = true;
+                    ts.PgfTagUsed = true;
+                }
+            }
+
+            if (properties != 0 || fontProperties != 0 || outPgfTag)
+            {
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<Pgf ";
+                os.indent();
+
+                if (outPgfTag)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfTag `" << pgfTag << "'>";
+                else if ((properties & (uint)Flags.fPgfTag) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfTag `" << PgfTag << "'>";
+
+                base.@out(os, fontProperties, FontStatement.stPgfFont);
+
+                if ((properties & (uint)Flags.fPgfLanguage) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfLanguage " << PgfLanguage << ">";
+                if ((properties & (uint)Flags.fPgfFIndent) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfFIndent " << new T_dimension(PgfFIndent) << ">";
+                if ((properties & (uint)Flags.fPgfLIndent) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfLIndent " << new T_dimension(PgfLIndent) << ">";
+                if ((properties & (uint)Flags.fPgfRIndent) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfRIndent " << new T_dimension(PgfRIndent) << ">";
+                if ((properties & (uint)Flags.fPgfAlignment) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfAlignment " << PgfAlignment << ">";
+                if ((properties & (uint)Flags.fPgfSpBefore) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfSpBefore " << new T_dimension(PgfSpBefore) << ">";
+                if ((properties & (uint)Flags.fPgfSpAfter) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfSpAfter " << new T_dimension(PgfSpAfter) << ">";
+                if ((properties & (uint)Flags.fPgfLineSpacing) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfLineSpacing " << PgfLineSpacing << ">";
+                if ((properties & (uint)Flags.fPgfLeading) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfLeading " << new T_dimension(PgfLeading) << ">";
+
+                if ((properties & (uint)Flags.fPgfNumTabs) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfNumTabs " << PgfNumTabs << ">";
+                if ((properties & (uint)Flags.fTabStops) != 0)
+                    for (int i = 0; i < TabStops.Count; i++)
+                        TabStops[i].@out(os);
+
+                if ((properties & (uint)Flags.fPgfPlacement) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfPlacement " << PgfPlacement << ">";
+                if ((properties & (uint)Flags.fPgfPlacementStyle) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfPlacementStyle " << PgfPlacementStyle << ">";
+                if ((properties & (uint)Flags.fPgfWithPrev) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfWithPrev " << (PgfWithPrev ? "Yes" : "No") << ">";
+                if ((properties & (uint)Flags.fPgfWithNext) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfWithNext " << (PgfWithNext ? "Yes" : "No") << ">";
+                if ((properties & (uint)Flags.fPgfBlockSize) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfBlockSize " << PgfBlockSize << ">";
+                if ((properties & (uint)Flags.fPgfAutoNum) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfAutoNum " << (PgfAutoNum ? "Yes" : "No") << ">";
+                if ((properties & (uint)Flags.fPgfNumFormat) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfNumFormat `" << PgfNumFormat << "'>";
+                if ((properties & (uint)Flags.fPgfNumberFont) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfNumberFont `" << PgfNumberFont << "'>";
+                if ((properties & (uint)Flags.fPgfHyphenate) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfHyphenate " << (PgfHyphenate ? "Yes" : "No") << ">";
+                if ((properties & (uint)Flags.fHyphenMaxLines) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<HyphenMaxLines " << HyphenMaxLines << ">";
+                if ((properties & (uint)Flags.fHyphenMinPrefix) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<HyphenMinPrefix " << HyphenMinPrefix << ">";
+                if ((properties & (uint)Flags.fHyphenMinSuffix) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<HyphenMinSuffix " << HyphenMinSuffix << ">";
+                if ((properties & (uint)Flags.fHyphenMinWord) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<HyphenMinWord " << HyphenMinWord << ">";
+                if ((properties & (uint)Flags.fPgfLetterSpace) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfLetterSpace " << (PgfLetterSpace ? "Yes" : "No") << ">";
+
+                if (MifDoc.CurInstance?.curCell() != null || !excludeCellProperties)
+                {
+                    if ((properties & (uint)Flags.fPgfCellAlignment) != 0)
+                        _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfCellAlignment " << PgfCellAlignment << ">";
+                    if ((properties & (uint)Flags.fPgfCellMargins) != 0)
+                        _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfCellMargins " << PgfCellMargins << ">";
+                    if ((properties & (uint)Flags.fPgfCellLMarginFixed) != 0)
+                        _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfCellLMarginFixed " << (PgfCellLMarginFixed ? "Yes" : "No") << ">";
+                    if ((properties & (uint)Flags.fPgfCellTMarginFixed) != 0)
+                        _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfCellTMarginFixed " << (PgfCellTMarginFixed ? "Yes" : "No") << ">";
+                    if ((properties & (uint)Flags.fPgfCellRMarginFixed) != 0)
+                        _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfCellRMarginFixed " << (PgfCellRMarginFixed ? "Yes" : "No") << ">";
+                    if ((properties & (uint)Flags.fPgfCellBMarginFixed) != 0)
+                        _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfCellBMarginFixed " << (PgfCellBMarginFixed ? "Yes" : "No") << ">";
+                }
+
+                os.undent();
+                _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            }
         }
     }
 
@@ -1339,7 +1436,15 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os, bool resolveCrossReferences = false)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<TextFlow ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TFTag `" << TFTag << "'>";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TFAutoConnect " << (TFAutoConnect ? "Yes" : "No") << ">";
+            content().commit(os.stream(), resolveCrossReferences);
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -2113,7 +2218,64 @@ public class MifDoc : IDisposable
 
         public void commit(string dirName, bool resolveCrossReferences = true)
         {
-            throw new NotImplementedException();
+            System.Diagnostics.Debug.Assert(FileName.Length > 0);
+            string fileLoc = dirName + FileName;
+
+            using (var outFileStream = new System.IO.FileStream(fileLoc, System.IO.FileMode.Create))
+            {
+                var outFile = new FileOutputByteStream();
+                outFile.attach(outFileStream);
+
+                MifOutputByteStream os = new MifOutputByteStream(0);
+                os.setStream(outFile);
+
+                _ = os << "<MIFFile 5.0>";
+
+                colorCatalog.@out(os);
+                pgfCatalog.@out(os);
+                rulingCatalog.@out(os);
+
+                if (AFrames.Count > 0)
+                {
+                    _ = os << "\n<AFrames ";
+                    os.indent();
+                    for (int i = 0; i < AFrames.Count; i++)
+                        AFrames[i].@out(os);
+                    os.undent();
+                    _ = os << '\n' << ">";
+                }
+
+                if (XRefFormats.Count > 0)
+                {
+                    _ = os << "\n<XRefFormats ";
+                    os.indent();
+                    for (int i = 0; i < XRefFormats.Count; i++)
+                        XRefFormats[i].@out(os);
+                    os.undent();
+                    _ = os << '\n' << ">";
+                }
+
+                tblCatalog.@out(os);
+                document.@out(os);
+
+                if (Tbls.Count > 0)
+                {
+                    _ = os << "\n<Tbls ";
+                    os.indent();
+                    for (int i = 0; i < Tbls.Count; i++)
+                        Tbls[i].@out(os, resolveCrossReferences);
+                    os.undent();
+                    _ = os << '\n' << ">";
+                }
+
+                for (int i = 0; i < Pages.Count; i++)
+                    Pages[i].@out(os);
+                for (int i = 0; i < TextFlows.Count; i++)
+                    TextFlows[i].@out(os, resolveCrossReferences);
+
+                if (epilogOs != null)
+                    epilogOs.commit(os.stream(), resolveCrossReferences);
+            }
         }
     }
 
@@ -2659,12 +2821,43 @@ public class MifTmpOutputByteStream : TmpOutputByteStream
 
     public void commit(OutputByteStream os, bool resolveCrossReferences = false)
     {
-        throw new NotImplementedException();
+        MifOutputByteStream outS = new MifOutputByteStream(0);
+        outS.setStream(os);
+
+        var data = getBuffer();
+        int i = 0;
+
+        while (i < data.Length)
+        {
+            if (resolveCrossReferences && data[i] == (byte)MifDoc.escapeChar())
+            {
+                // Read the cross-reference index (4 bytes, little endian)
+                i++;
+                if (i + 4 <= data.Length)
+                {
+                    uint crossRefInfoIdx = BitConverter.ToUInt32(data, i);
+                    i += 4;
+
+                    var crossRefInfos = MifDoc.CurInstance?.crossRefInfos();
+                    if (crossRefInfos != null && crossRefInfoIdx < crossRefInfos.Count)
+                    {
+                        MifDoc.CrossRefInfo crossRefInfo = crossRefInfos[(int)crossRefInfoIdx];
+                        crossRefInfo.@out(outS);
+                    }
+                }
+            }
+            else
+            {
+                os.sputc((sbyte)data[i]);
+                i++;
+            }
+        }
     }
 
     public void commit(StringBuilder str)
     {
-        throw new NotImplementedException();
+        var data = getBuffer();
+        str.Append(System.Text.Encoding.UTF8.GetString(data));
     }
 
     public MifOutputByteStream stream() => os_;
