@@ -57,6 +57,93 @@ public class FlowObj : SosofoObj
         context.endFlowObj();
     }
 
+    // Check if identifier is a display-related NIC
+    public static bool isDisplayNIC(Identifier? ident)
+    {
+        if (ident == null)
+            return false;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyPositionPreference:
+                case Identifier.SyntacticKey.keyIsKeepWithPrevious:
+                case Identifier.SyntacticKey.keyIsKeepWithNext:
+                case Identifier.SyntacticKey.keyKeep:
+                case Identifier.SyntacticKey.keyBreakBefore:
+                case Identifier.SyntacticKey.keyBreakAfter:
+                case Identifier.SyntacticKey.keyIsMayViolateKeepBefore:
+                case Identifier.SyntacticKey.keyIsMayViolateKeepAfter:
+                case Identifier.SyntacticKey.keySpaceBefore:
+                case Identifier.SyntacticKey.keySpaceAfter:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    // Set display-related NIC
+    public static bool setDisplayNIC(ref FOTBuilder.DisplayNIC nic, Identifier? ident,
+                                     ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (ident == null || obj == null)
+            return false;
+
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyPositionPreference:
+                    interp.convertEnumC(obj, ident, loc, out nic.positionPreference);
+                    return true;
+                case Identifier.SyntacticKey.keyIsKeepWithPrevious:
+                    interp.convertBooleanC(obj, ident, loc, out nic.keepWithPrevious);
+                    return true;
+                case Identifier.SyntacticKey.keyIsKeepWithNext:
+                    interp.convertBooleanC(obj, ident, loc, out nic.keepWithNext);
+                    return true;
+                case Identifier.SyntacticKey.keyKeep:
+                    interp.convertEnumC(obj, ident, loc, out nic.keep);
+                    return true;
+                case Identifier.SyntacticKey.keyBreakBefore:
+                    interp.convertEnumC(obj, ident, loc, out nic.breakBefore);
+                    return true;
+                case Identifier.SyntacticKey.keyBreakAfter:
+                    interp.convertEnumC(obj, ident, loc, out nic.breakAfter);
+                    return true;
+                case Identifier.SyntacticKey.keyIsMayViolateKeepBefore:
+                    interp.convertBooleanC(obj, ident, loc, out nic.mayViolateKeepBefore);
+                    return true;
+                case Identifier.SyntacticKey.keyIsMayViolateKeepAfter:
+                    interp.convertBooleanC(obj, ident, loc, out nic.mayViolateKeepAfter);
+                    return true;
+                case Identifier.SyntacticKey.keySpaceBefore:
+                case Identifier.SyntacticKey.keySpaceAfter:
+                    {
+                        ref FOTBuilder.DisplaySpace ds = ref (key == Identifier.SyntacticKey.keySpaceBefore
+                            ? ref nic.spaceBefore
+                            : ref nic.spaceAfter);
+                        DisplaySpaceObj? dso = obj.asDisplaySpace();
+                        if (dso != null)
+                            ds = dso.displaySpace();
+                        else if (interp.convertLengthSpecC(obj, ident, loc, ref ds.nominal))
+                        {
+                            ds.max = ds.nominal;
+                            ds.min = ds.nominal;
+                        }
+                    }
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
     public virtual void processInner(ProcessContext context)
     {
         // To be overridden by concrete flow objects

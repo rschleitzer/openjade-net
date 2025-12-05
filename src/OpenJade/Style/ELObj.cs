@@ -317,6 +317,25 @@ public class Identifier : Named
         elseKey,
         arrowKey,
         external,
+        // Display NIC keywords
+        keyPositionPreference,
+        keyIsKeepWithPrevious,
+        keyIsKeepWithNext,
+        keyKeep,
+        keyBreakBefore,
+        keyBreakAfter,
+        keyIsMayViolateKeepBefore,
+        keyIsMayViolateKeepAfter,
+        keySpaceBefore,
+        keySpaceAfter,
+        keyCoalesceId,
+        // Character and rule keywords
+        keyCh,
+        keyGlyphId,
+        keyIsBreakBeforePriority,
+        keyIsBreakAfterPriority,
+        keyOrientation,
+        keyLength,
     }
 
     public Identifier(StringC name) : base(name)
