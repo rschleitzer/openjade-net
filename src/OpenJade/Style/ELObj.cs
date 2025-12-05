@@ -392,6 +392,8 @@ public class Identifier : Named
         keyGridNRows,
         // Radical keyword
         keyRadical,
+        // Data keyword
+        keyData,
     }
 
     public Identifier(StringC name) : base(name)

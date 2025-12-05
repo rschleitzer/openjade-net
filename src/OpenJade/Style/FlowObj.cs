@@ -677,6 +677,7 @@ public class CharacterFlowObj : FlowObj
         CharacterFlowObj c = new CharacterFlowObj();
         c.setStyle(style());
         c.ch_ = ch_;
+        c.nic_ = nic_;
         return c;
     }
 
@@ -688,6 +689,110 @@ public class CharacterFlowObj : FlowObj
         nic_.ch = ch_;
         nic_.valid = true;
         context.currentFOTBuilder().character(nic_);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyCh:
+                case Identifier.SyntacticKey.keyChar:
+                case Identifier.SyntacticKey.keyGlyphId:
+                case Identifier.SyntacticKey.keyIsSpace:
+                case Identifier.SyntacticKey.keyIsRecordEnd:
+                case Identifier.SyntacticKey.keyIsInputTab:
+                case Identifier.SyntacticKey.keyIsInputWhitespace:
+                case Identifier.SyntacticKey.keyIsPunct:
+                case Identifier.SyntacticKey.keyIsDropAfterLineBreak:
+                case Identifier.SyntacticKey.keyIsDropUnlessBeforeLineBreak:
+                case Identifier.SyntacticKey.keyScript:
+                case Identifier.SyntacticKey.keyMathClass:
+                case Identifier.SyntacticKey.keyMathFontPosture:
+                case Identifier.SyntacticKey.keyStretchFactor:
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (ident == null || obj == null)
+            return;
+        Identifier.SyntacticKey key;
+        if (ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyCh:
+                case Identifier.SyntacticKey.keyChar:
+                    {
+                        Char c;
+                        if (interp.convertCharC(obj, ident, loc, out c))
+                            ch_ = c;
+                    }
+                    return;
+                case Identifier.SyntacticKey.keyGlyphId:
+                    {
+                        string? s;
+                        if (interp.convertPublicIdC(obj, ident, loc, out s))
+                            nic_.glyphId = new FOTBuilder.GlyphId(s);
+                    }
+                    return;
+                case Identifier.SyntacticKey.keyIsSpace:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isSpace);
+                    return;
+                case Identifier.SyntacticKey.keyIsRecordEnd:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isRecordEnd);
+                    return;
+                case Identifier.SyntacticKey.keyIsInputTab:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isInputTab);
+                    return;
+                case Identifier.SyntacticKey.keyIsInputWhitespace:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isInputWhitespace);
+                    return;
+                case Identifier.SyntacticKey.keyIsPunct:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isPunct);
+                    return;
+                case Identifier.SyntacticKey.keyIsDropAfterLineBreak:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isDropAfterLineBreak);
+                    return;
+                case Identifier.SyntacticKey.keyIsDropUnlessBeforeLineBreak:
+                    interp.convertBooleanC(obj, ident, loc, out nic_.isDropUnlessBeforeLineBreak);
+                    return;
+                case Identifier.SyntacticKey.keyScript:
+                    {
+                        string? s;
+                        if (interp.convertPublicIdC(obj, ident, loc, out s))
+                            nic_.script = s;
+                    }
+                    return;
+                case Identifier.SyntacticKey.keyMathClass:
+                    interp.convertEnumC(obj, ident, loc, out nic_.mathClass);
+                    return;
+                case Identifier.SyntacticKey.keyMathFontPosture:
+                    interp.convertEnumC(obj, ident, loc, out nic_.mathFontPosture);
+                    return;
+                case Identifier.SyntacticKey.keyStretchFactor:
+                    interp.convertRealC(obj, ident, loc, out nic_.stretchFactor);
+                    return;
+                case Identifier.SyntacticKey.keyBreakBeforePriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakBeforePriority);
+                    return;
+                case Identifier.SyntacticKey.keyBreakAfterPriority:
+                    interp.convertIntegerC(obj, ident, loc, out nic_.breakAfterPriority);
+                    return;
+                default:
+                    break;
+            }
+        }
     }
 }
 
@@ -1731,5 +1836,70 @@ public class EmptySosofoObj : SosofoObj
     public override void process(ProcessContext context)
     {
         // Empty - does nothing
+    }
+}
+
+// Unknown flow object - for declared-flow-object-class instances
+public class UnknownFlowObj : CompoundFlowObj
+{
+    public override FlowObj copy(Interpreter interp)
+    {
+        UnknownFlowObj c = new UnknownFlowObj();
+        c.setStyle(style());
+        c.setContent(content());
+        return c;
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        // Accept any non-inherited characteristic except label and content-map
+        Identifier.SyntacticKey syn;
+        if (ident != null && ident.syntacticKey(out syn))
+        {
+            if (syn == Identifier.SyntacticKey.keyLabel || syn == Identifier.SyntacticKey.keyContentMap)
+                return false;
+        }
+        // Don't accept inherited characteristics
+        if (ident != null && ident.inheritedC() != null)
+            return false;
+        return true;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp)
+    {
+        // Silently ignore all non-inherited characteristics
+    }
+}
+
+// Formatting instruction flow object
+public class FormattingInstructionFlowObj : FlowObj
+{
+    private StringC data_ = new StringC();
+
+    public override FlowObj copy(Interpreter interp)
+    {
+        FormattingInstructionFlowObj c = new FormattingInstructionFlowObj();
+        c.setStyle(style());
+        c.data_ = data_;
+        return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        context.currentFOTBuilder().formattingInstruction(data_);
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key) && key == Identifier.SyntacticKey.keyData)
+            return true;
+        return false;
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? obj, Location loc, Interpreter interp)
+    {
+        if (obj != null)
+            interp.convertStringC(obj, ident, loc, out data_);
     }
 }
