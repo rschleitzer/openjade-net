@@ -2981,12 +2981,13 @@ public class MifFOTBuilder : FOTBuilder
 
         public override bool hasNIC(StringC name)
         {
-            throw new NotImplementedException();
+            // IndexEntryFlowObj NICs are handled through the nic field
+            return false;
         }
 
         public override void setNIC(StringC name, IExtensionFlowObjValue value)
         {
-            throw new NotImplementedException();
+            // IndexEntryFlowObj NICs are handled through the nic field
         }
 
         public override ExtensionFlowObj copy()
@@ -3831,7 +3832,31 @@ public class MifFOTBuilder : FOTBuilder
 
     public void indexEntry(IndexEntryNIC nic)
     {
-        throw new NotImplementedException();
+        StringBuilder mText = new StringBuilder();
+        if (nic.components.Count > 0)
+        {
+            if (!nic.pageNumber)
+                mText.Append("<$nopage>");
+            if (nic.startsPageRange)
+                mText.Append("<$startrange>");
+            if (nic.endsPageRange)
+                mText.Append("<$endrange>");
+            bool first = true;
+            for (int i = 0; i < nic.components.Count; first = false, i++)
+            {
+                if (!first) mText.Append(':');
+                for (nuint ii = 0; ii < nic.components[i].size(); ii++)
+                    mText.Append((char)nic.components[i][ii]);
+            }
+            if (nic.sortString.size() > 0)
+            {
+                mText.Append('[');
+                for (nuint i = 0; i < nic.sortString.size(); i++)
+                    mText.Append((char)nic.sortString[i]);
+                mText.Append(']');
+            }
+            indexEntryStack.Add(new MifDoc.Marker(new MifDoc.T_string(mText.ToString()), MifDoc.Marker.MarkerType.Index));
+        }
     }
 
     public override void startSimplePageSequenceSerial()
@@ -4002,12 +4027,40 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void startLineField(LineFieldNIC nic)
     {
-        throw new NotImplementedException();
+        checkForParagraphReopening();
+        lastFlowObjectWasWhitespace = false;
+
+        long fieldWidth = computeLengthSpec(nextFormat.FotFieldWidth);
+        long firstLineIndent = mifDoc.curPara()?.curFormat().PgfFIndent ?? 0;
+        bool leadingTab = true;
+        switch (nextFormat.FotFieldAlign)
+        {
+            case Symbol.symbolStart:
+            default:
+                mifDoc.curPara()?.curFormat().TabStops.Add(
+                    new MifDoc.TabStop(MifDoc.sLeft, firstLineIndent + fieldWidth));
+                leadingTab = false;
+                break;
+            case Symbol.symbolEnd:
+                mifDoc.curPara()?.curFormat().TabStops.Add(
+                    new MifDoc.TabStop(MifDoc.sRight, firstLineIndent + fieldWidth));
+                mifDoc.curPara()?.curFormat().TabStops.Add(
+                    new MifDoc.TabStop(MifDoc.sLeft, firstLineIndent + fieldWidth + 1));
+                break;
+            case Symbol.symbolCenter:
+                mifDoc.curPara()?.curFormat().TabStops.Add(
+                    new MifDoc.TabStop(MifDoc.sCenter, firstLineIndent + fieldWidth / 2));
+                mifDoc.curPara()?.curFormat().TabStops.Add(
+                    new MifDoc.TabStop(MifDoc.sLeft, firstLineIndent + fieldWidth + 1));
+                break;
+        }
+        if (leadingTab)
+            mifDoc.outSpecialChar(MifDoc.sTab);
     }
 
     public override void endLineField()
     {
-        throw new NotImplementedException();
+        mifDoc.outSpecialChar(MifDoc.sTab);
     }
 
     public override void startParagraph(ParagraphNIC nic)
@@ -4325,19 +4378,29 @@ public class MifFOTBuilder : FOTBuilder
     public override void setDisplayAlignment(Symbol alignment) { nextFormat.FotDisplayAlignment = alignment; }
     public override void setFieldAlign(Symbol align) { nextFormat.FotFieldAlign = align; }
 
-    public override void setColor(DeviceRGBColor color)
+    public override void setColor(DeviceRGBColor rgbColor)
     {
-        throw new NotImplementedException();
+        var color = new MifDoc.Color(rgbColor.red, rgbColor.green, rgbColor.blue);
+        nextFormat.FColor = color.ColorTag;
+        if (!mifDoc.colorCatalog().Colors.ContainsKey(color.ColorTag))
+        {
+            mifDoc.colorCatalog().Colors[color.ColorTag] = color;
+        }
     }
 
-    public override void setBackgroundColor(DeviceRGBColor color)
+    public override void setBackgroundColor(DeviceRGBColor rgbColor)
     {
-        throw new NotImplementedException();
+        var color = new MifDoc.Color(rgbColor.red, rgbColor.green, rgbColor.blue);
+        nextFormat.MifBackgroundColor = color.ColorTag;
+        if (!mifDoc.colorCatalog().Colors.ContainsKey(color.ColorTag))
+        {
+            mifDoc.colorCatalog().Colors[color.ColorTag] = color;
+        }
     }
 
     public override void setBackgroundColor()
     {
-        throw new NotImplementedException();
+        nextFormat.MifBackgroundColor = "";
     }
 
     public override void setPageWidth(long pWidth) { nextFormat.FotPageWidth = pWidth; }
@@ -4460,7 +4523,17 @@ public class MifFOTBuilder : FOTBuilder
     // Helper methods
     public void synchronizeFontFormat()
     {
-        throw new NotImplementedException();
+        if (mifDoc.curPara(false) != null)
+        {
+            mifDoc.curPara()!.curFormat().ffUpdateFrom(nextFormat);
+            mifDoc.curPara()!.curFormat().ffOut(mifDoc.os(), MifDoc.FontFormat.FontStatement.stFont);
+        }
+        else
+        {
+            mifDoc.curFormat().ffUpdateFrom(nextFormat);
+            mifDoc.curFormat().ffOut(mifDoc.os(), MifDoc.FontFormat.FontStatement.stFont);
+        }
+        outPendingInlineStatements();
     }
 
     public long computeLengthSpec(LengthSpec spec)
@@ -4581,7 +4654,42 @@ public class MifFOTBuilder : FOTBuilder
 
     protected void checkForParagraphReopening()
     {
-        throw new NotImplementedException();
+        DisplayInfo? curDs = displayStack.First?.Value;
+        if (curDs != null && curDs.paragraphClosedInMif)
+        {
+            Format f = format();
+
+            f.setPgfWithPrev(curDs.firstParaOutputed ? curDs.keepWithinPageInEffect : false);
+            f.setPgfWithNext(false);
+            curDs.firstParaOutputed = true;
+
+            processDisplaySpaceStack();
+            switch (pendingBreak)
+            {
+                case Symbol.symbolPage:
+                    f.setPgfPlacement(MifDoc.sPageTop);
+                    break;
+                case Symbol.symbolColumn:
+                    f.setPgfPlacement(MifDoc.sColumnTop);
+                    break;
+                default:
+                    f.setPgfPlacement(MifDoc.sAnywhere);
+                    break;
+            }
+            pendingBreak = Symbol.symbolFalse;
+
+            f.setPgfSpBefore(pendingEffectiveDisplaySpace.nominal);
+            pendingEffectiveDisplaySpace.clear();
+            f.setPgfFIndent(nextFormat.PgfLIndent);
+
+            MifDoc.Para p = new MifDoc.Para();
+            mifDoc.enterPara(p);
+            f.@out(mifDoc.os());
+            mifDoc.beginParaLine();
+
+            synchronizeFontFormat();
+            curDs.paragraphClosedInMif = false;
+        }
     }
 
     protected void outPendingInlineStatements()
@@ -4597,17 +4705,77 @@ public class MifFOTBuilder : FOTBuilder
 
     protected void startDisplay(DisplayNIC nic)
     {
-        throw new NotImplementedException();
+        if (!inSimplePageSequence)
+        {
+            if (!bookComponentOpened)
+            {
+                mifDoc.enterBookComponent();
+                initMifBookComponent();
+                bookComponentOpened = true;
+            }
+            bookComponentAvailable = false;
+        }
+
+        displaySpaceQueue.Enqueue(new DisplaySpaceInfo(nic.spaceBefore, nic.breakBefore, false));
+
+        DisplayInfo? di = displayStack.First?.Value;
+        if (di != null && di.isParagraph && !di.paragraphClosedInMif)
+        {
+            if (mifDoc.curPara()?.content().isEmpty() ?? false)
+            {
+                doEndParagraph(true, true, true, true);
+            }
+            else
+                doEndParagraph(true, true);
+            di.paragraphClosedInMif = true;
+        }
+
+        if (curTable().CurCell != null)
+            nextFormat.FotCurDisplaySize = curTable().CurCell.displaySize;
+        else if (nextFormat.FotSpan > 1)
+            nextFormat.FotCurDisplaySize
+                = nextFormat.FotPageWidth - nextFormat.FotLeftMargin - nextFormat.FotRightMargin;
+        else
+            nextFormat.FotCurDisplaySize
+                = (nextFormat.FotPageWidth - nextFormat.FotLeftMargin - nextFormat.FotRightMargin
+                    - nextFormat.FotPageColumnSep * (nextFormat.FotPageNColumns - 1))
+                  / nextFormat.FotPageNColumns;
+
+        displayStack.AddFirst(new DisplayInfo(nic, displayStack.First?.Value));
     }
 
     protected void endDisplay()
     {
-        throw new NotImplementedException();
+        DisplayInfo? di = displayStack.First?.Value;
+        if (di != null)
+        {
+            displayStack.RemoveFirst();
+            displaySpaceQueue.Enqueue(new DisplaySpaceInfo(di.spaceAfter, di.breakAfter, true));
+        }
     }
 
     protected void processDisplaySpaceStack()
     {
-        throw new NotImplementedException();
+        pendingBreak = Symbol.symbolFalse;
+        EffectiveDisplaySpace effectiveDisplaySpace = new EffectiveDisplaySpace();
+        while (displaySpaceQueue.Count > 0)
+        {
+            DisplaySpaceInfo curDSI = displaySpaceQueue.Dequeue();
+            if (curDSI.breakType == Symbol.symbolPage || curDSI.breakType == Symbol.symbolColumn)
+            {
+                effectiveDisplaySpace.clear();
+                if (pendingBreak != Symbol.symbolFalse)
+                    mifDoc.outBreakingPara(curDSI.breakType == Symbol.symbolPage
+                                            ? MifDoc.sPageTop : MifDoc.sColumnTop);
+                pendingBreak = curDSI.breakType;
+                if (!curDSI.breakIsAfter)
+                    effectiveDisplaySpace.combine(createEffectiveDisplaySpace(curDSI.space));
+            }
+            else
+                effectiveDisplaySpace.combine(createEffectiveDisplaySpace(curDSI.space));
+        }
+
+        pendingEffectiveDisplaySpace = effectiveDisplaySpace;
     }
 
     protected MifDoc.Frame makeAnchoredFrame(MifDoc.T_keyword frameType, long width, long height,
