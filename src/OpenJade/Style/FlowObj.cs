@@ -100,11 +100,21 @@ public class SequenceFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startSequence();
+        base.processInner(context);
+        fotb.endSequence();
+    }
 }
 
 // Paragraph flow object
 public class ParagraphFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.ParagraphNIC nic_ = new FOTBuilder.ParagraphNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         ParagraphFlowObj c = new ParagraphFlowObj();
@@ -112,17 +122,35 @@ public class ParagraphFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startParagraph(nic_);
+        base.processInner(context);
+        fotb.endParagraph();
+    }
 }
 
 // Display group flow object
 public class DisplayGroupFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.DisplayGroupNIC nic_ = new FOTBuilder.DisplayGroupNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         DisplayGroupFlowObj c = new DisplayGroupFlowObj();
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startDisplayGroup(nic_);
+        base.processInner(context);
+        fotb.endDisplayGroup();
     }
 }
 
@@ -184,17 +212,43 @@ public class ScrollFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startScroll();
+        base.processInner(context);
+        fotb.endScroll();
+    }
 }
 
 // Link flow object
 public class LinkFlowObj : CompoundFlowObj
 {
+    private AddressObj? addressObj_;
+
     public override FlowObj copy(Interpreter interp)
     {
         LinkFlowObj c = new LinkFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.addressObj_ = addressObj_;
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        if (addressObj_ == null)
+        {
+            FOTBuilder.Address addr = new FOTBuilder.Address();
+            addr.type = FOTBuilder.Address.Type.none;
+            fotb.startLink(addr);
+        }
+        else
+            fotb.startLink(addressObj_.address());
+        base.processInner(context);
+        fotb.endLink();
     }
 }
 
@@ -202,6 +256,7 @@ public class LinkFlowObj : CompoundFlowObj
 public class CharacterFlowObj : FlowObj
 {
     private Char ch_;
+    private FOTBuilder.CharacterNIC nic_ = new FOTBuilder.CharacterNIC();
 
     public CharacterFlowObj() { ch_ = 0; }
     public CharacterFlowObj(Char c) { ch_ = c; }
@@ -218,50 +273,92 @@ public class CharacterFlowObj : FlowObj
 
     public Char ch() { return ch_; }
     public void setCh(Char c) { ch_ = c; }
+
+    public override void processInner(ProcessContext context)
+    {
+        nic_.ch = ch_;
+        nic_.valid = true;
+        context.currentFOTBuilder().character(nic_);
+    }
 }
 
 // External graphic flow object
 public class ExternalGraphicFlowObj : FlowObj
 {
+    private FOTBuilder.ExternalGraphicNIC nic_ = new FOTBuilder.ExternalGraphicNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         ExternalGraphicFlowObj c = new ExternalGraphicFlowObj();
         c.setStyle(style());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        context.currentFOTBuilder().externalGraphic(nic_);
+    }
 }
 
 // Rule flow object
 public class RuleFlowObj : FlowObj
 {
+    private FOTBuilder.RuleNIC nic_ = new FOTBuilder.RuleNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         RuleFlowObj c = new RuleFlowObj();
         c.setStyle(style());
         return c;
     }
+
+    public override bool isRule() { return true; }
+
+    public override void processInner(ProcessContext context)
+    {
+        context.currentFOTBuilder().rule(nic_);
+    }
 }
 
 // Leader flow object
 public class LeaderFlowObj : FlowObj
 {
+    private FOTBuilder.LeaderNIC nic_ = new FOTBuilder.LeaderNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         LeaderFlowObj c = new LeaderFlowObj();
         c.setStyle(style());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startLeader(nic_);
+        fotb.endLeader();
+    }
 }
 
 // Line field flow object
 public class LineFieldFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.LineFieldNIC nic_ = new FOTBuilder.LineFieldNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         LineFieldFlowObj c = new LineFieldFlowObj();
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startLineField(nic_);
+        base.processInner(context);
+        fotb.endLineField();
     }
 }
 
@@ -274,6 +371,14 @@ public class SidelineFlowObj : CompoundFlowObj
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startSideline();
+        base.processInner(context);
+        fotb.endSideline();
     }
 }
 
@@ -314,6 +419,8 @@ public class AlignedColumnFlowObj : CompoundFlowObj
 // Table flow object
 public class TableFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.TableNIC nic_ = new FOTBuilder.TableNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         TableFlowObj c = new TableFlowObj();
@@ -321,17 +428,35 @@ public class TableFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startTable(nic_);
+        base.processInner(context);
+        fotb.endTable();
+    }
 }
 
 // Table part flow object
 public class TablePartFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.TablePartNIC nic_ = new FOTBuilder.TablePartNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         TablePartFlowObj c = new TablePartFlowObj();
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startTablePart(nic_, out FOTBuilder? header, out FOTBuilder? footer);
+        base.processInner(context);
+        fotb.endTablePart();
     }
 }
 
@@ -345,28 +470,53 @@ public class TableRowFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startTableRow();
+        base.processInner(context);
+        fotb.endTableRow();
+    }
 }
 
 // Table column flow object
 public class TableColumnFlowObj : FlowObj
 {
+    private FOTBuilder.TableColumnNIC nic_ = new FOTBuilder.TableColumnNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         TableColumnFlowObj c = new TableColumnFlowObj();
         c.setStyle(style());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        context.currentFOTBuilder().tableColumn(nic_);
+    }
 }
 
 // Table cell flow object
 public class TableCellFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.TableCellNIC nic_ = new FOTBuilder.TableCellNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         TableCellFlowObj c = new TableCellFlowObj();
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startTableCell(nic_);
+        base.processInner(context);
+        fotb.endTableCell();
     }
 }
 
@@ -391,6 +541,14 @@ public class MathSequenceFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startMathSequence();
+        base.processInner(context);
+        fotb.endMathSequence();
+    }
 }
 
 // Fraction flow object
@@ -402,6 +560,14 @@ public class FractionFlowObj : CompoundFlowObj
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startFraction(out FOTBuilder? num, out FOTBuilder? denom);
+        base.processInner(context);
+        fotb.endFraction();
     }
 }
 
@@ -415,6 +581,14 @@ public class UnmathFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startUnmath();
+        base.processInner(context);
+        fotb.endUnmath();
+    }
 }
 
 // Superscript flow object
@@ -427,6 +601,14 @@ public class SuperscriptFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startSuperscript();
+        base.processInner(context);
+        fotb.endSuperscript();
+    }
 }
 
 // Subscript flow object
@@ -438,6 +620,14 @@ public class SubscriptFlowObj : CompoundFlowObj
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startSubscript();
+        base.processInner(context);
+        fotb.endSubscript();
     }
 }
 
@@ -504,6 +694,8 @@ public class MathOperatorFlowObj : CompoundFlowObj
 // Grid flow object
 public class GridFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.GridNIC nic_ = new FOTBuilder.GridNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         GridFlowObj c = new GridFlowObj();
@@ -511,17 +703,35 @@ public class GridFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startGrid(nic_);
+        base.processInner(context);
+        fotb.endGrid();
+    }
 }
 
 // Grid cell flow object
 public class GridCellFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.GridCellNIC nic_ = new FOTBuilder.GridCellNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         GridCellFlowObj c = new GridCellFlowObj();
         c.setStyle(style());
         c.setContent(content());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startGridCell(nic_);
+        base.processInner(context);
+        fotb.endGridCell();
     }
 }
 
