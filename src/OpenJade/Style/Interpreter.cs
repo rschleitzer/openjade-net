@@ -862,4 +862,6 @@ public enum InterpreterMessages
     badConnection,
     contentMapBadPort,
     badContentMap,
+    // Identifier messages
+    identifierLoop,
 }

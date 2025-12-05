@@ -24,9 +24,39 @@ public class StyleEngine : IDisposable
 
     public void defineVariable(StringC str)
     {
-        // TODO: Implement variable definition
-        // For now, just store in command line
-        cmdline_.append(str);
+        // Interpret "name=value" as a string variable setting
+        if (str.size() > 0 && str[0] == '(')
+        {
+            // Already a DSSSL expression - pass through
+            cmdline_.append(str);
+        }
+        else
+        {
+            // Find the '=' separator
+            nuint i;
+            for (i = 0; i < str.size() && str[i] != '='; i++)
+                ;
+
+            if (i == 0 || i >= str.size())
+            {
+                // No '=' found or empty name - define as #t
+                cmdline_.append(interpreter_.makeStringC("(define "));
+                cmdline_.append(str);
+                cmdline_.append(interpreter_.makeStringC(" #t)"));
+            }
+            else
+            {
+                // name=value format - define as string
+                cmdline_.append(interpreter_.makeStringC("(define "));
+                // Append the name part (before '=')
+                cmdline_.append(str.data(), 0, i);
+                cmdline_.append(interpreter_.makeStringC(" \""));
+                // Append the value part (after '=')
+                if (str.size() > i + 1)
+                    cmdline_.append(str.data(), i + 1, str.size() - i - 1);
+                cmdline_.append(interpreter_.makeStringC("\")"));
+            }
+        }
     }
 
     public void parseSpec(SgmlParser specParser, CharsetInfo charset,

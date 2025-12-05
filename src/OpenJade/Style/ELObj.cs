@@ -269,10 +269,12 @@ public class Identifier : Named
     private StringC name_;
     private ELObj? value_;
     private Expression? expression_;  // Uncompiled expression for lazy evaluation
+    private InsnPtr insn_;            // Compiled instruction
     private uint defPart_;
     private Location defLoc_;
     private bool isDefined_;
     private bool evaluated_;
+    private bool beingComputed_;      // Loop detection
     private ConstPtr<InheritedC>? inheritedC_;
     private FlowObj? flowObj_;
     private SyntacticKey synKey_;
@@ -403,10 +405,12 @@ public class Identifier : Named
         name_ = name;
         value_ = null;
         expression_ = null;
+        insn_ = new InsnPtr();
         defPart_ = 0;
         defLoc_ = new Location();
         isDefined_ = false;
         evaluated_ = false;
+        beingComputed_ = false;
         inheritedC_ = null;
         flowObj_ = null;
         synKey_ = SyntacticKey.notKey;
@@ -445,11 +449,49 @@ public class Identifier : Named
     {
         if (!isDefined_)
             return null;
-        if (value_ == null && force)
+        if (value_ != null)
+            return value_;
+
+        // Need to compute from expression
+        if (expression_ == null)
+            return null;
+
+        // Check for recursive definition loop
+        if (beingComputed_)
         {
-            // TODO: Compute value from expression
-            return interp.makeError();
+            if (force)
+            {
+                interp.setNextLocation(defLoc_);
+                interp.message(InterpreterMessages.identifierLoop, name_.ToString());
+                value_ = interp.makeError();
+            }
+            return value_;
         }
+
+        beingComputed_ = true;
+        try
+        {
+            // Compile expression if not already compiled
+            if (insn_.isNull())
+            {
+                insn_ = Expression.optimizeCompile(expression_, interp, new Environment(), 0, new InsnPtr());
+            }
+
+            // Evaluate if forced or expression can be evaluated at compile time
+            if (force || expression_.canEval(false))
+            {
+                VM vm = new VM(interp);
+                ELObj? v = vm.eval(insn_.pointer());
+                if (v != null)
+                    interp.makePermanent(v);
+                value_ = v;
+            }
+        }
+        finally
+        {
+            beingComputed_ = false;
+        }
+
         return value_;
     }
 
@@ -1476,9 +1518,10 @@ public class PairNodeListObj : NodeListObj
 // Map node list - applies a primitive to each node
 public class MapNodeListObj : NodeListObj
 {
-    private PrimitiveObj func_;
+    private PrimitiveObj? func_;
     private NodeListObj nodeList_;
     private Context context_;
+    private NodeListObj? mapped_;  // Cached result of applying func to current node
 
     public class Context
     {
@@ -1492,22 +1535,83 @@ public class MapNodeListObj : NodeListObj
         }
     }
 
-    public MapNodeListObj(PrimitiveObj func, NodeListObj nodeList, Context context)
+    public MapNodeListObj(PrimitiveObj? func, NodeListObj nodeList, Context context, NodeListObj? mapped = null)
     {
         func_ = func;
         nodeList_ = nodeList;
         context_ = context;
+        mapped_ = mapped;
     }
 
     public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
     {
-        // TODO: implement mapping
-        return nodeList_.nodeListFirst(ctx, interp);
+        while (true)
+        {
+            if (mapped_ == null)
+            {
+                mapNext(ctx, interp);
+                if (mapped_ == null)
+                    break;
+            }
+            NodePtr? nd = mapped_.nodeListFirst(ctx, interp);
+            if (nd != null)
+                return nd;
+            mapped_ = null;
+        }
+        return null;
     }
 
     public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
     {
-        return new MapNodeListObj(func_, nodeList_.nodeListRest(ctx, interp), context_);
+        while (true)
+        {
+            if (mapped_ == null)
+            {
+                mapNext(ctx, interp);
+                if (mapped_ == null)
+                    break;
+            }
+            NodePtr? nd = mapped_.nodeListFirst(ctx, interp);
+            if (nd != null)
+            {
+                NodeListObj tem = mapped_.nodeListRest(ctx, interp);
+                return new MapNodeListObj(func_, nodeList_, context_, tem);
+            }
+            mapped_ = null;
+        }
+        return interp.makeEmptyNodeList();
+    }
+
+    private void mapNext(EvalContext ctx, Interpreter interp)
+    {
+        if (func_ == null)
+            return;
+
+        NodePtr? nd = nodeList_.nodeListFirst(ctx, interp);
+        if (nd == null)
+            return;
+
+        // Create VM using stored context and apply function
+        VM vm = new VM(context_.evalContext, interp);
+        InsnPtr insn = func_.makeCallInsn(1, interp, context_.loc, new InsnPtr());
+        ELObj? ret = vm.eval(insn.pointer(), null, new NodePtrNodeListObj(nd));
+
+        if (ret == null || interp.isError(ret))
+        {
+            func_ = null;
+            return;
+        }
+
+        mapped_ = ret.asNodeList();
+        if (mapped_ == null)
+        {
+            interp.setNextLocation(context_.loc);
+            // Function didn't return a node list - disable further mapping
+            func_ = null;
+            return;
+        }
+
+        nodeList_ = nodeList_.nodeListRest(ctx, interp);
     }
 }
 
