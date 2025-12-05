@@ -67,41 +67,4 @@ public static class FOTBuilderFactory
 // RtfFOTBuilder is implemented in RtfFOTBuilder.cs
 // SgmlFOTBuilder is implemented in SgmlFOTBuilder.cs
 // TransformFOTBuilder is implemented in TransformFOTBuilder.cs
-
-// MIF FOT Builder - produces FrameMaker MIF output
-public class MifFOTBuilder : FOTBuilder
-{
-    private StringC fileLoc_;
-    private Ptr<ExtendEntityManager>? entityManager_;
-    private CharsetInfo? charsetInfo_;
-    private CmdLineApp? app_;
-
-    public MifFOTBuilder(
-        StringC fileLoc,
-        Ptr<ExtendEntityManager> entityManager,
-        CharsetInfo charsetInfo,
-        CmdLineApp app)
-    {
-        fileLoc_ = fileLoc;
-        entityManager_ = entityManager;
-        charsetInfo_ = charsetInfo;
-        app_ = app;
-    }
-
-    public override void characters(Char[] data, nuint size)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void startParagraph(FOTBuilder.ParagraphNIC nic)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void endParagraph()
-    {
-        throw new NotImplementedException();
-    }
-
-    // Additional MIF-specific implementations would go here
-}
+// MifFOTBuilder is implemented in MifFOTBuilder.cs
