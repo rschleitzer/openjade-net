@@ -1350,7 +1350,7 @@ public class StyleExpression : Expression
                 }
             }
             else if (!maybeStyleKeyword(keys_[i]))
-                ;
+            { /* skip non-style-keywords */ }
             else if (keys_[i]!.syntacticKey(out sk) && sk == Identifier.SyntacticKey.keyUse)
             {
                 if (!hasUse)

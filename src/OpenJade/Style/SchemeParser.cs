@@ -74,9 +74,11 @@ public class SchemeParser : Messenger
     private InputSource? in_;
     private StringC currentToken_;
     private ProcessingMode? defMode_;
+#pragma warning disable CS0414 // Field assigned but never used (port stubs)
     private string? afiiPublicId_;
     private bool dsssl2_;
     private LangObj? lang_;
+#pragma warning restore CS0414
     private Xchar pushedBack_ = noChar;  // One-character pushback buffer
 
     public SchemeParser(Interpreter interp, InputSource input)

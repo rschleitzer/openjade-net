@@ -874,13 +874,6 @@ public class CurrentNodePrimitiveObj : PrimitiveObj
             return noCurrentNodeError(interp, loc);
         return new NodePtrNodeListObj(ctx.currentNode);
     }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
-    }
 }
 
 // Node-list? primitive
@@ -1032,13 +1025,6 @@ public class ParentPrimitiveObj : PrimitiveObj
             return interp.makeEmptyNodeList();
         return new NodePtrNodeListObj(parent);
     }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
-    }
 }
 
 // Gi primitive (get generic identifier / element name)
@@ -1066,13 +1052,6 @@ public class GiPrimitiveObj : PrimitiveObj
             return interp.makeString(str.data(), str.size());
         return interp.makeFalse();
     }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
-    }
 }
 
 // Id primitive (get element ID)
@@ -1099,13 +1078,6 @@ public class IdPrimitiveObj : PrimitiveObj
         if (node != null && node.getId(str) == AccessResult.accessOK)
             return interp.makeString(str.data(), str.size());
         return interp.makeFalse();
-    }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
     }
 }
 
@@ -2684,13 +2656,6 @@ public class AttributeStringPrimitiveObj : PrimitiveObj
         return interp.makeFalse();
     }
 
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
-    }
-
     internal static bool nodeAttributeString(NodePtr node, StringC attName, StringC value)
     {
         NamedNodeListPtr atts = new NamedNodeListPtr();
@@ -2762,13 +2727,6 @@ public class InheritedAttributeStringPrimitiveObj : PrimitiveObj
         } while (cur.assignParent() == AccessResult.accessOK);
         return interp.makeFalse();
     }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
-    }
 }
 
 // Ancestor primitive
@@ -2817,13 +2775,6 @@ public class AncestorPrimitiveObj : PrimitiveObj
             }
         }
         return interp.makeEmptyNodeList();
-    }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
     }
 }
 
@@ -3082,13 +3033,6 @@ public class ElementWithIdPrimitiveObj : PrimitiveObj
             return interp.makeEmptyNodeList();
         return new NodePtrNodeListObj(elem);
     }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
-    }
 }
 
 // First-sibling? primitive
@@ -3137,13 +3081,6 @@ public class IsFirstSiblingPrimitiveObj : PrimitiveObj
             }
         }
         return interp.makeTrue();
-    }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
     }
 }
 
@@ -3194,13 +3131,6 @@ public class IsLastSiblingPrimitiveObj : PrimitiveObj
         }
         return interp.makeTrue();
     }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
-    }
 }
 
 // ChildNumber primitive
@@ -3250,13 +3180,6 @@ public class ChildNumberPrimitiveObj : PrimitiveObj
             }
         }
         return interp.makeInteger(count);
-    }
-
-    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
-    {
-        interp.setNextLocation(loc);
-        interp.message(InterpreterMessages.noCurrentNode);
-        return interp.makeError();
     }
 }
 

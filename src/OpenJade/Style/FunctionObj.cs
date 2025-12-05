@@ -126,10 +126,10 @@ public abstract class PrimitiveObj : FunctionObj
         return interp.makeError();
     }
 
-    protected ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    protected static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
     {
         interp.setNextLocation(loc);
-        // interp.message(InterpreterMessages.noCurrentNode);
+        interp.message(InterpreterMessages.noCurrentNode);
         return interp.makeError();
     }
 }

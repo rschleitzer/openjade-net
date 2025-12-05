@@ -102,7 +102,9 @@ public class ParentChunk : LocChunk
 
 public class ElementChunk : ParentChunk
 {
+#pragma warning disable CS0649 // Field never assigned (port stub)
     internal ElementType? type;
+#pragma warning restore CS0649
     public uint elementIndex;
 
     public virtual AttributeValue? attributeValue(nuint attIndex, GroveImpl grove)
@@ -285,7 +287,9 @@ public class GroveImpl
     private List<ConstPtr<AttributeValue>> values_ = new List<ConstPtr<AttributeValue>>();
     private List<ConstPtr<Origin>> origins_ = new List<ConstPtr<Origin>>();
     private NamedResourceTable<Entity> defaultedEntityTable_ = new NamedResourceTable<Entity>();
+#pragma warning disable CS0649 // Field never assigned (port stub)
     private Boolean hasDefaultEntity_;
+#pragma warning restore CS0649
     private Boolean haveAppinfo_;
     private StringC appinfo_ = new StringC();
     private Origin? currentLocOrigin_;

@@ -19,7 +19,9 @@ public class TeXFOTBuilder : FOTBuilder
 {
     private OutputByteStream os_;
     private Messenger? mgr_;
+#pragma warning disable CS0414 // Field assigned but never used (port stub)
     private bool preserveSdata_;
+#pragma warning restore CS0414
     private int inMath_;
     private System.Collections.Generic.List<Format> formatStack_;
     private Format nextFormat_;

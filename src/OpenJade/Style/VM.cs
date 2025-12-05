@@ -25,7 +25,7 @@ public partial class VM : EvalContext
     public Interpreter interp;
 
     // Evaluation stack
-    public ELObj?[] sbase;
+    public ELObj?[] sbase = Array.Empty<ELObj?>();
     public int sp;        // stack pointer (index into sbase)
     public int slim;      // stack limit
     public ELObj?[]? frame;  // current frame (reference to sbase slice)
@@ -34,15 +34,15 @@ public partial class VM : EvalContext
     // Closure and display
     public ELObj?[]? closure;
     public ClosureObj? protectClosure;
-    public Location closureLoc;
+    public Location closureLoc = new Location();
 
     // Control stack
-    public ControlStackEntry[] csbase;
+    public ControlStackEntry[] csbase = Array.Empty<ControlStackEntry>();
     public int csp;       // control stack pointer
     public int cslim;     // control stack limit
 
     // Processing mode stack
-    public System.Collections.Generic.List<ProcessingMode?> modeStack;
+    public System.Collections.Generic.List<ProcessingMode?> modeStack = new();
 
     // Call arguments
     public int nActualArgs;

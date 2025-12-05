@@ -499,7 +499,9 @@ public class TopRefInsn : Insn
 {
     private Identifier var_;
     private InsnPtr next_;
+#pragma warning disable CS0169, CS8618 // Field never used (port stub)
     private Location loc_;
+#pragma warning restore CS0169, CS8618
 
     public TopRefInsn(Identifier var, InsnPtr next)
     {
