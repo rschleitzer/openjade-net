@@ -1349,7 +1349,4 @@ public class SchemeParser : Messenger
     }
 }
 
-// Placeholder for LangObj (language object for collation)
-public class LangObj : LanguageObj
-{
-}
+// LangObj is defined in LangObj.cs

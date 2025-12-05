@@ -238,7 +238,7 @@ public class ClosureObj : FunctionObj
     {
         code_ = code;
         display_ = display;
-        hasSubObjects_ = true;
+        hasSubObjects_ = (char)1;
     }
 
     public ELObj?[]? display() { return display_; }
@@ -356,13 +356,13 @@ public class BoxObj : ELObj
     public BoxObj()
     {
         value = null;
-        hasSubObjects_ = true;
+        hasSubObjects_ = (char)1;
     }
 
     public BoxObj(ELObj? obj)
     {
         value = obj;
-        hasSubObjects_ = true;
+        hasSubObjects_ = (char)1;
     }
 
     public override BoxObj? asBox() { return this; }

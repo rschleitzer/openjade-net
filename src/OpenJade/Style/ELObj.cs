@@ -83,6 +83,12 @@ public class ELObj : Collector.Object
 {
     public ELObj() { }
 
+    // Make object permanent (will not be collected)
+    public new void makePermanent()
+    {
+        base.makePermanent();
+    }
+
     public virtual bool isNil() { return false; }
     public virtual bool isList() { return false; }
     public virtual bool isTrue() { return true; }
@@ -1398,4 +1404,11 @@ public class NamedNodeListObj : ELObj
 public class LanguageObj : ELObj
 {
     public override LanguageObj? asLanguage() { return this; }
+
+    // Virtual methods for language-specific operations
+    public virtual Char toUpper(Char c) { return c; }
+    public virtual Char toLower(Char c) { return c; }
+    public virtual bool areEquivalent(StringC r, StringC s, Char level) { return r.Equals(s); }
+    public virtual bool isLess(StringC r, StringC s) { return false; }
+    public virtual bool isLessOrEqual(StringC r, StringC s) { return true; }
 }

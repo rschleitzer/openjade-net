@@ -8,45 +8,73 @@ using OpenJade.Grove;
 using Char = System.UInt32;
 using Boolean = System.Boolean;
 
-// Save FOT Builder for queuing
+// SaveFOTBuilder for deferred FOT output
 public class SaveFOTBuilder : FOTBuilder
 {
     private NodePtr node_;
-    private StringC processingMode_;
+    private StringC modeName_;
+    private System.Collections.Generic.List<Action<FOTBuilder>> operations_ = new();
 
     public SaveFOTBuilder()
     {
         node_ = new NodePtr();
-        processingMode_ = new StringC();
+        modeName_ = new StringC();
     }
 
-    public SaveFOTBuilder(NodePtr node, StringC processingMode)
+    public SaveFOTBuilder(NodePtr node, StringC modeName)
     {
         node_ = node;
-        processingMode_ = processingMode;
-    }
-
-    public void emit(FOTBuilder fotb)
-    {
-        // Replay saved output to fotb
-        // Full implementation would store and replay all operations
+        modeName_ = modeName;
     }
 
     public override SaveFOTBuilder? asSaveFOTBuilder() { return this; }
 
-    public override void characters(Char[] data, nuint size)
+    public void emit(FOTBuilder target)
     {
-        // Save characters for later replay
+        target.startNode(node_, modeName_);
+        foreach (var op in operations_)
+            op(target);
+        target.endNode();
+    }
+
+    // Capture FOT operations for later replay
+    public override void characters(Char[] data, nuint len)
+    {
+        Char[] copy = new Char[len];
+        Array.Copy(data, copy, (int)len);
+        operations_.Add(fotb => fotb.characters(copy, (nuint)copy.Length));
+    }
+
+    public override void startSequence()
+    {
+        operations_.Add(fotb => fotb.startSequence());
+    }
+
+    public override void endSequence()
+    {
+        operations_.Add(fotb => fotb.endSequence());
     }
 
     public override void startParagraph(ParagraphNIC nic)
     {
-        // Save for later replay
+        var copy = nic;
+        operations_.Add(fotb => fotb.startParagraph(copy));
     }
 
     public override void endParagraph()
     {
-        // Save for later replay
+        operations_.Add(fotb => fotb.endParagraph());
+    }
+
+    public override void startDisplayGroup(DisplayGroupNIC nic)
+    {
+        var copy = nic;
+        operations_.Add(fotb => fotb.startDisplayGroup(copy));
+    }
+
+    public override void endDisplayGroup()
+    {
+        operations_.Add(fotb => fotb.endDisplayGroup());
     }
 }
 
@@ -749,36 +777,4 @@ public class FOTBuilder
     }
 }
 
-// Collector for garbage collection of ELObj instances
-public class Collector
-{
-    public class Object
-    {
-        private enum Color
-        {
-            someColor,
-            anotherColor,
-            permanentColor
-        }
-        private Color color_ = Color.someColor;
-        protected bool hasSubObjects_;
-        protected bool readOnly_;
-
-        public bool permanent() { return color_ == Color.permanentColor; }
-        public bool readOnly() { return readOnly_; }
-        internal void makePermanent() { color_ = Color.permanentColor; }
-        public virtual void traceSubObjects(Collector c) { }
-    }
-
-    // Dynamic root for tracing
-    public class DynamicRoot
-    {
-        public DynamicRoot(Collector c) { }
-        public virtual void trace(Collector c) { }
-    }
-
-    public object allocateObject(int size) { return new object(); }
-    public void unallocateObject(object p) { }
-    public void trace(object o) { }
-    public void makePermanent(Object obj) { obj.makePermanent(); }
-}
+// Note: Collector is defined in Collector.cs
