@@ -1930,14 +1930,49 @@ public abstract class AttributeDefOrigin
 
     public virtual AccessResult makeAttributeValueNode(GroveImpl grove, ref NodePtr ptr, AttributeValue? value)
     {
-        // Base implementation - returns null for now
+        if (value != null)
+        {
+            Text? text;
+            StringC? str;
+            switch (value.info(out text, out str))
+            {
+                case AttributeValue.Type.tokenized:
+                    var tokenizedValue = value as TokenizedAttributeValue;
+                    if (tokenizedValue != null)
+                    {
+                        ptr.assign(makeAttributeValueTokenNode(grove, tokenizedValue, attIndex_, 0));
+                        return AccessResult.accessOK;
+                    }
+                    break;
+                case AttributeValue.Type.cdata:
+                    if (text != null)
+                    {
+                        TextIter iter = new TextIter(text);
+                        if (!CdataAttributeValueNode.skipBoring(iter))
+                        {
+                            return AccessResult.accessNull;
+                        }
+                        ptr.assign(makeCdataAttributeValueNode(grove, value, attIndex_, iter));
+                        return AccessResult.accessOK;
+                    }
+                    break;
+            }
+        }
         return AccessResult.accessNull;
     }
 
     public virtual AccessResult makeAttributeValueNodeList(GroveImpl grove, ref NodeListPtr ptr, AttributeValue? value)
     {
-        ptr.assign(new BaseNodeList());
-        return AccessResult.accessOK;
+        NodePtr nodePtr = new NodePtr();
+        AccessResult result = makeAttributeValueNode(grove, ref nodePtr, value);
+        if (result == AccessResult.accessOK)
+        {
+            if (nodePtr.node == null)
+                ptr.assign(new BaseNodeList());
+            else
+                ptr.assign(new SiblingNodeList(nodePtr));
+        }
+        return result;
     }
 
     public virtual AccessResult makeAttributeDefNode(GroveImpl grove, ref NodePtr ptr, nuint attributeDefIdx)
@@ -2270,6 +2305,63 @@ public class ElementTypeAttributeDefOrigin : AttributeDefOrigin
     }
 }
 
+// Notation attribute def origin - provides attribute definition context from notation
+public class NotationAttributeDefOrigin : AttributeDefOrigin
+{
+    protected Notation notation_;
+
+    public NotationAttributeDefOrigin(Notation notation) : base(0)
+    {
+        notation_ = notation;
+    }
+
+    public override AttributeDefinitionList? attDefList()
+    {
+        return notation_.attributeDefTemp();
+    }
+
+    public override AccessResult makeAttributeDefNode(GroveImpl grove, ref NodePtr ptr, nuint attributeDefIdx)
+    {
+        ptr.assign(new NotationAttributeDefNode(grove, notation_, attributeDefIdx));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult makeAttributeDefList(GroveImpl grove, ref NodeListPtr ptr, nuint firstAttDefIdx)
+    {
+        ptr.assign(new NotationAttributeDefsNodeList(grove, notation_, firstAttDefIdx));
+        return AccessResult.accessOK;
+    }
+
+    public override Node makeCdataAttributeValueNode(
+        GroveImpl grove,
+        AttributeValue? value,
+        nuint attIndex,
+        TextIter iter,
+        nuint charIndex = 0)
+    {
+        return new NotationCdataAttributeValueNode(grove, value, attIndex, iter, charIndex, notation_);
+    }
+
+    public override Node makeAttributeValueTokenNode(
+        GroveImpl grove,
+        TokenizedAttributeValue? value,
+        nuint attIndex,
+        nuint tokenIndex)
+    {
+        return new NotationAttributeValueTokenNode(grove, value, attIndex, tokenIndex, notation_);
+    }
+
+    public override Node makeOriginNode(GroveImpl grove, nuint attIndex)
+    {
+        return new NotationAttributeDefNode(grove, notation_, attIndex_);
+    }
+
+    public override object? attributeOriginId()
+    {
+        return notation_;
+    }
+}
+
 // Element attribute assignment node
 public class ElementAttributeAsgnNode : AttributeAsgnNode
 {
@@ -2308,15 +2400,49 @@ public class ElementAttributeAsgnNode : AttributeAsgnNode
 
     public override AccessResult makeAttributeValueNode(GroveImpl grove, ref NodePtr ptr, AttributeValue? value)
     {
-        // TODO: Implement proper attribute value node creation
+        if (value != null)
+        {
+            Text? text;
+            StringC? str;
+            switch (value.info(out text, out str))
+            {
+                case AttributeValue.Type.tokenized:
+                    var tokenizedValue = value as TokenizedAttributeValue;
+                    if (tokenizedValue != null)
+                    {
+                        ptr.assign(new ElementAttributeValueTokenNode(grove, tokenizedValue, attIndex_, 0, chunk_));
+                        return AccessResult.accessOK;
+                    }
+                    break;
+                case AttributeValue.Type.cdata:
+                    if (text != null)
+                    {
+                        TextIter iter = new TextIter(text);
+                        if (!CdataAttributeValueNode.skipBoring(iter))
+                        {
+                            return AccessResult.accessNull;
+                        }
+                        ptr.assign(new ElementCdataAttributeValueNode(grove, value, attIndex_, iter, 0, chunk_));
+                        return AccessResult.accessOK;
+                    }
+                    break;
+            }
+        }
         return AccessResult.accessNull;
     }
 
     public override AccessResult makeAttributeValueNodeList(GroveImpl grove, ref NodeListPtr ptr, AttributeValue? value)
     {
-        // TODO: Implement proper attribute value node list creation
-        ptr.assign(new BaseNodeList());
-        return AccessResult.accessOK;
+        NodePtr nodePtr = new NodePtr();
+        AccessResult result = makeAttributeValueNode(grove, ref nodePtr, value);
+        if (result == AccessResult.accessOK)
+        {
+            if (nodePtr.node == null)
+                ptr.assign(new BaseNodeList());
+            else
+                ptr.assign(new SiblingNodeList(nodePtr));
+        }
+        return result;
     }
 
     public override AccessResult makeAttributeDefNode(GroveImpl grove, ref NodePtr ptr, nuint attributeDefIdx)
@@ -3171,8 +3297,8 @@ public class NotationNode : BaseNode
     {
         if (notation_ == null)
             return AccessResult.accessNull;
-        // TODO: Implement NotationAttributeDefsNamedNodeList
-        return AccessResult.accessNull;
+        ptr.assign(new NotationAttributeDefsNamedNodeList(grove(), notation_));
+        return AccessResult.accessOK;
     }
 
     public override bool same(BaseNode node)
@@ -4332,6 +4458,123 @@ public class ElementTypeAttributeValueTokenNode : AttributeValueTokenNode
     }
 }
 
+// Notation attribute def node
+public class NotationAttributeDefNode : AttributeDefNode
+{
+    protected Notation notation_;
+
+    public NotationAttributeDefNode(GroveImpl grove, Notation notation, nuint attributeDefIdx)
+        : base(grove, attributeDefIdx)
+    {
+        notation_ = notation;
+    }
+
+    public override AttributeDefinitionList? attDefList()
+    {
+        return notation_.attributeDefTemp();
+    }
+
+    public override Node makeOriginNode(GroveImpl grove, nuint attIndex)
+    {
+        return new NotationNode(grove, notation_);
+    }
+
+    public override object? attributeOriginId()
+    {
+        return notation_;
+    }
+
+    public override AccessResult getOriginToSubnodeRelPropertyName(out ComponentName.Id name)
+    {
+        name = ComponentName.Id.idAttributeDefs;
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult getCurrentGroup(ref NodeListPtr ptr)
+    {
+        return AccessResult.accessNull;
+    }
+
+    public override AccessResult getLocation(ref Location location)
+    {
+        return AccessResult.accessNull;
+    }
+
+    public override AccessResult getDefaultValue(ref NodeListPtr ptr)
+    {
+        return AccessResult.accessNull;
+    }
+}
+
+// Notation attribute defs node list
+public class NotationAttributeDefsNodeList : BaseNodeList
+{
+    private GroveImpl grove_;
+    private Notation notation_;
+    private nuint firstAttDefIdx_;
+
+    public NotationAttributeDefsNodeList(GroveImpl grove, Notation notation, nuint firstAttDefIdx)
+    {
+        grove_ = grove;
+        notation_ = notation;
+        firstAttDefIdx_ = firstAttDefIdx;
+    }
+
+    public override AccessResult first(ref NodePtr ptr)
+    {
+        var defList = notation_.attributeDefTemp();
+        if (defList == null || firstAttDefIdx_ >= defList.size())
+            return AccessResult.accessNull;
+        ptr.assign(new NotationAttributeDefNode(grove_, notation_, firstAttDefIdx_));
+        return AccessResult.accessOK;
+    }
+
+    public override AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        var defList = notation_.attributeDefTemp();
+        nuint nextIdx = firstAttDefIdx_ + 1;
+        if (defList == null || nextIdx >= defList.size())
+            return AccessResult.accessNull;
+        ptr.assign(new NotationAttributeDefsNodeList(grove_, notation_, nextIdx));
+        return AccessResult.accessOK;
+    }
+}
+
+// Notation cdata attribute value node
+public class NotationCdataAttributeValueNode : CdataAttributeValueNode
+{
+    protected Notation notation_;
+
+    public NotationCdataAttributeValueNode(
+        GroveImpl grove,
+        AttributeValue? value,
+        nuint attIndex,
+        TextIter iter,
+        nuint charIndex,
+        Notation notation)
+        : base(grove, value, attIndex, iter, charIndex)
+    {
+        notation_ = notation;
+    }
+}
+
+// Notation attribute value token node
+public class NotationAttributeValueTokenNode : AttributeValueTokenNode
+{
+    protected Notation notation_;
+
+    public NotationAttributeValueTokenNode(
+        GroveImpl grove,
+        TokenizedAttributeValue? value,
+        nuint attIndex,
+        nuint tokenIndex,
+        Notation notation)
+        : base(grove, value, attIndex, tokenIndex)
+    {
+        notation_ = notation;
+    }
+}
+
 // Base class for named node lists
 public abstract class BaseNamedNodeList : NamedNodeList
 {
@@ -4616,6 +4859,42 @@ public class ElementTypeAttributeDefsNamedNodeList : BaseNamedNodeList
             if (def != null && def.name().Equals(str))
             {
                 ptr.assign(new ElementTypeAttributeDefNode(grove_, elementType_, i));
+                return AccessResult.accessOK;
+            }
+        }
+        return AccessResult.accessNull;
+    }
+
+    public override Type type() { return Type.attributeDefs; }
+}
+
+// Notation attribute defs named node list
+public class NotationAttributeDefsNamedNodeList : BaseNamedNodeList
+{
+    private Notation notation_;
+
+    public NotationAttributeDefsNamedNodeList(GroveImpl grove, Notation notation)
+        : base(grove, grove.generalSubstTable())
+    {
+        notation_ = notation;
+    }
+
+    public override NodeListPtr nodeList()
+    {
+        return new NodeListPtr(new NotationAttributeDefsNodeList(grove_, notation_, 0));
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        var defList = notation_.attributeDefTemp();
+        if (defList == null)
+            return AccessResult.accessNull;
+        for (nuint i = 0; i < defList.size(); i++)
+        {
+            var def = defList.def(i);
+            if (def != null && def.name().Equals(str))
+            {
+                ptr.assign(new NotationAttributeDefNode(grove_, notation_, i));
                 return AccessResult.accessOK;
             }
         }
