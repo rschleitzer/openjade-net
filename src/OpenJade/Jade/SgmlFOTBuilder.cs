@@ -1006,7 +1006,7 @@ public class SgmlFOTBuilder : FOTBuilder
         return b ? trueString : falseString;
     }
 
-    private static string? symbolName(Symbol sym)
+    private static new string? symbolName(Symbol sym)
     {
         return sym switch
         {

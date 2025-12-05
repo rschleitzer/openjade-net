@@ -1992,6 +1992,7 @@ public class GridFlowObj : CompoundFlowObj
         GridFlowObj c = new GridFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -2001,6 +2002,42 @@ public class GridFlowObj : CompoundFlowObj
         fotb.startGrid(nic_);
         base.processInner(context);
         fotb.endGrid();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyGridNColumns:
+                case Identifier.SyntacticKey.keyGridNRows:
+                    return true;
+            }
+        }
+        return base.hasNonInheritedC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            long n;
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyGridNColumns:
+                    if (value != null && value.exactIntegerValue(out n) && n > 0)
+                        nic_.nColumns = (uint)n;
+                    return;
+                case Identifier.SyntacticKey.keyGridNRows:
+                    if (value != null && value.exactIntegerValue(out n) && n > 0)
+                        nic_.nRows = (uint)n;
+                    return;
+            }
+        }
+        base.setNonInheritedC(ident, value, loc, interp);
     }
 }
 
@@ -2014,6 +2051,7 @@ public class GridCellFlowObj : CompoundFlowObj
         GridCellFlowObj c = new GridCellFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.nic_ = nic_;
         return c;
     }
 
@@ -2023,6 +2061,42 @@ public class GridCellFlowObj : CompoundFlowObj
         fotb.startGridCell(nic_);
         base.processInner(context);
         fotb.endGridCell();
+    }
+
+    public override bool hasNonInheritedC(Identifier? ident)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyColumnNumber:
+                case Identifier.SyntacticKey.keyRowNumber:
+                    return true;
+            }
+        }
+        return base.hasNonInheritedC(ident);
+    }
+
+    public override void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp)
+    {
+        Identifier.SyntacticKey key;
+        if (ident != null && ident.syntacticKey(out key))
+        {
+            long n;
+            switch (key)
+            {
+                case Identifier.SyntacticKey.keyColumnNumber:
+                    if (value != null && value.exactIntegerValue(out n) && n > 0)
+                        nic_.columnNumber = (uint)n;
+                    return;
+                case Identifier.SyntacticKey.keyRowNumber:
+                    if (value != null && value.exactIntegerValue(out n) && n > 0)
+                        nic_.rowNumber = (uint)n;
+                    return;
+            }
+        }
+        base.setNonInheritedC(ident, value, loc, interp);
     }
 }
 

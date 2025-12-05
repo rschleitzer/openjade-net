@@ -768,6 +768,71 @@ public class FOTBuilder
     public virtual void setEscapementSpaceAfter(InlineSpace space) { }
     public virtual void setGlyphSubstTableX(System.Collections.Generic.List<ConstPtr<GlyphSubstTable>> tables) { }
 
+    // Spacing setters
+    public virtual void setMinPreLineSpacing(OptLengthSpec spacing) { }
+    public virtual void setMinPostLineSpacing(OptLengthSpec spacing) { }
+    public virtual void setMinLeading(OptLengthSpec leading) { }
+
+    // Line styling setters
+    public virtual void setLineNumberSide(Symbol side) { }
+    public virtual void setKernMode(Symbol mode) { }
+
+    // Box/Cell/Border setters
+    public virtual void setBoxBorderAlignment(Symbol alignment) { }
+    public virtual void setCellRowAlignment(Symbol alignment) { }
+    public virtual void setCellCrossed(Symbol crossed) { }
+    public virtual void setMarginaliaSide(Symbol side) { }
+
+    // Layer setter
+    public virtual void setLayer(long layer) { }
+
+    // PublicId-based setters (methods that use public identifiers)
+    public virtual void setBackgroundTile(string? pubid) { }
+    public virtual void setLineBreakingMethod(string? pubid) { }
+    public virtual void setLineCompositionMethod(string? pubid) { }
+    public virtual void setImplicitBidiMethod(string? pubid) { }
+    public virtual void setGlyphSubstMethod(string? pubid) { }
+    public virtual void setHyphenationMethod(string? pubid) { }
+    public virtual void setTableAutoWidthMethod(string? pubid) { }
+    public virtual void setFontName(string? name) { }
+
+    // Page and margin setters
+    public virtual void setPageWidth(long width) { }
+    public virtual void setPageHeight(long height) { }
+    public virtual void setLeftMargin(long margin) { }
+    public virtual void setRightMargin(long margin) { }
+    public virtual void setTopMargin(long margin) { }
+    public virtual void setBottomMargin(long margin) { }
+    public virtual void setHeaderMargin(long margin) { }
+    public virtual void setFooterMargin(long margin) { }
+
+    // Symbol name lookup - converts Symbol enum to DSSSL symbol name
+    public static string? symbolName(Symbol sym)
+    {
+        if (sym == Symbol.symbolFalse || sym == Symbol.symbolTrue)
+            return null;
+        // Map Symbol enum values to DSSSL hyphenated symbol names
+        string name = sym.ToString();
+        if (name.StartsWith("symbol"))
+            name = name.Substring(6);
+        // Convert PascalCase to kebab-case (e.g., "UltraCondensed" -> "ultra-condensed")
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < name.Length; i++)
+        {
+            char c = name[i];
+            if (i > 0 && char.IsUpper(c))
+            {
+                sb.Append('-');
+                sb.Append(char.ToLower(c));
+            }
+            else
+            {
+                sb.Append(char.ToLower(c));
+            }
+        }
+        return sb.ToString();
+    }
+
     // Utility for 2-letter ISO codes
     public struct Letter2
     {
