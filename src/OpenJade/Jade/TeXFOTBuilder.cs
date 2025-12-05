@@ -986,4 +986,968 @@ public class TeXFOTBuilder : FOTBuilder
             _ => null
         };
     }
+
+    // Additional atomic flow objects
+    public override void pageNumber()
+    {
+        output("\\FOTPageNumber{}");
+    }
+
+    public override void formattingInstruction(StringC instr)
+    {
+        // Pass through raw formatting instruction to TeX
+        for (nuint i = 0; i < instr.size(); i++)
+            os_.sputc((sbyte)instr[i]);
+    }
+
+    public override void currentNodePageNumber(NodePtr node)
+    {
+        output("\\FOTCurrentNodePageNumber{");
+        // Output node identifier if available
+        output("}");
+    }
+
+    // Table border methods
+    public override void tableBeforeRowBorder()
+    {
+        output("\\FOTTableBeforeRowBorder{}");
+    }
+
+    public override void tableAfterRowBorder()
+    {
+        output("\\FOTTableAfterRowBorder{}");
+    }
+
+    public override void tableBeforeColumnBorder()
+    {
+        output("\\FOTTableBeforeColumnBorder{}");
+    }
+
+    public override void tableAfterColumnBorder()
+    {
+        output("\\FOTTableAfterColumnBorder{}");
+    }
+
+    public override void tableCellBeforeRowBorder()
+    {
+        output("\\FOTTableCellBeforeRowBorder{}");
+    }
+
+    public override void tableCellAfterRowBorder()
+    {
+        output("\\FOTTableCellAfterRowBorder{}");
+    }
+
+    public override void tableCellBeforeColumnBorder()
+    {
+        output("\\FOTTableCellBeforeColumnBorder{}");
+    }
+
+    public override void tableCellAfterColumnBorder()
+    {
+        output("\\FOTTableCellAfterColumnBorder{}");
+    }
+
+    // Math flow objects - fraction support
+    public override void fractionBar()
+    {
+        output("\\FOTFractionBar{}");
+    }
+
+    public override void startFraction(out FOTBuilder? numerator, out FOTBuilder? denominator)
+    {
+        output("\\FOTFraction{");
+        pushFormat();
+        numerator = null;
+        denominator = null;
+    }
+
+    public override void endFraction()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Radical support
+    public override void radicalRadical(CharacterNIC c)
+    {
+        output("\\FOTRadicalRadical{");
+        if ((c.specifiedC & (1 << CharacterNIC.cChar)) != 0)
+            outputChar(c.ch);
+        output("}");
+    }
+
+    public override void radicalRadicalDefaulted()
+    {
+        output("\\FOTRadicalRadicalDefaulted{}");
+    }
+
+    public override void startRadical(out FOTBuilder? degree)
+    {
+        output("\\FOTRadical{");
+        pushFormat();
+        degree = null;
+    }
+
+    public override void endRadical()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Script serial flow objects
+    public override void startScript(out FOTBuilder? preSup, out FOTBuilder? preSub, out FOTBuilder? postSup, out FOTBuilder? postSub, out FOTBuilder? midSup, out FOTBuilder? midSub)
+    {
+        output("\\FOTScript{");
+        pushFormat();
+        preSup = null; preSub = null; postSup = null; postSub = null; midSup = null; midSub = null;
+    }
+
+    public override void endScript()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Mark flow objects
+    public override void startMark(out FOTBuilder? overMark, out FOTBuilder? underMark)
+    {
+        output("\\FOTMark{");
+        pushFormat();
+        overMark = null;
+        underMark = null;
+    }
+
+    public override void endMark()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Fence flow objects
+    public override void startFence(out FOTBuilder? open, out FOTBuilder? close)
+    {
+        output("\\FOTFence{");
+        pushFormat();
+        open = null;
+        close = null;
+    }
+
+    public override void endFence()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Math operator flow objects
+    public override void startMathOperator(out FOTBuilder? oper, out FOTBuilder? lowerLimit, out FOTBuilder? upperLimit)
+    {
+        output("\\FOTMathOperator{");
+        pushFormat();
+        oper = null;
+        lowerLimit = null;
+        upperLimit = null;
+    }
+
+    public override void endMathOperator()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Node tracking
+    public override void startNode(NodePtr node, StringC processingMode)
+    {
+        output("\\FOTNode{");
+        pushFormat();
+    }
+
+    public override void endNode()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Simple page sequence
+    public override void startSimplePageSequence(FOTBuilder? headerFooter)
+    {
+        output("\\begin{FOTSimplePageSequence}\n");
+        pushFormat();
+    }
+
+    public override void endSimplePageSequenceHeaderFooter()
+    {
+        // End of header/footer region
+    }
+
+    public override void endSimplePageSequence()
+    {
+        output("\\end{FOTSimplePageSequence}\n");
+        popFormat();
+    }
+
+    // Table part with header/footer
+    public override void startTablePart(TablePartNIC nic, out FOTBuilder? header, out FOTBuilder? footer)
+    {
+        output("\\FOTTablePart{");
+        pushFormat();
+        header = null;
+        footer = null;
+    }
+
+    public override void endTablePart()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Multi-mode support
+    public override void startMultiMode(MultiMode? principalPort, System.Collections.Generic.List<MultiMode> namedPorts, out System.Collections.Generic.List<FOTBuilder> builders)
+    {
+        output("\\FOTMultiMode{");
+        pushFormat();
+        builders = new System.Collections.Generic.List<FOTBuilder>();
+    }
+
+    public override void endMultiMode()
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Extension flow objects
+    public override void extension(ExtensionFlowObj fo, NodePtr currentNode)
+    {
+        output("\\FOTExtension{}");
+    }
+
+    public override void startExtension(ExtensionFlowObj fo, NodePtr currentNode, System.Collections.Generic.List<FOTBuilder?> fotbs)
+    {
+        output("\\FOTExtensionStart{");
+        pushFormat();
+    }
+
+    public override void endExtension(ExtensionFlowObj fo)
+    {
+        output("}");
+        popFormat();
+    }
+
+    // Additional inherited characteristic setters
+    public override void setFieldWidth(LengthSpec width)
+    {
+        output("\\FOTFieldWidth{");
+        outputLengthSpec(width);
+        output("}");
+    }
+
+    public override void setMarginaliaSep(LengthSpec sep)
+    {
+        output("\\FOTMarginaliaSep{");
+        outputLengthSpec(sep);
+        output("}");
+    }
+
+    public override void setFieldAlign(Symbol align)
+    {
+        output("\\FOTFieldAlign{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setCellBeforeRowMargin(LengthSpec margin)
+    {
+        output("\\FOTCellBeforeRowMargin{");
+        outputLengthSpec(margin);
+        output("}");
+    }
+
+    public override void setCellAfterRowMargin(LengthSpec margin)
+    {
+        output("\\FOTCellAfterRowMargin{");
+        outputLengthSpec(margin);
+        output("}");
+    }
+
+    public override void setCellBeforeColumnMargin(LengthSpec margin)
+    {
+        output("\\FOTCellBeforeColumnMargin{");
+        outputLengthSpec(margin);
+        output("}");
+    }
+
+    public override void setCellAfterColumnMargin(LengthSpec margin)
+    {
+        output("\\FOTCellAfterColumnMargin{");
+        outputLengthSpec(margin);
+        output("}");
+    }
+
+    public override void setLineSep(LengthSpec sep)
+    {
+        output("\\FOTLineSep{");
+        outputLengthSpec(sep);
+        output("}");
+    }
+
+    public override void setBoxSizeBefore(LengthSpec size)
+    {
+        output("\\FOTBoxSizeBefore{");
+        outputLengthSpec(size);
+        output("}");
+    }
+
+    public override void setBoxSizeAfter(LengthSpec size)
+    {
+        output("\\FOTBoxSizeAfter{");
+        outputLengthSpec(size);
+        output("}");
+    }
+
+    public override void setPositionPointShift(LengthSpec shift)
+    {
+        output("\\FOTPositionPointShift{");
+        outputLengthSpec(shift);
+        output("}");
+    }
+
+    public override void setStartMargin(LengthSpec margin)
+    {
+        output("\\FOTStartMargin{");
+        outputLengthSpec(margin);
+        output("}");
+    }
+
+    public override void setEndMargin(LengthSpec margin)
+    {
+        output("\\FOTEndMargin{");
+        outputLengthSpec(margin);
+        output("}");
+    }
+
+    public override void setSidelineSep(LengthSpec sep)
+    {
+        output("\\FOTSidelineSep{");
+        outputLengthSpec(sep);
+        output("}");
+    }
+
+    public override void setAsisWrapIndent(LengthSpec indent)
+    {
+        output("\\FOTAsisWrapIndent{");
+        outputLengthSpec(indent);
+        output("}");
+    }
+
+    public override void setLineNumberSep(LengthSpec sep)
+    {
+        output("\\FOTLineNumberSep{");
+        outputLengthSpec(sep);
+        output("}");
+    }
+
+    public override void setLastLineJustifyLimit(LengthSpec limit)
+    {
+        output("\\FOTLastLineJustifyLimit{");
+        outputLengthSpec(limit);
+        output("}");
+    }
+
+    public override void setJustifyGlyphSpaceMaxAdd(LengthSpec add)
+    {
+        output("\\FOTJustifyGlyphSpaceMaxAdd{");
+        outputLengthSpec(add);
+        output("}");
+    }
+
+    public override void setJustifyGlyphSpaceMaxRemove(LengthSpec remove)
+    {
+        output("\\FOTJustifyGlyphSpaceMaxRemove{");
+        outputLengthSpec(remove);
+        output("}");
+    }
+
+    public override void setTableCornerRadius(LengthSpec radius)
+    {
+        output("\\FOTTableCornerRadius{");
+        outputLengthSpec(radius);
+        output("}");
+    }
+
+    public override void setBoxCornerRadius(LengthSpec radius)
+    {
+        output("\\FOTBoxCornerRadius{");
+        outputLengthSpec(radius);
+        output("}");
+    }
+
+    public override void setFloatOutMarginalia(bool flag)
+    {
+        if (flag) output("\\FOTFloatOutMarginalia{}");
+    }
+
+    public override void setFloatOutSidelines(bool flag)
+    {
+        if (flag) output("\\FOTFloatOutSidelines{}");
+    }
+
+    public override void setFloatOutLineNumbers(bool flag)
+    {
+        if (flag) output("\\FOTFloatOutLineNumbers{}");
+    }
+
+    public override void setCellBackground(bool flag)
+    {
+        if (flag) output("\\FOTCellBackground{}");
+    }
+
+    public override void setSpanWeak(bool flag)
+    {
+        if (flag) output("\\FOTSpanWeak{}");
+    }
+
+    public override void setIgnoreRecordEnd(bool flag)
+    {
+        if (flag) output("\\FOTIgnoreRecordEnd{}");
+    }
+
+    public override void setNumberedLines(bool flag)
+    {
+        if (flag) output("\\FOTNumberedLines{}");
+    }
+
+    public override void setHangingPunct(bool flag)
+    {
+        if (flag) output("\\FOTHangingPunct{}");
+    }
+
+    public override void setBoxOpenEnd(bool flag)
+    {
+        if (flag) output("\\FOTBoxOpenEnd{}");
+    }
+
+    public override void setTruncateLeader(bool flag)
+    {
+        if (flag) output("\\FOTTruncateLeader{}");
+    }
+
+    public override void setAlignLeader(bool flag)
+    {
+        if (flag) output("\\FOTAlignLeader{}");
+    }
+
+    public override void setTablePartOmitMiddleHeader(bool flag)
+    {
+        if (flag) output("\\FOTTablePartOmitMiddleHeader{}");
+    }
+
+    public override void setTablePartOmitMiddleFooter(bool flag)
+    {
+        if (flag) output("\\FOTTablePartOmitMiddleFooter{}");
+    }
+
+    public override void setBorderOmitAtBreak(bool flag)
+    {
+        if (flag) output("\\FOTBorderOmitAtBreak{}");
+    }
+
+    public override void setPrincipalModeSimultaneous(bool flag)
+    {
+        if (flag) output("\\FOTPrincipalModeSimultaneous{}");
+    }
+
+    public override void setMarginaliaKeepWithPrevious(bool flag)
+    {
+        if (flag) output("\\FOTMarginaliaKeepWithPrevious{}");
+    }
+
+    public override void setLineJoin(Symbol join)
+    {
+        output("\\FOTLineJoin{");
+        outputSymbol(join);
+        output("}");
+    }
+
+    public override void setLineCap(Symbol cap)
+    {
+        output("\\FOTLineCap{");
+        outputSymbol(cap);
+        output("}");
+    }
+
+    public override void setLineNumberSide(Symbol side)
+    {
+        output("\\FOTLineNumberSide{");
+        outputSymbol(side);
+        output("}");
+    }
+
+    public override void setKernMode(Symbol mode)
+    {
+        output("\\FOTKernMode{");
+        outputSymbol(mode);
+        output("}");
+    }
+
+    public override void setInputWhitespaceTreatment(Symbol treatment)
+    {
+        output("\\FOTInputWhitespaceTreatment{");
+        outputSymbol(treatment);
+        output("}");
+    }
+
+    public override void setFillingDirection(Symbol direction)
+    {
+        output("\\FOTFillingDirection{");
+        outputSymbol(direction);
+        output("}");
+    }
+
+    public override void setWritingMode(Symbol mode)
+    {
+        output("\\FOTWritingMode{");
+        outputSymbol(mode);
+        output("}");
+    }
+
+    public override void setLastLineQuadding(Symbol quadding)
+    {
+        output("\\FOTLastLineQuadding{");
+        outputSymbol(quadding);
+        output("}");
+    }
+
+    public override void setMathDisplayMode(Symbol mode)
+    {
+        output("\\FOTMathDisplayMode{");
+        outputSymbol(mode);
+        output("}");
+    }
+
+    public override void setBoxType(Symbol type)
+    {
+        output("\\FOTBoxType{");
+        outputSymbol(type);
+        output("}");
+    }
+
+    public override void setGlyphAlignmentMode(Symbol mode)
+    {
+        output("\\FOTGlyphAlignmentMode{");
+        outputSymbol(mode);
+        output("}");
+    }
+
+    public override void setBoxBorderAlignment(Symbol align)
+    {
+        output("\\FOTBoxBorderAlignment{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setCellRowAlignment(Symbol align)
+    {
+        output("\\FOTCellRowAlignment{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setBorderAlignment(Symbol align)
+    {
+        output("\\FOTBorderAlignment{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setSidelineSide(Symbol side)
+    {
+        output("\\FOTSidelineSide{");
+        outputSymbol(side);
+        output("}");
+    }
+
+    public override void setHyphenationKeep(Symbol keep)
+    {
+        output("\\FOTHyphenationKeep{");
+        outputSymbol(keep);
+        output("}");
+    }
+
+    public override void setFontStructure(Symbol structure)
+    {
+        output("\\FOTFontStructure{");
+        outputSymbol(structure);
+        output("}");
+    }
+
+    public override void setFontProportionateWidth(Symbol width)
+    {
+        output("\\FOTFontProportionateWidth{");
+        outputSymbol(width);
+        output("}");
+    }
+
+    public override void setCellCrossed(Symbol crossed)
+    {
+        output("\\FOTCellCrossed{");
+        outputSymbol(crossed);
+        output("}");
+    }
+
+    public override void setMarginaliaSide(Symbol side)
+    {
+        output("\\FOTMarginaliaSide{");
+        outputSymbol(side);
+        output("}");
+    }
+
+    public override void setLayer(long n)
+    {
+        output("\\FOTLayer{");
+        output(n.ToString());
+        output("}");
+    }
+
+    public override void setBackgroundLayer(long n)
+    {
+        output("\\FOTBackgroundLayer{");
+        output(n.ToString());
+        output("}");
+    }
+
+    public override void setBorderPriority(long n)
+    {
+        output("\\FOTBorderPriority{");
+        output(n.ToString());
+        output("}");
+    }
+
+    public override void setLineRepeatCount(long n)
+    {
+        output("\\FOTLineRepeat{");
+        output(n.ToString());
+        output("}");
+    }
+
+    public override void setSpan(long n)
+    {
+        output("\\FOTSpan{");
+        output(n.ToString());
+        output("}");
+    }
+
+    public override void setMinLeaderRepeat(long n)
+    {
+        output("\\FOTMinLeaderRepeat{");
+        output(n.ToString());
+        output("}");
+    }
+
+    public override void setHyphenationRemainCharCount(long count)
+    {
+        output("\\FOTHyphenationRemainCharCount{");
+        output(count.ToString());
+        output("}");
+    }
+
+    public override void setHyphenationPushCharCount(long count)
+    {
+        output("\\FOTHyphenationPushCharCount{");
+        output(count.ToString());
+        output("}");
+    }
+
+    public override void setWidowCount(long count)
+    {
+        output("\\widowpenalty=");
+        if (count > 0)
+            output("10000");
+        else
+            output("150");
+        output("{}");
+    }
+
+    public override void setOrphanCount(long count)
+    {
+        output("\\clubpenalty=");
+        if (count > 0)
+            output("10000");
+        else
+            output("150");
+        output("{}");
+    }
+
+    public override void setExpandTabs(long tabs)
+    {
+        output("\\FOTExpandTabs{");
+        output(tabs.ToString());
+        output("}");
+    }
+
+    // PublicId-based setters
+    public override void setBackgroundTile(string? pubid)
+    {
+        if (pubid != null)
+        {
+            output("\\FOTBackgroundTile{");
+            output(pubid);
+            output("}");
+        }
+    }
+
+    public override void setLineBreakingMethod(string? pubid)
+    {
+        if (pubid != null)
+        {
+            output("\\FOTLineBreakingMethod{");
+            output(pubid);
+            output("}");
+        }
+    }
+
+    public override void setLineCompositionMethod(string? pubid)
+    {
+        if (pubid != null)
+        {
+            output("\\FOTLineCompositionMethod{");
+            output(pubid);
+            output("}");
+        }
+    }
+
+    public override void setImplicitBidiMethod(string? pubid)
+    {
+        if (pubid != null)
+        {
+            output("\\FOTImplicitBidiMethod{");
+            output(pubid);
+            output("}");
+        }
+    }
+
+    public override void setGlyphSubstMethod(string? pubid)
+    {
+        if (pubid != null)
+        {
+            output("\\FOTGlyphSubstMethod{");
+            output(pubid);
+            output("}");
+        }
+    }
+
+    public override void setHyphenationMethod(string? pubid)
+    {
+        if (pubid != null)
+        {
+            output("\\FOTHyphenationMethod{");
+            output(pubid);
+            output("}");
+        }
+    }
+
+    public override void setTableAutoWidthMethod(string? pubid)
+    {
+        if (pubid != null)
+        {
+            output("\\FOTTableAutoWidthMethod{");
+            output(pubid);
+            output("}");
+        }
+    }
+
+    public override void setFontName(string? name)
+    {
+        if (name != null)
+        {
+            output("\\FOTFontName{");
+            output(name);
+            output("}");
+        }
+    }
+
+    // Page dimension setters
+    public override void setPageWidth(long width)
+    {
+        output("\\FOTPageWidth{");
+        outputLength(width);
+        output("}");
+    }
+
+    public override void setPageHeight(long height)
+    {
+        output("\\FOTPageHeight{");
+        outputLength(height);
+        output("}");
+    }
+
+    public override void setLeftMargin(long margin)
+    {
+        output("\\FOTLeftMargin{");
+        outputLength(margin);
+        output("}");
+    }
+
+    public override void setRightMargin(long margin)
+    {
+        output("\\FOTRightMargin{");
+        outputLength(margin);
+        output("}");
+    }
+
+    public override void setTopMargin(long margin)
+    {
+        output("\\FOTTopMargin{");
+        outputLength(margin);
+        output("}");
+    }
+
+    public override void setBottomMargin(long margin)
+    {
+        output("\\FOTBottomMargin{");
+        outputLength(margin);
+        output("}");
+    }
+
+    public override void setHeaderMargin(long margin)
+    {
+        output("\\FOTHeaderMargin{");
+        outputLength(margin);
+        output("}");
+    }
+
+    public override void setFooterMargin(long margin)
+    {
+        output("\\FOTFooterMargin{");
+        outputLength(margin);
+        output("}");
+    }
+
+    // Math alignment setters
+    public override void setScriptPreAlign(Symbol align)
+    {
+        output("\\FOTScriptPreAlign{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setScriptPostAlign(Symbol align)
+    {
+        output("\\FOTScriptPostAlign{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setScriptMidSupAlign(Symbol align)
+    {
+        output("\\FOTScriptMidSupAlign{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setScriptMidSubAlign(Symbol align)
+    {
+        output("\\FOTScriptMidSubAlign{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setNumeratorAlign(Symbol align)
+    {
+        output("\\FOTNumeratorAlign{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    public override void setDenominatorAlign(Symbol align)
+    {
+        output("\\FOTDenominatorAlign{");
+        outputSymbol(align);
+        output("}");
+    }
+
+    // Grid alignment setters
+    public override void setGridPositionCellType(Symbol type)
+    {
+        output("\\FOTGridPositionCellType{");
+        outputSymbol(type);
+        output("}");
+    }
+
+    public override void setGridColumnAlignment(Symbol alignment)
+    {
+        output("\\FOTGridColumnAlignment{");
+        outputSymbol(alignment);
+        output("}");
+    }
+
+    public override void setGridRowAlignment(Symbol alignment)
+    {
+        output("\\FOTGridRowAlignment{");
+        outputSymbol(alignment);
+        output("}");
+    }
+
+    public override void setGridEquidistantRows(bool flag)
+    {
+        if (flag) output("\\FOTGridEquidistantRows{}");
+    }
+
+    public override void setGridEquidistantColumns(bool flag)
+    {
+        if (flag) output("\\FOTGridEquidistantColumns{}");
+    }
+
+    // Spacing setters
+    public override void setMinPreLineSpacing(OptLengthSpec spacing)
+    {
+        if (spacing.hasLength)
+        {
+            output("\\FOTMinPreLineSpacing{");
+            outputLengthSpec(spacing.length);
+            output("}");
+        }
+    }
+
+    public override void setMinPostLineSpacing(OptLengthSpec spacing)
+    {
+        if (spacing.hasLength)
+        {
+            output("\\FOTMinPostLineSpacing{");
+            outputLengthSpec(spacing.length);
+            output("}");
+        }
+    }
+
+    public override void setMinLeading(OptLengthSpec leading)
+    {
+        if (leading.hasLength)
+        {
+            output("\\FOTMinLeading{");
+            outputLengthSpec(leading.length);
+            output("}");
+        }
+    }
+
+    public override void setEscapementSpaceBefore(InlineSpace space)
+    {
+        output("\\FOTEscapementSpaceBefore{");
+        outputInlineSpace(space);
+        output("}");
+    }
+
+    public override void setEscapementSpaceAfter(InlineSpace space)
+    {
+        output("\\FOTEscapementSpaceAfter{");
+        outputInlineSpace(space);
+        output("}");
+    }
+
+    private void outputInlineSpace(InlineSpace space)
+    {
+        outputLengthSpec(space.nominal);
+        output(" plus ");
+        outputLengthSpec(space.max);
+        output(" minus ");
+        outputLengthSpec(space.min);
+    }
 }
