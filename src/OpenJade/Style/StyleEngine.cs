@@ -32,9 +32,66 @@ public class StyleEngine : IDisposable
     public void parseSpec(SgmlParser specParser, CharsetInfo charset,
                           StringC id, Messenger mgr)
     {
-        // TODO: Implement spec parsing
-        // This would parse a DSSSL specification
-        throw new NotImplementedException();
+        // Create handler for DSSSL specification parsing
+        DssslSpecEventHandler specHandler = new DssslSpecEventHandler(mgr);
+
+        // Load and resolve specification parts
+        System.Collections.Generic.List<DssslSpecEventHandler.Part> parts =
+            new System.Collections.Generic.List<DssslSpecEventHandler.Part>();
+        specHandler.load(specParser, charset, id, parts);
+
+        // Parse each part's body elements
+        for (int partIndex = parts.Count - 1; partIndex >= 0; partIndex--)
+        {
+            DssslSpecEventHandler.Part part = parts[partIndex];
+
+            // Process declarations first
+            for (IListIter<DssslSpecEventHandler.DeclarationElement> diter = part.diter();
+                 diter.done() == 0; diter.next())
+            {
+                DssslSpecEventHandler.DeclarationElement decl = diter.cur()!;
+                processDeclaration(decl, charset);
+            }
+
+            // Process body elements
+            for (IListIter<DssslSpecEventHandler.BodyElement> iter = part.iter();
+                 iter.done() == 0; iter.next())
+            {
+                DssslSpecEventHandler.BodyElement body = iter.cur()!;
+                body.makeInputSource(specHandler, out InputSource? inputSource);
+                if (inputSource != null)
+                {
+                    SchemeParser parser = new SchemeParser(interpreter_!, inputSource);
+                    parser.parse();
+                }
+            }
+        }
+
+        // Compile all processing modes
+        interpreter_!.compile();
+    }
+
+    private void processDeclaration(DssslSpecEventHandler.DeclarationElement decl, CharsetInfo charset)
+    {
+        // Process DSSSL declarations like features, char-repertoire, etc.
+        switch (decl.type())
+        {
+            case DssslSpecEventHandler.DeclarationType.features:
+                // Parse feature declaration
+                break;
+            case DssslSpecEventHandler.DeclarationType.mapSdataEntity:
+                // Register SDATA entity mapping
+                break;
+            case DssslSpecEventHandler.DeclarationType.charRepertoire:
+                // Set character repertoire
+                break;
+            case DssslSpecEventHandler.DeclarationType.sgmlGrovePlan:
+                // Set grove plan
+                break;
+            default:
+                // Other declarations
+                break;
+        }
     }
 
     public void process(NodePtr node, FOTBuilder fotb)
