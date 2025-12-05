@@ -1004,8 +1004,26 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            // TODO: implement document output
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Document ";
+            os.indent();
+            if ((setProperties & (uint)Flags.fDMargins) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DMargins " << DMargins << ">";
+            if ((setProperties & (uint)Flags.fDColumns) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DColumns " << DColumns << ">";
+            if ((setProperties & (uint)Flags.fDColumnGap) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DColumnGap " << DColumnGap << ">";
+            if ((setProperties & (uint)Flags.fDPageSize) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DPageSize " << DPageSize << ">";
+            if ((setProperties & (uint)Flags.fDStartPage) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DStartPage " << DStartPage << ">";
+            if ((setProperties & (uint)Flags.fDPageNumStyle) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DPageNumStyle " << DPageNumStyle << ">";
+            if ((setProperties & (uint)Flags.fDTwoSides) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DTwoSides " << (DTwoSides ? "Yes" : "No") << ">";
+            if ((setProperties & (uint)Flags.fDParity) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<DParity " << DParity << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1346,22 +1364,35 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            outProlog(os);
+            ParaLine.outProlog(os);
+            content().commit(os.stream());
+            ParaLine.outEpilog(os);
+            outEpilog(os);
         }
 
         public void outProlog(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            currentlyOpened = true;
+            outSimpleProlog(os);
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfTag `" << PgfTag << "'>";
+            if ((setProperties & 0x2) != 0)  // fParagraphFormat
+                curFormat().@out(os);
         }
 
         public static void outSimpleProlog(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            currentlyOpened = true;
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Para ";
+            os.indent();
         }
 
         public static void outEpilog(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            currentlyOpened = false;
         }
     }
 
@@ -1377,12 +1408,34 @@ public class MifDoc : IDisposable
 
         public static void outProlog(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<ParaLine ";
+            os.indent();
+
+            TextFlow? tf = MifDoc.CurInstance?.curTextFlow();
+            if (tf != null && !tf.TextRectIDUsed)
+            {
+                setTextRectID(tf.TextRectID);
+                if ((setProperties & 0x1) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<TextRectID " << TextRectID << ">";
+                setProperties &= ~0x1u;
+                tf.TextRectIDUsed = true;
+            }
+
+            Tbl? tbl = MifDoc.CurInstance?.curTbl(false);
+            if (tbl != null && !tbl.TblIDUsed)
+            {
+                setATbl(tbl.TblID);
+                if ((setProperties & 0x2) != 0)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<ATbl " << ATbl << ">";
+                setProperties &= ~0x2u;
+                tbl.TblIDUsed = true;
+            }
         }
 
         public static void outEpilog(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1393,7 +1446,12 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<PgfCatalog ";
+            os.indent();
+            for (int i = 0; i < ParaFormats.Count; i++)
+                ParaFormats[i].@out(os, false);
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
