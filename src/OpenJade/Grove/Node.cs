@@ -1504,6 +1504,90 @@ public class NodePtr
         return node.nextChunkSibling(ref ptr);
     }
 
+    public AccessResult firstChild(ref NodePtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.firstChild(ref ptr);
+    }
+
+    public AccessResult getGroveRoot(ref NodePtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getGroveRoot(ref ptr);
+    }
+
+    public AccessResult getAttributes(ref NamedNodeListPtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getAttributes(ref ptr);
+    }
+
+    public AccessResult tokens(GroveString str)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.tokens(ref str);
+    }
+
+    public AccessResult getImplied(out bool implied)
+    {
+        implied = false;
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getImplied(out implied);
+    }
+
+    public AccessResult assignParent()
+    {
+        var temp = new NodePtr();
+        var result = node!.getParent(ref temp);
+        if (result == AccessResult.accessOK)
+            assign(temp.node);
+        return result;
+    }
+
+    public AccessResult assignPreviousSibling()
+    {
+        // Get parent and find previous sibling by iteration
+        var parent = new NodePtr();
+        if (node!.getParent(ref parent) != AccessResult.accessOK)
+            return AccessResult.accessNotInClass;
+        var first = new NodePtr();
+        if (parent.node!.firstChild(ref first) != AccessResult.accessOK)
+            return AccessResult.accessNotInClass;
+        if (first.node == node)
+            return AccessResult.accessNotInClass; // No previous sibling
+        var prev = first;
+        var next = new NodePtr();
+        while (prev.node!.nextChunkSibling(ref next) == AccessResult.accessOK)
+        {
+            if (next.node == node)
+            {
+                assign(prev.node);
+                return AccessResult.accessOK;
+            }
+            prev.assign(next);
+        }
+        return AccessResult.accessNotInClass;
+    }
+
+    public AccessResult getElementWithId(GroveString id, ref NodePtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        // Get elements named node list
+        var elements = new NamedNodeListPtr();
+        if (node.getElements(ref elements) != AccessResult.accessOK)
+            return AccessResult.accessNotInClass;
+        // Look up by ID
+        return elements.namedNode(id, ref ptr);
+    }
+
+    public bool isNull() { return node == null; }
+
     private void addRef() { if (node != null) node.addRef(); }
     private void release() { if (node != null) node.release(); }
 }
@@ -1603,6 +1687,20 @@ public class NamedNodeListPtr
     public void clear() { release(); list = null; }
 
     public static implicit operator bool(NamedNodeListPtr ptr) => ptr.list != null;
+
+    public AccessResult namedNode(GroveString name, ref NodePtr ptr)
+    {
+        if (list == null)
+            return AccessResult.accessNull;
+        return list.namedNode(name, ref ptr);
+    }
+
+    public NodeListPtr nodeList()
+    {
+        if (list == null)
+            return new NodeListPtr();
+        return list.nodeList();
+    }
 
     private void addRef() { if (list != null) list.addRef(); }
     private void release() { if (list != null) list.release(); }

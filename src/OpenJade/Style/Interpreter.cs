@@ -812,4 +812,10 @@ public enum InterpreterMessages
     useLoop,
     specNotArc,
     noParts,
+    // Color messages
+    colorArgCount,
+    notAColorSpace,
+    unknownColorSpaceFamily,
+    colorSpaceArgError,
+    colorSpaceNoArgs,
 }

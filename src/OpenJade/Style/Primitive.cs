@@ -2353,3 +2353,1266 @@ public class TableLengthSpecObj : ELObj
     public TableLengthSpecObj(FOTBuilder.TableLengthSpec spec) { spec_ = spec; }
     public FOTBuilder.TableLengthSpec spec() { return spec_; }
 }
+
+// <= primitive
+public class LessEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);
+    public LessEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (nArgs < 2)
+            return interp.makeTrue();
+        for (int i = 0; i < nArgs - 1; i++)
+        {
+            long lval1 = 0, lval2 = 0;
+            double dval1 = 0, dval2 = 0;
+            int dim1 = 0, dim2 = 0;
+            var q1 = args[i]?.quantityValue(out lval1, out dval1, out dim1) ?? ELObj.QuantityType.noQuantity;
+            var q2 = args[i + 1]?.quantityValue(out lval2, out dval2, out dim2) ?? ELObj.QuantityType.noQuantity;
+            if (q1 == ELObj.QuantityType.noQuantity)
+                return argError(interp, loc, i, args[i]);
+            if (q2 == ELObj.QuantityType.noQuantity)
+                return argError(interp, loc, i + 1, args[i + 1]);
+            if (dim1 != dim2)
+            {
+                interp.setNextLocation(loc);
+                return interp.makeError();
+            }
+            double v1 = (q1 == ELObj.QuantityType.doubleQuantity) ? dval1 : lval1;
+            double v2 = (q2 == ELObj.QuantityType.doubleQuantity) ? dval2 : lval2;
+            if (!(v1 <= v2))
+                return interp.makeFalse();
+        }
+        return interp.makeTrue();
+    }
+}
+
+// >= primitive
+public class GreaterEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);
+    public GreaterEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (nArgs < 2)
+            return interp.makeTrue();
+        for (int i = 0; i < nArgs - 1; i++)
+        {
+            long lval1 = 0, lval2 = 0;
+            double dval1 = 0, dval2 = 0;
+            int dim1 = 0, dim2 = 0;
+            var q1 = args[i]?.quantityValue(out lval1, out dval1, out dim1) ?? ELObj.QuantityType.noQuantity;
+            var q2 = args[i + 1]?.quantityValue(out lval2, out dval2, out dim2) ?? ELObj.QuantityType.noQuantity;
+            if (q1 == ELObj.QuantityType.noQuantity)
+                return argError(interp, loc, i, args[i]);
+            if (q2 == ELObj.QuantityType.noQuantity)
+                return argError(interp, loc, i + 1, args[i + 1]);
+            if (dim1 != dim2)
+            {
+                interp.setNextLocation(loc);
+                return interp.makeError();
+            }
+            double v1 = (q1 == ELObj.QuantityType.doubleQuantity) ? dval1 : lval1;
+            double v2 = (q2 == ELObj.QuantityType.doubleQuantity) ? dval2 : lval2;
+            if (!(v1 >= v2))
+                return interp.makeFalse();
+        }
+        return interp.makeTrue();
+    }
+}
+
+// Descendants primitive
+public class DescendantsPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public DescendantsPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+        {
+            NodeListObj? nl = args[0]?.asNodeList();
+            if (nl != null)
+                return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        }
+        if (node == null)
+            return args[0];
+        return new DescendantsNodeListObj(node);
+    }
+}
+
+// DescendantsNodeListObj - traverses all descendants of a node
+public class DescendantsNodeListObj : NodeListObj
+{
+    private NodePtr start_;
+    private uint depth_;
+
+    public DescendantsNodeListObj(NodePtr start, uint depth = 0)
+    {
+        start_ = start;
+        depth_ = depth;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        NodePtr node = new NodePtr(start_);
+        uint depth = depth_;
+        advance(ref node, ref depth);
+        if (depth > 0)
+            return node;
+        return null;
+    }
+
+    public override NodeListObj? nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        NodePtr node = new NodePtr(start_);
+        uint depth = depth_;
+        advance(ref node, ref depth);
+        if (depth > 0)
+            return new DescendantsNodeListObj(node, depth);
+        return interp.makeEmptyNodeList() as NodeListObj;
+    }
+
+    private static void advance(ref NodePtr node, ref uint depth)
+    {
+        if (node.assignFirstChild() == AccessResult.accessOK)
+        {
+            depth++;
+            return;
+        }
+        while (depth > 0)
+        {
+            if (node.assignNextChunkSibling() == AccessResult.accessOK)
+                return;
+            if (node.assignParent() != AccessResult.accessOK)
+                break;
+            depth--;
+        }
+        depth = 0;
+    }
+}
+
+// Follow primitive (following siblings)
+public class FollowPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public FollowPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+        {
+            NodeListObj? nl = args[0]?.asNodeList();
+            if (nl != null)
+                return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        }
+        if (node == null)
+            return args[0];
+        NodePtr next = new NodePtr();
+        if (node.nextChunkSibling(ref next) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        return new SiblingNodeListObj(next, new NodePtr());
+    }
+}
+
+// Preced primitive (preceding siblings)
+public class PrecedPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public PrecedPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+        {
+            NodeListObj? nl = args[0]?.asNodeList();
+            if (nl != null)
+                return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        }
+        if (node == null)
+            return args[0];
+        // Get parent's first child, iterate until we reach this node
+        NodePtr parent = new NodePtr();
+        if (node.getParent(ref parent) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        NodePtr first = new NodePtr();
+        if (parent.firstChild(ref first) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        if (first.Equals(node))
+            return interp.makeEmptyNodeList();
+        return new SiblingNodeListObj(first, node);
+    }
+}
+
+// SiblingNodeListObj - node list of siblings between first and end (exclusive)
+public class SiblingNodeListObj : NodeListObj
+{
+    private NodePtr first_;
+    private NodePtr end_;
+
+    public SiblingNodeListObj(NodePtr first, NodePtr end)
+    {
+        first_ = first;
+        end_ = end;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        if (end_ != null && !end_.isNull() && first_.Equals(end_))
+            return null;
+        return first_;
+    }
+
+    public override NodeListObj? nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        if (end_ != null && !end_.isNull() && first_.Equals(end_))
+            return interp.makeEmptyNodeList() as NodeListObj;
+        NodePtr next = new NodePtr();
+        if (first_.nextChunkSibling(ref next) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList() as NodeListObj;
+        return new SiblingNodeListObj(next, end_);
+    }
+}
+
+// Data primitive - returns character data of a node
+public class DataPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public DataPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+            return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+        if (node == null)
+            return interp.makeString(Array.Empty<Char>(), 0);
+        return nodeData(node, interp);
+    }
+
+    private static ELObj nodeData(NodePtr node, Interpreter interp)
+    {
+        StringObj result = new StringObj();
+        collectData(node, result);
+        return result;
+    }
+
+    private static void collectData(NodePtr node, StringObj result)
+    {
+        GroveString chunk = new GroveString();
+        if (node.charChunk(null, chunk) == AccessResult.accessOK)
+        {
+            if (chunk.data() != null)
+                result.append(chunk.data()!, chunk.size());
+            return;
+        }
+        NodePtr child = new NodePtr();
+        if (node.firstChild(ref child) == AccessResult.accessOK)
+        {
+            do
+            {
+                collectData(child, result);
+            } while (child.assignNextChunkSibling() == AccessResult.accessOK);
+        }
+    }
+}
+
+// Attributes primitive - returns attributes node list
+public class AttributesPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public AttributesPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+        {
+            NodeListObj? nl = args[0]?.asNodeList();
+            if (nl != null)
+                return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        }
+        if (node == null)
+            return args[0];
+        NamedNodeListPtr atts = new NamedNodeListPtr();
+        if (node.getAttributes(ref atts) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        return new NamedNodeListPtrNodeListObj(atts);
+    }
+}
+
+// AttributeString primitive
+public class AttributeStringPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public AttributeStringPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        if (node == null)
+            return interp.makeFalse();
+        StringC attName = new StringC(s!, n);
+        StringC value = new StringC();
+        if (nodeAttributeString(node, attName, value))
+            return interp.makeString(value);
+        return interp.makeFalse();
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+
+    internal static bool nodeAttributeString(NodePtr node, StringC attName, StringC value)
+    {
+        NamedNodeListPtr atts = new NamedNodeListPtr();
+        if (node.getAttributes(ref atts) != AccessResult.accessOK)
+            return false;
+        NodePtr att = new NodePtr();
+        if (atts.namedNode(new GroveString(attName.data(), attName.size()), ref att) != AccessResult.accessOK)
+            return false;
+        bool implied = false;
+        if (att.getImplied(out implied) == AccessResult.accessOK && implied)
+            return false;
+        // Try tokens first
+        GroveString tokens = new GroveString();
+        if (att.tokens(tokens) == AccessResult.accessOK)
+        {
+            if (tokens.data() != null)
+                value.assign(tokens.data()!, tokens.size());
+            return true;
+        }
+        // Collect character content
+        NodePtr child = new NodePtr();
+        if (att.firstChild(ref child) == AccessResult.accessOK)
+        {
+            do
+            {
+                GroveString chunk = new GroveString();
+                if (child.charChunk(null, chunk) == AccessResult.accessOK && chunk.data() != null)
+                    value.append(chunk.data()!, chunk.size());
+            } while (child.assignNextChunkSibling() == AccessResult.accessOK);
+        }
+        return true;
+    }
+}
+
+// InheritedAttributeString primitive
+public class InheritedAttributeStringPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public InheritedAttributeStringPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        if (node == null)
+            return interp.makeFalse();
+        StringC attName = new StringC(s!, n);
+        StringC value = new StringC();
+        // Walk up ancestors looking for attribute
+        NodePtr cur = new NodePtr(node);
+        do
+        {
+            if (AttributeStringPrimitiveObj.nodeAttributeString(cur, attName, value))
+                return interp.makeString(value);
+        } while (cur.assignParent() == AccessResult.accessOK);
+        return interp.makeFalse();
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// Ancestor primitive
+public class AncestorPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public AncestorPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node) || node == null)
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        StringC gi = new StringC(s!, n);
+        // Normalize the GI using grove's element name normalization
+        NodePtr cur = new NodePtr(node);
+        while (cur.assignParent() == AccessResult.accessOK)
+        {
+            GroveString nodeGi = new GroveString();
+            if (cur.getGi(nodeGi) == AccessResult.accessOK)
+            {
+                if (nodeGi.size() == gi.size())
+                {
+                    bool match = true;
+                    for (nuint i = 0; i < gi.size() && match; i++)
+                    {
+                        if (nodeGi.data()![i] != gi.data()[i])
+                            match = false;
+                    }
+                    if (match)
+                        return new NodePtrNodeListObj(cur);
+                }
+            }
+        }
+        return interp.makeEmptyNodeList();
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// SelectElements primitive
+public class SelectElementsPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public SelectElementsPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+
+        // args[1] can be a string (GI) or a list of strings (GIs)
+        System.Collections.Generic.List<StringC> gis = new System.Collections.Generic.List<StringC>();
+        Char[]? s = null;
+        nuint n = 0;
+        if (args[1]!.stringData(out s, out n))
+        {
+            gis.Add(new StringC(s!, n));
+        }
+        else
+        {
+            ELObj? lst = args[1];
+            while (lst != null && !lst.isNil())
+            {
+                PairObj? pair = lst.asPair();
+                if (pair == null)
+                    return argError(interp, loc, InterpreterMessages.notAList, 1, args[1]);
+                if (!pair.car()!.stringData(out s, out n))
+                    return argError(interp, loc, InterpreterMessages.notAString, 1, args[1]);
+                gis.Add(new StringC(s!, n));
+                lst = pair.cdr();
+            }
+        }
+        return new SelectElementsNodeListObj(nl, gis);
+    }
+}
+
+// SelectElementsNodeListObj - filters node list by element name(s)
+public class SelectElementsNodeListObj : NodeListObj
+{
+    private NodeListObj nodeList_;
+    private System.Collections.Generic.List<StringC> gis_;
+
+    public SelectElementsNodeListObj(NodeListObj nl, System.Collections.Generic.List<StringC> gis)
+    {
+        nodeList_ = nl;
+        gis_ = gis;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        NodeListObj? nl = nodeList_;
+        while (nl != null)
+        {
+            NodePtr? node = nl.nodeListFirst(ctx, interp);
+            if (node == null)
+                return null;
+            if (matchesGi(node))
+                return node;
+            nl = nl.nodeListRest(ctx, interp);
+        }
+        return null;
+    }
+
+    public override NodeListObj? nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        NodeListObj? nl = nodeList_;
+        while (nl != null)
+        {
+            NodePtr? node = nl.nodeListFirst(ctx, interp);
+            if (node == null)
+                return interp.makeEmptyNodeList() as NodeListObj;
+            NodeListObj? rest = nl.nodeListRest(ctx, interp);
+            if (matchesGi(node))
+                return new SelectElementsNodeListObj(rest ?? (interp.makeEmptyNodeList() as NodeListObj)!, gis_);
+            nl = rest;
+        }
+        return interp.makeEmptyNodeList() as NodeListObj;
+    }
+
+    private bool matchesGi(NodePtr node)
+    {
+        GroveString nodeGi = new GroveString();
+        if (node.getGi(nodeGi) != AccessResult.accessOK)
+            return false;
+        foreach (StringC gi in gis_)
+        {
+            if (nodeGi.size() == gi.size())
+            {
+                bool match = true;
+                for (nuint i = 0; i < gi.size() && match; i++)
+                {
+                    if (nodeGi.data()![i] != gi.data()[i])
+                        match = false;
+                }
+                if (match)
+                    return true;
+            }
+        }
+        return false;
+    }
+}
+
+// NodeListLength primitive
+public class NodeListLengthPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public NodeListLengthPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        long count = 0;
+        while (nl != null && nl.nodeListFirst(ctx, interp) != null)
+        {
+            count++;
+            nl = nl.nodeListRest(ctx, interp);
+        }
+        return interp.makeInteger(count);
+    }
+}
+
+// NodeListRef primitive
+public class NodeListRefPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public NodeListRefPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        long k = 0;
+        if (!args[1]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (k < 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        for (long i = 0; i < k && nl != null; i++)
+        {
+            if (nl.nodeListFirst(ctx, interp) == null)
+            {
+                interp.setNextLocation(loc);
+                interp.message(InterpreterMessages.outOfRange);
+                return interp.makeError();
+            }
+            nl = nl.nodeListRest(ctx, interp);
+        }
+        NodePtr? node = nl?.nodeListFirst(ctx, interp);
+        if (node == null)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        return new NodePtrNodeListObj(node);
+    }
+}
+
+// NodeListReverse primitive
+public class NodeListReversePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public NodeListReversePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        // Collect all nodes
+        var nodes = new System.Collections.Generic.List<NodePtr>();
+        while (nl != null)
+        {
+            NodePtr? node = nl.nodeListFirst(ctx, interp);
+            if (node == null)
+                break;
+            nodes.Add(node);
+            nl = nl.nodeListRest(ctx, interp);
+        }
+        // Build reversed list
+        NodeListObj? result = interp.makeEmptyNodeList() as NodeListObj;
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            result = new PairNodeListObj(new NodePtrNodeListObj(nodes[i]), result!);
+        }
+        return result;
+    }
+}
+
+// ProcessNodeList primitive
+public class ProcessNodeListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ProcessNodeListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        if (ctx.processingMode == null)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.noCurrentProcessingMode);
+            return interp.makeError();
+        }
+        return new ProcessNodeListSosofoObj(nl, ctx.processingMode);
+    }
+}
+
+// ElementWithId primitive
+public class ElementWithIdPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public ElementWithIdPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        if (node == null)
+            return interp.makeEmptyNodeList();
+        // Get grove root
+        NodePtr root = new NodePtr();
+        if (node.getGroveRoot(ref root) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        // Get element by ID
+        StringC id = new StringC(s!, n);
+        NodePtr elem = new NodePtr();
+        if (root.getElementWithId(new GroveString(id.data(), id.size()), ref elem) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        return new NodePtrNodeListObj(elem);
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// First-sibling? primitive
+public class IsFirstSiblingPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public IsFirstSiblingPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        if (node == null)
+            return interp.makeFalse();
+        // Check if there's a previous sibling with same GI
+        GroveString myGi = new GroveString();
+        if (node.getGi(myGi) != AccessResult.accessOK)
+            return interp.makeFalse();
+        NodePtr prev = new NodePtr(node);
+        while (prev.assignPreviousSibling() == AccessResult.accessOK)
+        {
+            GroveString prevGi = new GroveString();
+            if (prev.getGi(prevGi) == AccessResult.accessOK)
+            {
+                if (myGi.size() == prevGi.size())
+                {
+                    bool same = true;
+                    for (nuint i = 0; i < myGi.size() && same; i++)
+                    {
+                        if (myGi.data()![i] != prevGi.data()![i])
+                            same = false;
+                    }
+                    if (same)
+                        return interp.makeFalse();
+                }
+            }
+        }
+        return interp.makeTrue();
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// Last-sibling? primitive
+public class IsLastSiblingPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public IsLastSiblingPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        if (node == null)
+            return interp.makeFalse();
+        // Check if there's a next sibling with same GI
+        GroveString myGi = new GroveString();
+        if (node.getGi(myGi) != AccessResult.accessOK)
+            return interp.makeFalse();
+        NodePtr next = new NodePtr(node);
+        while (next.assignNextChunkSibling() == AccessResult.accessOK)
+        {
+            GroveString nextGi = new GroveString();
+            if (next.getGi(nextGi) == AccessResult.accessOK)
+            {
+                if (myGi.size() == nextGi.size())
+                {
+                    bool same = true;
+                    for (nuint i = 0; i < myGi.size() && same; i++)
+                    {
+                        if (myGi.data()![i] != nextGi.data()![i])
+                            same = false;
+                    }
+                    if (same)
+                        return interp.makeFalse();
+                }
+            }
+        }
+        return interp.makeTrue();
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// ChildNumber primitive
+public class ChildNumberPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public ChildNumberPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        if (node == null)
+            return interp.makeFalse();
+        // Count preceding siblings with same GI
+        GroveString myGi = new GroveString();
+        if (node.getGi(myGi) != AccessResult.accessOK)
+            return interp.makeFalse();
+        long count = 1;
+        NodePtr prev = new NodePtr(node);
+        while (prev.assignPreviousSibling() == AccessResult.accessOK)
+        {
+            GroveString prevGi = new GroveString();
+            if (prev.getGi(prevGi) == AccessResult.accessOK)
+            {
+                if (myGi.size() == prevGi.size())
+                {
+                    bool same = true;
+                    for (nuint i = 0; i < myGi.size() && same; i++)
+                    {
+                        if (myGi.data()![i] != prevGi.data()![i])
+                            same = false;
+                    }
+                    if (same)
+                        count++;
+                }
+            }
+        }
+        return interp.makeInteger(count);
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// IsColor? primitive
+public class IsColorPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsColorPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (args[0]?.asColor() != null)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// IsColorSpace? primitive
+public class IsColorSpacePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsColorSpacePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (args[0]?.asColorSpace() != null)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// Device RGB color space
+public class DeviceRGBColorSpaceObj : ColorSpaceObj
+{
+    public ELObj? makeColor(int nArgs, ELObj?[] args, Interpreter interp, Location loc)
+    {
+        if (nArgs != 3)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.colorArgCount);
+            return interp.makeError();
+        }
+        double[] components = new double[3];
+        for (int i = 0; i < 3; i++)
+        {
+            if (!args[i]!.realValue(out components[i]))
+            {
+                interp.setNextLocation(loc);
+                interp.message(InterpreterMessages.notANumber);
+                return interp.makeError();
+            }
+        }
+        return new DeviceRGBColorObj(components);
+    }
+}
+
+// Device RGB color
+public class DeviceRGBColorObj : ColorObj
+{
+    private double r_, g_, b_;
+
+    public DeviceRGBColorObj(double[] rgb)
+    {
+        r_ = rgb[0];
+        g_ = rgb[1];
+        b_ = rgb[2];
+    }
+
+    public override void set(FOTBuilder fotb)
+    {
+        FOTBuilder.DeviceRGBColor c = new FOTBuilder.DeviceRGBColor();
+        c.red = (byte)(r_ * 255);
+        c.green = (byte)(g_ * 255);
+        c.blue = (byte)(b_ * 255);
+        fotb.setColor(c);
+    }
+
+    public override void setBackground(FOTBuilder fotb)
+    {
+        FOTBuilder.DeviceRGBColor c = new FOTBuilder.DeviceRGBColor();
+        c.red = (byte)(r_ * 255);
+        c.green = (byte)(g_ * 255);
+        c.blue = (byte)(b_ * 255);
+        fotb.setBackgroundColor(c);
+    }
+}
+
+// Device Gray color space
+public class DeviceGrayColorSpaceObj : ColorSpaceObj
+{
+    public ELObj? makeColor(int nArgs, ELObj?[] args, Interpreter interp, Location loc)
+    {
+        if (nArgs != 1)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.colorArgCount);
+            return interp.makeError();
+        }
+        double gray = 0;
+        if (!args[0]!.realValue(out gray))
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.notANumber);
+            return interp.makeError();
+        }
+        return new DeviceGrayColorObj(gray);
+    }
+}
+
+// Device Gray color
+public class DeviceGrayColorObj : ColorObj
+{
+    private double gray_;
+
+    public DeviceGrayColorObj(double gray)
+    {
+        gray_ = gray;
+    }
+
+    public override void set(FOTBuilder fotb)
+    {
+        byte g = (byte)(gray_ * 255);
+        FOTBuilder.DeviceRGBColor c = new FOTBuilder.DeviceRGBColor();
+        c.red = g;
+        c.green = g;
+        c.blue = g;
+        fotb.setColor(c);
+    }
+
+    public override void setBackground(FOTBuilder fotb)
+    {
+        byte g = (byte)(gray_ * 255);
+        FOTBuilder.DeviceRGBColor c = new FOTBuilder.DeviceRGBColor();
+        c.red = g;
+        c.green = g;
+        c.blue = g;
+        fotb.setBackgroundColor(c);
+    }
+}
+
+// Device CMYK color space
+public class DeviceCMYKColorSpaceObj : ColorSpaceObj
+{
+    public ELObj? makeColor(int nArgs, ELObj?[] args, Interpreter interp, Location loc)
+    {
+        if (nArgs != 4)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.colorArgCount);
+            return interp.makeError();
+        }
+        double[] components = new double[4];
+        for (int i = 0; i < 4; i++)
+        {
+            if (!args[i]!.realValue(out components[i]))
+            {
+                interp.setNextLocation(loc);
+                interp.message(InterpreterMessages.notANumber);
+                return interp.makeError();
+            }
+        }
+        return new DeviceCMYKColorObj(components);
+    }
+}
+
+// Device CMYK color
+public class DeviceCMYKColorObj : ColorObj
+{
+    private double c_, m_, y_, k_;
+
+    public DeviceCMYKColorObj(double[] cmyk)
+    {
+        c_ = cmyk[0];
+        m_ = cmyk[1];
+        y_ = cmyk[2];
+        k_ = cmyk[3];
+    }
+
+    public override void set(FOTBuilder fotb)
+    {
+        // Convert CMYK to RGB for FOTBuilder
+        FOTBuilder.DeviceRGBColor c = new FOTBuilder.DeviceRGBColor();
+        c.red = (byte)((1 - c_) * (1 - k_) * 255);
+        c.green = (byte)((1 - m_) * (1 - k_) * 255);
+        c.blue = (byte)((1 - y_) * (1 - k_) * 255);
+        fotb.setColor(c);
+    }
+
+    public override void setBackground(FOTBuilder fotb)
+    {
+        FOTBuilder.DeviceRGBColor c = new FOTBuilder.DeviceRGBColor();
+        c.red = (byte)((1 - c_) * (1 - k_) * 255);
+        c.green = (byte)((1 - m_) * (1 - k_) * 255);
+        c.blue = (byte)((1 - y_) * (1 - k_) * 255);
+        fotb.setBackgroundColor(c);
+    }
+}
+
+// ColorSpace primitive
+public class ColorSpacePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, true);
+    public ColorSpacePrimitiveObj() : base(sig) { }
+
+    private const string DevicePrefix = "ISO/IEC 10179:1996//Color-Space Family::Device ";
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        StringC str = new StringC(s!, n);
+        string strStr = str.ToString();
+
+        if (strStr.StartsWith(DevicePrefix))
+        {
+            string type = strStr.Substring(DevicePrefix.Length);
+            switch (type)
+            {
+                case "RGB":
+                    return new DeviceRGBColorSpaceObj();
+                case "Gray":
+                    return new DeviceGrayColorSpaceObj();
+                case "CMYK":
+                    return new DeviceCMYKColorSpaceObj();
+                default:
+                    interp.setNextLocation(loc);
+                    interp.message(InterpreterMessages.unknownColorSpaceFamily, strStr);
+                    return interp.makeError();
+            }
+        }
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.unknownColorSpaceFamily, strStr);
+        return interp.makeError();
+    }
+}
+
+// Color primitive
+public class ColorPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, true);
+    public ColorPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        ColorSpaceObj? cs = args[0]?.asColorSpace();
+        if (cs == null)
+            return argError(interp, loc, InterpreterMessages.notAColorSpace, 0, args[0]);
+        // Call makeColor on the color space with remaining arguments
+        ELObj?[] colorArgs = new ELObj?[nArgs - 1];
+        for (int i = 1; i < nArgs; i++)
+            colorArgs[i - 1] = args[i];
+        // Type-specific makeColor call
+        if (cs is DeviceRGBColorSpaceObj rgb)
+            return rgb.makeColor(nArgs - 1, colorArgs, interp, loc);
+        if (cs is DeviceGrayColorSpaceObj gray)
+            return gray.makeColor(nArgs - 1, colorArgs, interp, loc);
+        if (cs is DeviceCMYKColorSpaceObj cmyk)
+            return cmyk.makeColor(nArgs - 1, colorArgs, interp, loc);
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.unknownColorSpaceFamily, "unknown");
+        return interp.makeError();
+    }
+}
+
+// IsAddress? primitive
+public class IsAddressPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsAddressPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (args[0]?.asAddress() != null)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// CurrentNodeAddress primitive
+public class CurrentNodeAddressPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public CurrentNodeAddressPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (ctx.currentNode == null)
+            return noCurrentNodeError(interp, loc);
+        FOTBuilder.Address addr = new FOTBuilder.Address();
+        addr.type = FOTBuilder.Address.Type.resolvedNode;
+        addr.node = ctx.currentNode;
+        return new AddressObj(addr);
+    }
+}
+
+// IdrefAddress primitive
+public class IdrefAddressPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IdrefAddressPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        if (ctx.currentNode == null)
+            return noCurrentNodeError(interp, loc);
+        FOTBuilder.Address addr = new FOTBuilder.Address();
+        addr.type = FOTBuilder.Address.Type.idref;
+        addr.node = ctx.currentNode;
+        addr.@params[0] = new StringC(s!, n);
+        return new AddressObj(addr);
+    }
+}
+
+// EntityAddress primitive
+public class EntityAddressPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public EntityAddressPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        if (ctx.currentNode == null)
+            return noCurrentNodeError(interp, loc);
+        FOTBuilder.Address addr = new FOTBuilder.Address();
+        addr.type = FOTBuilder.Address.Type.entity;
+        addr.node = ctx.currentNode;
+        addr.@params[0] = new StringC(s!, n);
+        return new AddressObj(addr);
+    }
+}
+
+// NodeListAddress primitive
+public class NodeListAddressPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public NodeListAddressPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node) || node == null)
+            return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+        FOTBuilder.Address addr = new FOTBuilder.Address();
+        addr.type = FOTBuilder.Address.Type.resolvedNode;
+        addr.node = node;
+        return new AddressObj(addr);
+    }
+}
+

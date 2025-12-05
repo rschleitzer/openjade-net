@@ -1407,6 +1407,39 @@ public class NodeListPtrNodeListObj : NodeListObj
     }
 }
 
+// Node list from named node list pointer (attributes, elements, etc.)
+public class NamedNodeListPtrNodeListObj : NodeListObj
+{
+    private NamedNodeListPtr namedList_;
+    private NodeListPtrNodeListObj? listObj_;
+
+    public NamedNodeListPtrNodeListObj(NamedNodeListPtr namedList)
+    {
+        namedList_ = namedList;
+        listObj_ = null;
+    }
+
+    private NodeListPtrNodeListObj getListObj()
+    {
+        if (listObj_ == null && namedList_ != null)
+        {
+            NodeListPtr nlp = namedList_.nodeList();
+            listObj_ = new NodeListPtrNodeListObj(nlp);
+        }
+        return listObj_!;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        return getListObj().nodeListFirst(ctx, interp);
+    }
+
+    public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        return getListObj().nodeListRest(ctx, interp);
+    }
+}
+
 // Pair of node lists (concatenation)
 public class PairNodeListObj : NodeListObj
 {
