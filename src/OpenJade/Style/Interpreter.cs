@@ -160,4 +160,21 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     {
         // Set the next location for error messages
     }
+
+    // Debug mode
+    private bool debugMode_ = false;
+    public bool debugMode() { return debugMode_; }
+    public void setDebugMode(bool debug) { debugMode_ = debug; }
+
+    // Create a StringC from string
+    public StringC makeStringC(string s)
+    {
+        return new StringC(s);
+    }
+
+    // Get string by index for interned strings
+    public StringObj? storeString(StringC s)
+    {
+        return makeString(s);
+    }
 }

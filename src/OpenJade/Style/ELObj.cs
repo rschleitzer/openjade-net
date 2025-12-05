@@ -258,13 +258,81 @@ public class SymbolObj : ELObj
 public class Identifier : Named
 {
     private StringC name_;
+    private ELObj? value_;
+    private uint defPart_;
+    private Location defLoc_;
+    private bool isDefined_;
+    private bool evaluated_;
+    private ConstPtr<InheritedC>? inheritedC_;
+    private FlowObj? flowObj_;
+    private SyntacticKey synKey_;
+
+    public enum SyntacticKey
+    {
+        notKey,
+        keyUse,
+        keyLabel,
+        keyContentMap,
+    }
 
     public Identifier(StringC name) : base(name)
     {
         name_ = name;
+        value_ = null;
+        defPart_ = 0;
+        defLoc_ = new Location();
+        isDefined_ = false;
+        evaluated_ = false;
+        inheritedC_ = null;
+        flowObj_ = null;
+        synKey_ = SyntacticKey.notKey;
     }
 
     public new StringC name() { return name_; }
+
+    public bool defined(out uint part, out Location loc)
+    {
+        part = defPart_;
+        loc = defLoc_;
+        return isDefined_;
+    }
+
+    public void setDefinition(uint part, Location loc, ELObj? value)
+    {
+        defPart_ = part;
+        defLoc_ = loc;
+        value_ = value;
+        isDefined_ = true;
+        evaluated_ = (value != null);
+    }
+
+    public ELObj? computeValue(bool force, Interpreter interp)
+    {
+        if (!isDefined_)
+            return null;
+        if (value_ == null && force)
+        {
+            // TODO: Compute value from expression
+            return interp.makeError();
+        }
+        return value_;
+    }
+
+    public bool evaluated() { return evaluated_; }
+
+    public bool syntacticKey(out SyntacticKey key)
+    {
+        key = synKey_;
+        return synKey_ != SyntacticKey.notKey;
+    }
+
+    public void setSyntacticKey(SyntacticKey key) { synKey_ = key; }
+
+    public ConstPtr<InheritedC>? inheritedC() { return inheritedC_; }
+    public void setInheritedC(ConstPtr<InheritedC>? ic) { inheritedC_ = ic; }
+
+    public FlowObj? flowObj() { return flowObj_; }
+    public void setFlowObj(FlowObj? fo) { flowObj_ = fo; }
 }
 
 public class KeywordObj : ELObj
@@ -1037,15 +1105,7 @@ public class AddressObj : ELObj
     public FOTBuilder.Address address() { return address_; }
 }
 
-public class BoxObj : ELObj
-{
-    public override BoxObj? asBox() { return this; }
-}
-
-public class FunctionObj : ELObj
-{
-    public override FunctionObj? asFunction() { return this; }
-}
+// NOTE: BoxObj and FunctionObj are defined in FunctionObj.cs
 
 public abstract class SosofoObj : ELObj
 {

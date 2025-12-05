@@ -241,7 +241,7 @@ public class ProcessingMode : Named
         {
             if (expr_ == null)
                 return;
-            insn_ = expr_.compile(interp);
+            insn_ = expr_.compile(interp, new Environment(), 0, new InsnPtr(new ReturnInsn(0)));
             // For construction rules, we could pre-evaluate constant sosofos
             // For now, just compile the expression
         }
@@ -427,60 +427,12 @@ public class Resource
     public int refCount() { return refCount_; }
 }
 
-// Instruction pointer
-public class InsnPtr
-{
-    private Insn? insn_;
-
-    public InsnPtr()
-    {
-        insn_ = null;
-    }
-
-    public InsnPtr(Insn insn)
-    {
-        insn_ = insn;
-    }
-
-    public Insn? get() { return insn_; }
-    public void assign(Insn? insn) { insn_ = insn; }
-}
-
-// Instruction base class
-public abstract class Insn
-{
-    public abstract ELObj? execute(VM vm);
-}
-
+// NOTE: InsnPtr is defined in Insn.cs
+// NOTE: Insn is defined in Insn.cs
 // NOTE: SosofoObj is defined in ELObj.cs
 // NOTE: StyleObj is defined in ELObj.cs
-
-// Expression base class
-public abstract class Expression
-{
-    public abstract ELObj? evaluate(VM vm);
-    public virtual InsnPtr compile(Interpreter interp)
-    {
-        // Default: create instruction that evaluates this expression
-        return new InsnPtr(new EvalExprInsn(this));
-    }
-}
-
-// Instruction that evaluates an expression
-public class EvalExprInsn : Insn
-{
-    private Expression expr_;
-
-    public EvalExprInsn(Expression expr)
-    {
-        expr_ = expr;
-    }
-
-    public override ELObj? execute(VM vm)
-    {
-        return expr_.evaluate(vm);
-    }
-}
+// NOTE: VM is defined in VM.cs
+// NOTE: Expression is defined in Expression.cs
 
 // CurrentNodeSetter - saves and restores current node context
 public class CurrentNodeSetter : IDisposable
@@ -502,49 +454,5 @@ public class CurrentNodeSetter : IDisposable
     {
         ec_.currentNode = saveCurrentNode_;
         ec_.processingMode = saveProcessingMode_;
-    }
-}
-
-// VM (Virtual Machine) for DSSSL execution
-public class VM
-{
-    public Interpreter interp;
-    public NodePtr currentNode;
-    public ProcessingMode? processingMode;
-    public StyleObj? overridingStyle;
-    public StyleStack? styleStack;
-    public uint specLevel;
-    public System.Collections.Generic.List<nuint>? actualDependencies;
-    public LanguageObj? currentLanguage;
-    private ELObj?[] frame_;
-    private int frameSize_;
-
-    public VM(Interpreter interpreter)
-    {
-        interp = interpreter;
-        currentNode = new NodePtr();
-        processingMode = null;
-        overridingStyle = null;
-        styleStack = null;
-        specLevel = 0;
-        actualDependencies = null;
-        currentLanguage = null;
-        frame_ = Array.Empty<ELObj?>();
-        frameSize_ = 0;
-    }
-
-    public Interpreter interpreter() { return interp; }
-
-    public ELObj? eval(Insn? insn)
-    {
-        if (insn == null) return null;
-        return insn.execute(this);
-    }
-
-    public ELObj? eval(Insn? insn, ELObj?[]? display, ELObj? arg = null)
-    {
-        if (insn == null) return null;
-        // TODO: Full implementation with display and arg
-        return insn.execute(this);
     }
 }
