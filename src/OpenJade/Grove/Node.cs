@@ -1476,6 +1476,20 @@ public class NodePtr
         return node.getOrigin(ref ptr);
     }
 
+    public AccessResult getParent(ref NodePtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getParent(ref ptr);
+    }
+
+    public AccessResult children(ref NodeListPtr ptr)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.children(ref ptr);
+    }
+
     private void addRef() { if (node != null) node.addRef(); }
     private void release() { if (node != null) node.release(); }
 }
@@ -1527,6 +1541,20 @@ public class NodeListPtr
     public void clear() { release(); list = null; }
 
     public static implicit operator bool(NodeListPtr ptr) => ptr.list != null;
+
+    public AccessResult first(NodePtr ptr)
+    {
+        if (list == null)
+            return AccessResult.accessNull;
+        return list.first(ref ptr);
+    }
+
+    public AccessResult rest(NodeListPtr ptr)
+    {
+        if (list == null)
+            return AccessResult.accessNull;
+        return list.rest(ref ptr);
+    }
 
     private void addRef() { if (list != null) list.addRef(); }
     private void release() { if (list != null) list.release(); }

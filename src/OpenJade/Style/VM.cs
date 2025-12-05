@@ -234,7 +234,7 @@ public partial class VM : EvalContext
 }
 
 // EvalContext - evaluation context for DSSSL
-public class EvalContext
+public class EvalContext : IEvalContext
 {
     public NodePtr currentNode;
     public ProcessingMode? processingMode;

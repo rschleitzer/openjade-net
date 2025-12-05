@@ -75,6 +75,20 @@ public abstract class ProcessContext
     public abstract void endFlowObj();
     public abstract void startConnection(SymbolObj? label, Location loc);
     public abstract void endConnection();
+
+    // Character output
+    public virtual void characters(Char[] data, nuint start, nuint len)
+    {
+        if (start == 0)
+            currentFOTBuilder().characters(data, len);
+        else
+        {
+            // Create a copy starting from offset
+            Char[] sub = new Char[len];
+            Array.Copy(data, (int)start, sub, 0, (int)len);
+            currentFOTBuilder().characters(sub, len);
+        }
+    }
 }
 
 // Full ProcessContext implementation

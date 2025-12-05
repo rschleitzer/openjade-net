@@ -517,4 +517,58 @@ public class ContentMapSosofoObj : SosofoObj
     }
 }
 
+// LiteralSosofoObj - outputs literal text
+public class LiteralSosofoObj : SosofoObj
+{
+    private ELObj str_;
+
+    public LiteralSosofoObj(ELObj str)
+    {
+        str_ = str;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (str_.stringData(out s, out n))
+            context.characters(s!, 0, n);
+    }
+}
+
+// ProcessChildrenTrimSosofoObj - processes children trimming whitespace
+public class ProcessChildrenTrimSosofoObj : SosofoObj
+{
+    private ProcessingMode? mode_;
+
+    public ProcessChildrenTrimSosofoObj(ProcessingMode? mode)
+    {
+        mode_ = mode;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        // TODO: implement trim logic
+        throw new NotImplementedException();
+    }
+}
+
+// NextMatchSosofoObj - processes next matching rule
+public class NextMatchSosofoObj : SosofoObj
+{
+    private StyleObj? style_;
+
+    public NextMatchSosofoObj(StyleObj? style)
+    {
+        style_ = style;
+    }
+
+    public override void process(ProcessContext context)
+    {
+        // TODO: implement
+        throw new NotImplementedException();
+    }
+}
+
 // NOTE: ProcessContext is defined in StyleEngine.cs
+// NOTE: MergeStyleObj is defined in Style.cs

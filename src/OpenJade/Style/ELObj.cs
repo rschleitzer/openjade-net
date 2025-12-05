@@ -357,6 +357,8 @@ public class KeywordObj : ELObj
 
     public Identifier? identifier() { return ident_; }
 
+    public StringC name() { return ident_?.name() ?? new StringC(); }
+
     protected override bool isEqual(ELObj other)
     {
         if (other is KeywordObj kw)
@@ -491,6 +493,12 @@ public class VectorObj : ELObj
     public VectorObj(System.Collections.Generic.List<ELObj?> v)
     {
         elements_ = new System.Collections.Generic.List<ELObj?>(v);
+    }
+
+    public VectorObj(int size, ELObj? fill)
+    {
+        for (int i = 0; i < size; i++)
+            elements_.Add(fill);
     }
 
     public override void traceSubObjects(Collector c)
@@ -665,6 +673,12 @@ public class StringObj : ELObj
             if (s![i] != myData[i])
                 return false;
         return true;
+    }
+
+    // Append string data
+    public void append(Char[] data, nuint size)
+    {
+        str_.append(data, size);
     }
 
     // Allow implicit conversion to StringC
@@ -1150,6 +1164,146 @@ public class StyleObj : ELObj
 public class NodeListObj : ELObj
 {
     public override NodeListObj? asNodeList() { return this; }
+    public virtual NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp) { return null; }
+    public virtual NodeListObj nodeListRest(EvalContext ctx, Interpreter interp) { return new EmptyNodeListObj(); }
+    public virtual NodeListObj nodeListNoOrder(Interpreter interp) { return this; }
+}
+
+// Empty node list
+public class EmptyNodeListObj : NodeListObj
+{
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp) { return null; }
+    public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp) { return this; }
+}
+
+// Node list from single node pointer
+public class NodePtrNodeListObj : NodeListObj
+{
+    private NodePtr? node_;
+
+    public NodePtrNodeListObj(NodePtr? node)
+    {
+        node_ = node;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        return node_;
+    }
+
+    public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        return new EmptyNodeListObj();
+    }
+}
+
+// Node list from grove node list pointer
+public class NodeListPtrNodeListObj : NodeListObj
+{
+    private NodeListPtr nodeList_;
+    private NodePtr? current_;
+    private bool started_;
+
+    public NodeListPtrNodeListObj(NodeListPtr nodeList)
+    {
+        nodeList_ = nodeList;
+        started_ = false;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        if (!started_)
+        {
+            started_ = true;
+            if (nodeList_ != null)
+            {
+                current_ = new NodePtr();
+                if (nodeList_.first(current_) != AccessResult.accessOK)
+                    current_ = null;
+            }
+        }
+        return current_;
+    }
+
+    public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        if (nodeList_ == null)
+            return new EmptyNodeListObj();
+        NodeListPtr rest = new NodeListPtr();
+        if (nodeList_.rest(rest) == AccessResult.accessOK)
+            return new NodeListPtrNodeListObj(rest);
+        return new EmptyNodeListObj();
+    }
+}
+
+// Pair of node lists (concatenation)
+public class PairNodeListObj : NodeListObj
+{
+    private NodeListObj head_;
+    private NodeListObj tail_;
+
+    public PairNodeListObj(NodeListObj head, NodeListObj tail)
+    {
+        head_ = head;
+        tail_ = tail;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        NodePtr? nd = head_.nodeListFirst(ctx, interp);
+        if (nd != null)
+            return nd;
+        return tail_.nodeListFirst(ctx, interp);
+    }
+
+    public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        NodePtr? nd = head_.nodeListFirst(ctx, interp);
+        if (nd != null)
+        {
+            NodeListObj headRest = head_.nodeListRest(ctx, interp);
+            return new PairNodeListObj(headRest, tail_);
+        }
+        return tail_.nodeListRest(ctx, interp);
+    }
+}
+
+// Map node list - applies a primitive to each node
+public class MapNodeListObj : NodeListObj
+{
+    private PrimitiveObj func_;
+    private NodeListObj nodeList_;
+    private Context context_;
+
+    public class Context
+    {
+        public EvalContext evalContext;
+        public Location loc;
+
+        public Context(EvalContext ctx, Location l)
+        {
+            evalContext = ctx;
+            loc = l;
+        }
+    }
+
+    public MapNodeListObj(PrimitiveObj func, NodeListObj nodeList, Context context)
+    {
+        func_ = func;
+        nodeList_ = nodeList;
+        context_ = context;
+    }
+
+    public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
+    {
+        // TODO: implement mapping
+        return nodeList_.nodeListFirst(ctx, interp);
+    }
+
+    public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
+    {
+        return new MapNodeListObj(func_, nodeList_.nodeListRest(ctx, interp), context_);
+    }
 }
 
 public class NamedNodeListObj : ELObj

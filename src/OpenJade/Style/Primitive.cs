@@ -861,3 +861,1337 @@ public class IsEqvPrimitiveObj : PrimitiveObj
         return ELObj.eqv(args[0], args[1]) ? interp.makeTrue() : interp.makeFalse();
     }
 }
+
+// Current-node primitive
+public class CurrentNodePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public CurrentNodePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (ctx.currentNode == null)
+            return noCurrentNodeError(interp, loc);
+        return new NodePtrNodeListObj(ctx.currentNode);
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// Node-list? primitive
+public class IsNodeListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsNodeListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        return args[0]?.asNodeList() != null ? interp.makeTrue() : interp.makeFalse();
+    }
+}
+
+// Node-list-empty? primitive
+public class IsNodeListEmptyPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsNodeListEmptyPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        if (nl.nodeListFirst(ctx, interp) != null)
+            return interp.makeFalse();
+        return interp.makeTrue();
+    }
+}
+
+// Node-list-first primitive
+public class NodeListFirstPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public NodeListFirstPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        NodePtr? nd = nl.nodeListFirst(ctx, interp);
+        return new NodePtrNodeListObj(nd);
+    }
+}
+
+// Node-list-rest primitive
+public class NodeListRestPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public NodeListRestPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        return nl.nodeListRest(ctx, interp);
+    }
+}
+
+// Node-list primitive
+public class NodeListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);
+    public NodeListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (nArgs == 0)
+            return interp.makeEmptyNodeList();
+        int i = nArgs - 1;
+        NodeListObj? nl = args[i]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, i, args[i]);
+        for (i--; i >= 0; i--)
+        {
+            NodeListObj? tem = args[i]?.asNodeList();
+            if (tem == null)
+                return argError(interp, loc, InterpreterMessages.notANodeList, i, args[i]);
+            nl = new PairNodeListObj(tem, nl);
+        }
+        return nl;
+    }
+}
+
+// Empty-node-list primitive
+public class EmptyNodeListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public EmptyNodeListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        return interp.makeEmptyNodeList();
+    }
+}
+
+// Children primitive
+public class ChildrenPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ChildrenPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+        {
+            NodeListObj? nl = args[0]?.asNodeList();
+            if (nl != null)
+                return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+        }
+        if (node == null)
+            return args[0];
+        NodeListPtr? nlp = null;
+        if (node.children(ref nlp) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        return new NodeListPtrNodeListObj(nlp!);
+    }
+}
+
+// Parent primitive
+public class ParentPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public ParentPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+            if (node == null)
+                return args[0];
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null)
+                return noCurrentNodeError(interp, loc);
+        }
+        NodePtr parent = new NodePtr();
+        if (node.getParent(ref parent) != AccessResult.accessOK)
+            return interp.makeEmptyNodeList();
+        return new NodePtrNodeListObj(parent);
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// Gi primitive (get generic identifier / element name)
+public class GiPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public GiPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+        }
+        else
+        {
+            if (ctx.currentNode == null)
+                return noCurrentNodeError(interp, loc);
+            node = ctx.currentNode;
+        }
+        GroveString str = new GroveString();
+        if (node != null && node.getGi(str) == AccessResult.accessOK)
+            return interp.makeString(str.data(), str.size());
+        return interp.makeFalse();
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// Id primitive (get element ID)
+public class IdPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public IdPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
+                return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
+        }
+        else
+        {
+            if (ctx.currentNode == null)
+                return noCurrentNodeError(interp, loc);
+            node = ctx.currentNode;
+        }
+        GroveString str = new GroveString();
+        if (node != null && node.getId(str) == AccessResult.accessOK)
+            return interp.makeString(str.data(), str.size());
+        return interp.makeFalse();
+    }
+
+    private static ELObj? noCurrentNodeError(Interpreter interp, Location loc)
+    {
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noCurrentNode);
+        return interp.makeError();
+    }
+}
+
+// Process-children primitive
+public class ProcessChildrenPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public ProcessChildrenPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (ctx.processingMode == null)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.noCurrentProcessingMode);
+            return interp.makeError();
+        }
+        return new ProcessChildrenSosofoObj(ctx.processingMode);
+    }
+}
+
+// Process-children-trim primitive
+public class ProcessChildrenTrimPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public ProcessChildrenTrimPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (ctx.processingMode == null)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.noCurrentProcessingMode);
+            return interp.makeError();
+        }
+        return new ProcessChildrenTrimSosofoObj(ctx.processingMode);
+    }
+}
+
+// Sosofo-append primitive
+public class SosofoAppendPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);
+    public SosofoAppendPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (nArgs == 0)
+            return new EmptySosofoObj();
+        if (nArgs == 1)
+        {
+            SosofoObj? sosofo = args[0]?.asSosofo();
+            if (sosofo == null)
+                return argError(interp, loc, InterpreterMessages.notASosofo, 0, args[0]);
+            return sosofo;
+        }
+        AppendSosofoObj? obj;
+        int i = 0;
+        if (args[i]?.asAppendSosofo() != null)
+            obj = args[i++]!.asAppendSosofo();
+        else
+            obj = new AppendSosofoObj();
+        for (; i < nArgs; i++)
+        {
+            SosofoObj? sosofo = args[i]?.asSosofo();
+            if (sosofo == null)
+                return argError(interp, loc, InterpreterMessages.notASosofo, i, args[i]);
+            obj!.append(sosofo);
+        }
+        return obj;
+    }
+}
+
+// Literal primitive
+public class LiteralPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);
+    public LiteralPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (nArgs == 0)
+            return new EmptySosofoObj();
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        if (nArgs == 1)
+            return new LiteralSosofoObj(args[0]!);
+        StringObj strObj = new StringObj(s!, n);
+        for (int i = 1; i < nArgs; i++)
+        {
+            if (!args[i]!.stringData(out s, out n))
+                return argError(interp, loc, InterpreterMessages.notAString, i, args[i]);
+            strObj.append(s!, n);
+        }
+        return new LiteralSosofoObj(strObj);
+    }
+}
+
+// Next-match primitive
+public class NextMatchPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public NextMatchPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (ctx.processingMode == null)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.noCurrentProcessingMode);
+            return interp.makeError();
+        }
+        StyleObj? style = null;
+        if (nArgs > 0)
+        {
+            style = args[0]?.asStyle();
+            if (style == null)
+                return argError(interp, loc, InterpreterMessages.notAStyle, 0, args[0]);
+        }
+        return new NextMatchSosofoObj(style);
+    }
+}
+
+// Merge-style primitive
+public class MergeStylePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);
+    public MergeStylePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        MergeStyleObj merged = new MergeStyleObj();
+        for (int i = 0; i < nArgs; i++)
+        {
+            StyleObj? style = args[i]?.asStyle();
+            if (style == null)
+                return argError(interp, loc, InterpreterMessages.notAStyle, i, args[i]);
+            merged.append(style);
+        }
+        return merged;
+    }
+}
+
+// String-append primitive
+public class StringAppendPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);
+    public StringAppendPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (nArgs == 0)
+            return interp.makeString(Array.Empty<Char>(), 0);
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        if (nArgs == 1)
+            return args[0];
+        StringObj result = new StringObj(s!, n);
+        for (int i = 1; i < nArgs; i++)
+        {
+            if (!args[i]!.stringData(out s, out n))
+                return argError(interp, loc, InterpreterMessages.notAString, i, args[i]);
+            result.append(s!, n);
+        }
+        return result;
+    }
+}
+
+// String-length primitive
+public class StringLengthPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public StringLengthPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        return interp.makeInteger((long)n);
+    }
+}
+
+// String-ref primitive
+public class StringRefPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public StringRefPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        long k = 0;
+        if (!args[1]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (k < 0 || (nuint)k >= n)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        return interp.makeChar(s![(int)k]);
+    }
+}
+
+// Substring primitive
+public class SubstringPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(3, 0, false);
+    public SubstringPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        long start = 0;
+        if (!args[1]!.exactIntegerValue(out start))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        long end = 0;
+        if (!args[2]!.exactIntegerValue(out end))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 2, args[2]);
+        if (start < 0 || end < start || (nuint)end > n)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        Char[] result = new Char[end - start];
+        Array.Copy(s!, (int)start, result, 0, (int)(end - start));
+        return interp.makeString(result, (nuint)(end - start));
+    }
+}
+
+// String=? primitive
+public class IsStringEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public IsStringEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s1 = null;
+        nuint n1 = 0;
+        if (!args[0]!.stringData(out s1, out n1))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        Char[]? s2 = null;
+        nuint n2 = 0;
+        if (!args[1]!.stringData(out s2, out n2))
+            return argError(interp, loc, InterpreterMessages.notAString, 1, args[1]);
+        if (n1 != n2)
+            return interp.makeFalse();
+        for (nuint i = 0; i < n1; i++)
+        {
+            if (s1![(int)i] != s2![(int)i])
+                return interp.makeFalse();
+        }
+        return interp.makeTrue();
+    }
+}
+
+// List-tail primitive
+public class ListTailPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public ListTailPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long k = 0;
+        if (!args[1]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (k < 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        ELObj? lst = args[0];
+        for (long i = 0; i < k; i++)
+        {
+            PairObj? pair = lst?.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 0, args[0]);
+            lst = pair.cdr();
+        }
+        return lst;
+    }
+}
+
+// List-ref primitive
+public class ListRefPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public ListRefPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long k = 0;
+        if (!args[1]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (k < 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        ELObj? lst = args[0];
+        for (long i = 0; i < k; i++)
+        {
+            PairObj? pair = lst?.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 0, args[0]);
+            lst = pair.cdr();
+        }
+        PairObj? p = lst?.asPair();
+        if (p == null)
+            return argError(interp, loc, InterpreterMessages.notAList, 0, args[0]);
+        return p.car();
+    }
+}
+
+// Member primitive
+public class MemberPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public MemberPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        ELObj? lst = args[1];
+        while (true)
+        {
+            if (lst?.isNil() == true)
+                return interp.makeFalse();
+            PairObj? pair = lst?.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 1, args[1]);
+            if (ELObj.equal(args[0], pair.car()))
+                return lst;
+            lst = pair.cdr();
+        }
+    }
+}
+
+// Assoc primitive
+public class AssocPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public AssocPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        ELObj? lst = args[1];
+        while (true)
+        {
+            if (lst?.isNil() == true)
+                return interp.makeFalse();
+            PairObj? pair = lst?.asPair();
+            if (pair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 1, args[1]);
+            PairObj? assocPair = pair.car()?.asPair();
+            if (assocPair == null)
+                return argError(interp, loc, InterpreterMessages.notAPair, 1, args[1]);
+            if (ELObj.equal(args[0], assocPair.car()))
+                return assocPair;
+            lst = pair.cdr();
+        }
+    }
+}
+
+// Quotient primitive
+public class QuotientPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public QuotientPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long n1 = 0;
+        if (!args[0]!.exactIntegerValue(out n1))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        long n2 = 0;
+        if (!args[1]!.exactIntegerValue(out n2))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (n2 == 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.divideByZero);
+            return interp.makeError();
+        }
+        return interp.makeInteger(n1 / n2);
+    }
+}
+
+// Remainder primitive
+public class RemainderPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public RemainderPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long n1 = 0;
+        if (!args[0]!.exactIntegerValue(out n1))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        long n2 = 0;
+        if (!args[1]!.exactIntegerValue(out n2))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (n2 == 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.divideByZero);
+            return interp.makeError();
+        }
+        return interp.makeInteger(n1 % n2);
+    }
+}
+
+// Modulo primitive
+public class ModuloPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public ModuloPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long n1 = 0;
+        if (!args[0]!.exactIntegerValue(out n1))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        long n2 = 0;
+        if (!args[1]!.exactIntegerValue(out n2))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (n2 == 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.divideByZero);
+            return interp.makeError();
+        }
+        long rem = n1 % n2;
+        if (rem != 0 && (n1 < 0) != (n2 < 0))
+            rem += n2;
+        return interp.makeInteger(rem);
+    }
+}
+
+// Min primitive
+public class MinPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, true);
+    public MinPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double minVal = 0;
+        bool isExact = false;
+        long minExact = 0;
+        if (args[0]!.exactIntegerValue(out minExact))
+        {
+            isExact = true;
+            minVal = minExact;
+        }
+        else if (!args[0]!.realValue(out minVal))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        for (int i = 1; i < nArgs; i++)
+        {
+            long n = 0;
+            double d = 0;
+            if (args[i]!.exactIntegerValue(out n))
+            {
+                if (isExact)
+                {
+                    if (n < minExact)
+                        minExact = n;
+                }
+                else if (n < minVal)
+                    minVal = n;
+            }
+            else if (args[i]!.realValue(out d))
+            {
+                isExact = false;
+                if (d < minVal)
+                    minVal = d;
+            }
+            else
+                return argError(interp, loc, InterpreterMessages.notANumber, i, args[i]);
+        }
+        if (isExact)
+            return interp.makeInteger(minExact);
+        return interp.makeReal(minVal);
+    }
+}
+
+// Max primitive
+public class MaxPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, true);
+    public MaxPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double maxVal = 0;
+        bool isExact = false;
+        long maxExact = 0;
+        if (args[0]!.exactIntegerValue(out maxExact))
+        {
+            isExact = true;
+            maxVal = maxExact;
+        }
+        else if (!args[0]!.realValue(out maxVal))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        for (int i = 1; i < nArgs; i++)
+        {
+            long n = 0;
+            double d = 0;
+            if (args[i]!.exactIntegerValue(out n))
+            {
+                if (isExact)
+                {
+                    if (n > maxExact)
+                        maxExact = n;
+                }
+                else if (n > maxVal)
+                    maxVal = n;
+            }
+            else if (args[i]!.realValue(out d))
+            {
+                isExact = false;
+                if (d > maxVal)
+                    maxVal = d;
+            }
+            else
+                return argError(interp, loc, InterpreterMessages.notANumber, i, args[i]);
+        }
+        if (isExact)
+            return interp.makeInteger(maxExact);
+        return interp.makeReal(maxVal);
+    }
+}
+
+// Truncate primitive
+public class TruncatePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public TruncatePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        return interp.makeInteger((long)Math.Truncate(d));
+    }
+}
+
+// Exp primitive
+public class ExpPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ExpPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        return interp.makeReal(Math.Exp(d));
+    }
+}
+
+// Log primitive
+public class LogPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public LogPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        if (d <= 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        return interp.makeReal(Math.Log(d));
+    }
+}
+
+// Sin primitive
+public class SinPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public SinPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        return interp.makeReal(Math.Sin(d));
+    }
+}
+
+// Cos primitive
+public class CosPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public CosPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        return interp.makeReal(Math.Cos(d));
+    }
+}
+
+// Tan primitive
+public class TanPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public TanPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        return interp.makeReal(Math.Tan(d));
+    }
+}
+
+// Asin primitive
+public class AsinPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public AsinPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        if (d < -1 || d > 1)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        return interp.makeReal(Math.Asin(d));
+    }
+}
+
+// Acos primitive
+public class AcosPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public AcosPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double d = 0;
+        if (!args[0]!.realValue(out d))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        if (d < -1 || d > 1)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        return interp.makeReal(Math.Acos(d));
+    }
+}
+
+// Atan primitive
+public class AtanPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public AtanPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double y = 0;
+        if (!args[0]!.realValue(out y))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        if (nArgs == 1)
+            return interp.makeReal(Math.Atan(y));
+        double x = 0;
+        if (!args[1]!.realValue(out x))
+            return argError(interp, loc, InterpreterMessages.notANumber, 1, args[1]);
+        return interp.makeReal(Math.Atan2(y, x));
+    }
+}
+
+// Expt primitive (power)
+public class ExptPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public ExptPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        double b = 0;
+        if (!args[0]!.realValue(out b))
+            return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+        double e = 0;
+        if (!args[1]!.realValue(out e))
+            return argError(interp, loc, InterpreterMessages.notANumber, 1, args[1]);
+        return interp.makeReal(Math.Pow(b, e));
+    }
+}
+
+// Number->string primitive
+public class NumberToStringPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public NumberToStringPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long radix = 10;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.exactIntegerValue(out radix))
+                return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+            if (radix < 2 || radix > 36)
+            {
+                interp.setNextLocation(loc);
+                interp.message(InterpreterMessages.outOfRange);
+                return interp.makeError();
+            }
+        }
+        long n = 0;
+        if (args[0]!.exactIntegerValue(out n))
+        {
+            string s = Convert.ToString(n, (int)radix);
+            return interp.makeString(new StringC(s));
+        }
+        double d = 0;
+        if (args[0]!.realValue(out d))
+        {
+            string s = d.ToString();
+            return interp.makeString(new StringC(s));
+        }
+        return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
+    }
+}
+
+// String->number primitive
+public class StringToNumberPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public StringToNumberPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        long radix = 10;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.exactIntegerValue(out radix))
+                return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+            if (radix < 2 || radix > 36)
+            {
+                interp.setNextLocation(loc);
+                interp.message(InterpreterMessages.outOfRange);
+                return interp.makeError();
+            }
+        }
+        string str = new StringC(s!, n).ToString();
+        try
+        {
+            if (radix == 10)
+            {
+                if (str.Contains('.') || str.Contains('e') || str.Contains('E'))
+                {
+                    double d = double.Parse(str);
+                    return interp.makeReal(d);
+                }
+            }
+            long val = Convert.ToInt64(str, (int)radix);
+            return interp.makeInteger(val);
+        }
+        catch
+        {
+            return interp.makeFalse();
+        }
+    }
+}
+
+// Char->integer primitive
+public class CharToIntegerPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public CharToIntegerPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char c = 0;
+        if (!args[0]!.charValue(out c))
+            return argError(interp, loc, InterpreterMessages.notAChar, 0, args[0]);
+        return interp.makeInteger(c);
+    }
+}
+
+// Integer->char primitive
+public class IntegerToCharPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IntegerToCharPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long n = 0;
+        if (!args[0]!.exactIntegerValue(out n))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        if (n < 0 || n > 0x10FFFF)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        return interp.makeChar((Char)n);
+    }
+}
+
+// Char<? primitive
+public class IsCharLessPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public IsCharLessPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char c1 = 0;
+        if (!args[0]!.charValue(out c1))
+            return argError(interp, loc, InterpreterMessages.notAChar, 0, args[0]);
+        Char c2 = 0;
+        if (!args[1]!.charValue(out c2))
+            return argError(interp, loc, InterpreterMessages.notAChar, 1, args[1]);
+        return c1 < c2 ? interp.makeTrue() : interp.makeFalse();
+    }
+}
+
+// Char<=? primitive
+public class IsCharLessOrEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public IsCharLessOrEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char c1 = 0;
+        if (!args[0]!.charValue(out c1))
+            return argError(interp, loc, InterpreterMessages.notAChar, 0, args[0]);
+        Char c2 = 0;
+        if (!args[1]!.charValue(out c2))
+            return argError(interp, loc, InterpreterMessages.notAChar, 1, args[1]);
+        return c1 <= c2 ? interp.makeTrue() : interp.makeFalse();
+    }
+}
+
+// Char=? primitive
+public class IsCharEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public IsCharEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char c1 = 0;
+        if (!args[0]!.charValue(out c1))
+            return argError(interp, loc, InterpreterMessages.notAChar, 0, args[0]);
+        Char c2 = 0;
+        if (!args[1]!.charValue(out c2))
+            return argError(interp, loc, InterpreterMessages.notAChar, 1, args[1]);
+        return c1 == c2 ? interp.makeTrue() : interp.makeFalse();
+    }
+}
+
+// Char-upcase primitive
+public class CharUpcasePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public CharUpcasePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char c = 0;
+        if (!args[0]!.charValue(out c))
+            return argError(interp, loc, InterpreterMessages.notAChar, 0, args[0]);
+        return interp.makeChar((Char)System.Char.ToUpper((char)c));
+    }
+}
+
+// Char-downcase primitive
+public class CharDowncasePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public CharDowncasePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char c = 0;
+        if (!args[0]!.charValue(out c))
+            return argError(interp, loc, InterpreterMessages.notAChar, 0, args[0]);
+        return interp.makeChar((Char)System.Char.ToLower((char)c));
+    }
+}
+
+// Make-vector primitive
+public class MakeVectorPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public MakeVectorPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        long k = 0;
+        if (!args[0]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
+        if (k < 0)
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        ELObj? fill = nArgs > 1 ? args[1] : interp.makeFalse();
+        return new VectorObj((int)k, fill);
+    }
+}
+
+// Vector-ref primitive
+public class VectorRefPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public VectorRefPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        VectorObj? vec = args[0] as VectorObj;
+        if (vec == null)
+            return argError(interp, loc, InterpreterMessages.notAVector, 0, args[0]);
+        long k = 0;
+        if (!args[1]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (k < 0 || k >= (long)vec.size())
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        return vec[(int)k];
+    }
+}
+
+// Vector-set! primitive
+public class VectorSetPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(3, 0, false);
+    public VectorSetPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        VectorObj? vec = args[0] as VectorObj;
+        if (vec == null)
+            return argError(interp, loc, InterpreterMessages.notAVector, 0, args[0]);
+        long k = 0;
+        if (!args[1]!.exactIntegerValue(out k))
+            return argError(interp, loc, InterpreterMessages.notAnExactInteger, 1, args[1]);
+        if (k < 0 || k >= (long)vec.size())
+        {
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.outOfRange);
+            return interp.makeError();
+        }
+        vec[(int)k] = args[2];
+        return interp.makeUnspecified();
+    }
+}
+
+// Vector-length primitive
+public class VectorLengthPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public VectorLengthPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        VectorObj? vec = args[0] as VectorObj;
+        if (vec == null)
+            return argError(interp, loc, InterpreterMessages.notAVector, 0, args[0]);
+        return interp.makeInteger((long)vec.size());
+    }
+}
+
+// Error primitive
+public class ErrorPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ErrorPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.errorProc, new StringC(s!, n).ToString());
+        return interp.makeError();
+    }
+}
+
+// Debug primitive
+public class DebugPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public DebugPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        // Debug output implementation
+        return args[0];
+    }
+}
+
+// Keyword->string primitive
+public class KeywordToStringPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public KeywordToStringPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        KeywordObj? kw = args[0] as KeywordObj;
+        if (kw == null)
+            return argError(interp, loc, InterpreterMessages.notAKeyword, 0, args[0]);
+        return interp.makeString(kw.name());
+    }
+}
+
+// String->keyword primitive
+public class StringToKeywordPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public StringToKeywordPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        return interp.makeKeyword(new StringC(s!, n));
+    }
+}
+
+// String->symbol primitive
+public class StringToSymbolPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public StringToSymbolPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        return interp.makeSymbol(new StringC(s!, n));
+    }
+}

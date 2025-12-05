@@ -119,6 +119,13 @@ public abstract class PrimitiveObj : FunctionObj
         return interp.makeError();
     }
 
+    protected ELObj? argError(Interpreter interp, Location loc, InterpreterMessages msg, int index, ELObj? obj)
+    {
+        interp.setNextLocation(loc);
+        interp.message(msg, index, obj);
+        return interp.makeError();
+    }
+
     protected ELObj? noCurrentNodeError(Interpreter interp, Location loc)
     {
         interp.setNextLocation(loc);

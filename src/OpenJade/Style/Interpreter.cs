@@ -177,4 +177,61 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     {
         return makeString(s);
     }
+
+    // Make empty node list
+    public NodeListObj makeEmptyNodeList()
+    {
+        return new EmptyNodeListObj();
+    }
+
+    // Make unspecified value
+    public ELObj makeUnspecified()
+    {
+        return unspecifiedObj_;
+    }
+
+    // Make string from char array
+    public StringObj makeString(Char[] data, nuint size)
+    {
+        return new StringObj(data, size);
+    }
+
+    // Message methods for InterpreterMessages
+    public void message(InterpreterMessages msg)
+    {
+        message(MessageType.Severity.error, new Location(), msg.ToString());
+    }
+
+    public void message(InterpreterMessages msg, string arg)
+    {
+        message(MessageType.Severity.error, new Location(), $"{msg}: {arg}");
+    }
+
+    public void message(InterpreterMessages msg, int argIndex, ELObj? obj)
+    {
+        string objStr = obj?.ToString() ?? "null";
+        message(MessageType.Severity.error, new Location(), $"{msg}: argument {argIndex}: {objStr}");
+    }
+}
+
+// Interpreter error messages
+public enum InterpreterMessages
+{
+    noCurrentNode,
+    noCurrentProcessingMode,
+    notANodeList,
+    notAnOptSingletonNode,
+    notASosofo,
+    notAStyle,
+    notAString,
+    notAnExactInteger,
+    notANumber,
+    notAChar,
+    notAList,
+    notAPair,
+    notAVector,
+    notAKeyword,
+    outOfRange,
+    divideByZero,
+    errorProc
 }
