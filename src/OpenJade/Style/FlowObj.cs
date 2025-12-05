@@ -169,18 +169,54 @@ public class InlineSequenceFlowObj : CompoundFlowObj
 // Score flow object
 public class ScoreFlowObj : CompoundFlowObj
 {
+    public enum ScoreType { TypeNone, TypeSymbol, TypeLength, TypeChar }
+    private ScoreType scoreType_ = ScoreType.TypeNone;
+    private FOTBuilder.Symbol symbolType_ = FOTBuilder.Symbol.symbolFalse;
+    private FOTBuilder.LengthSpec lengthType_ = new FOTBuilder.LengthSpec();
+    private Char charType_ = 0;
+
     public override FlowObj copy(Interpreter interp)
     {
         ScoreFlowObj c = new ScoreFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        c.scoreType_ = scoreType_;
+        c.symbolType_ = symbolType_;
+        c.lengthType_ = lengthType_;
+        c.charType_ = charType_;
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        switch (scoreType_)
+        {
+            case ScoreType.TypeSymbol:
+                fotb.startScore(symbolType_);
+                break;
+            case ScoreType.TypeLength:
+                fotb.startScore(lengthType_);
+                break;
+            case ScoreType.TypeChar:
+                fotb.startScore(charType_);
+                break;
+            default:
+                fotb.startSequence();
+                base.processInner(context);
+                fotb.endSequence();
+                return;
+        }
+        base.processInner(context);
+        fotb.endScore();
     }
 }
 
 // Box flow object
 public class BoxFlowObj : CompoundFlowObj
 {
+    private FOTBuilder.BoxNIC nic_ = new FOTBuilder.BoxNIC();
+
     public override FlowObj copy(Interpreter interp)
     {
         BoxFlowObj c = new BoxFlowObj();
@@ -188,17 +224,50 @@ public class BoxFlowObj : CompoundFlowObj
         c.setContent(content());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startBox(nic_);
+        base.processInner(context);
+        fotb.endBox();
+    }
 }
 
 // Simple page sequence flow object
 public class SimplePageSequenceFlowObj : CompoundFlowObj
 {
+    public const int nHeaderFooterParts = 6;
+    private SosofoObj?[] headerFooter_ = new SosofoObj?[nHeaderFooterParts];
+
+    public SimplePageSequenceFlowObj()
+    {
+        hasSubObjects_ = (char)1;
+    }
+
     public override FlowObj copy(Interpreter interp)
     {
         SimplePageSequenceFlowObj c = new SimplePageSequenceFlowObj();
         c.setStyle(style());
         c.setContent(content());
+        Array.Copy(headerFooter_, c.headerFooter_, nHeaderFooterParts);
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startSimplePageSequence(null);
+        fotb.endSimplePageSequenceHeaderFooter();
+        base.processInner(context);
+        fotb.endSimplePageSequence();
+    }
+
+    public override void traceSubObjects(Collector c)
+    {
+        for (int i = 0; i < nHeaderFooterParts; i++)
+            if (headerFooter_[i] != null)
+                c.trace(headerFooter_[i]);
     }
 }
 
@@ -391,6 +460,28 @@ public class AnchorFlowObj : FlowObj
         c.setStyle(style());
         return c;
     }
+
+    public override void processInner(ProcessContext context)
+    {
+        // Anchor generates an alignment point
+        context.currentFOTBuilder().alignmentPoint();
+    }
+}
+
+// Alignment point flow object
+public class AlignmentPointFlowObj : FlowObj
+{
+    public override FlowObj copy(Interpreter interp)
+    {
+        AlignmentPointFlowObj c = new AlignmentPointFlowObj();
+        c.setStyle(style());
+        return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        context.currentFOTBuilder().alignmentPoint();
+    }
 }
 
 // Page number flow object
@@ -401,6 +492,31 @@ public class PageNumberFlowObj : FlowObj
         PageNumberFlowObj c = new PageNumberFlowObj();
         c.setStyle(style());
         return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        context.currentFOTBuilder().pageNumber();
+    }
+}
+
+// Marginalia flow object
+public class MarginaliaFlowObj : CompoundFlowObj
+{
+    public override FlowObj copy(Interpreter interp)
+    {
+        MarginaliaFlowObj c = new MarginaliaFlowObj();
+        c.setStyle(style());
+        c.setContent(content());
+        return c;
+    }
+
+    public override void processInner(ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        fotb.startMarginalia();
+        base.processInner(context);
+        fotb.endMarginalia();
     }
 }
 
