@@ -540,6 +540,45 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         unitTable_[name.ToString().ToLowerInvariant()] = value;
     }
 
+    // SDATA entity mapping
+    private Dictionary<string, Char> sdataEntityNameTable_ = new Dictionary<string, Char>();
+    private Dictionary<string, Char> sdataEntityTextTable_ = new Dictionary<string, Char>();
+
+    public void addSdataEntity(StringC ename, StringC etext, StringC charName)
+    {
+        // Look up the character name - for now, simple ASCII lookup
+        // A full implementation would use a named character table
+        if (charName.size() == 0)
+            return;
+
+        // Try to interpret the char name as a simple character
+        Char c = charName[0];
+
+        // Add to entity tables if name or text is non-empty
+        if (ename.size() > 0)
+        {
+            sdataEntityNameTable_[ename.ToString()] = c;
+        }
+        if (etext.size() > 0)
+        {
+            sdataEntityTextTable_[etext.ToString()] = c;
+        }
+    }
+
+    public bool sdataMap(StringC name, StringC text, out Char c)
+    {
+        string nameStr = name.ToString();
+        string textStr = text.ToString();
+
+        if (sdataEntityNameTable_.TryGetValue(nameStr, out c))
+            return true;
+        if (sdataEntityTextTable_.TryGetValue(textStr, out c))
+            return true;
+
+        c = 0;
+        return false;
+    }
+
     // Address support
     private AddressObj? addressNone_;
 

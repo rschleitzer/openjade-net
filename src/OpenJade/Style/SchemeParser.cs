@@ -219,7 +219,18 @@ public class SchemeParser : Messenger
 
     public void parseMapSdataEntity(StringC name, StringC text)
     {
-        // TODO: implement SDATA entity mapping
+        // (map-sdata-entity entity-name entity-text char-name)
+        Token tok;
+        if (!getToken(TokenAllow.Identifier | TokenAllow.EndOfEntity, out tok) || tok == Token.EndOfEntity)
+        {
+            message(InterpreterMessages.badDeclaration);
+            return;
+        }
+
+        // currentToken_ now contains the character name
+        // A full implementation would look up the character in the named character table
+        // and add the sdata entity mapping
+        interp_.addSdataEntity(name, text, currentToken_);
     }
 
     public bool parseExpression(out Expression? expr)
@@ -1444,7 +1455,8 @@ public class SchemeParser : Messenger
 
     private bool doDefineUnit()
     {
-        // TODO: implement unit definition
+        // (define-unit name value)
+        // For now, just skip the form - full implementation requires unit evaluation
         return skipForm();
     }
 
@@ -1811,13 +1823,15 @@ public class SchemeParser : Messenger
 
     private bool doDeclareInitialValue()
     {
-        // TODO: implement declare-initial-value
+        // (declare-initial-value name expression)
+        // Skip - requires full characteristic system implementation
         return skipForm();
     }
 
     private bool doDeclareCharacteristic()
     {
-        // TODO: implement declare-characteristic
+        // (declare-characteristic name public-id expression)
+        // Skip - requires full characteristic system implementation
         return skipForm();
     }
 
