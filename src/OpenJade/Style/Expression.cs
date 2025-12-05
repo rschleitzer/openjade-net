@@ -245,9 +245,11 @@ public abstract class Expression
     public virtual bool canEval(bool maybeCall) { return false; }
     public virtual void markBoundVars(BoundVarList vars, bool shared) { }
 
-    protected static InsnPtr optimizeCompile(Expression expr, Interpreter interp, Environment env,
+    public static InsnPtr optimizeCompile(Expression? expr, Interpreter interp, Environment env,
                                               int stackPos, InsnPtr next)
     {
+        if (expr == null)
+            return next;
         expr.optimize(interp, env, ref expr);
         return expr.compile(interp, env, stackPos, next);
     }

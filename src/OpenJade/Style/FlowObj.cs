@@ -28,8 +28,8 @@ public class FlowObj : SosofoObj
     public virtual bool hasNonInheritedC(Identifier? ident) { return false; }
     public virtual bool hasPseudoNonInheritedC(Identifier? ident) { return false; }
     public virtual void setNonInheritedC(Identifier? ident, ELObj? value, Location loc, Interpreter interp) { }
-    public virtual bool isCharacter() { return false; }
-    public virtual bool isRule() { return false; }
+    public override bool isCharacter() { return false; }
+    public override bool isRule() { return false; }
     public virtual CompoundFlowObj? asCompoundFlowObj() { return null; }
 
     public virtual void pushStyle(ProcessContext context, ref uint flags)

@@ -395,6 +395,140 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     {
         // Mark object as read-only (GC semantics - in C# we don't need to do anything special)
     }
+
+    // Processing mode table
+    private Dictionary<string, ProcessingMode> processingModeTable_ = new();
+
+    public ProcessingMode? lookupProcessingMode(StringC name)
+    {
+        string key = name.ToString();
+        if (processingModeTable_.TryGetValue(key, out ProcessingMode? mode))
+            return mode;
+        return null;
+    }
+
+    public ProcessingMode getProcessingMode(StringC name)
+    {
+        string key = name.ToString();
+        if (processingModeTable_.TryGetValue(key, out ProcessingMode? mode))
+            return mode;
+        mode = new ProcessingMode(name);
+        processingModeTable_[key] = mode;
+        return mode;
+    }
+
+    // Initial values storage
+    private System.Collections.Generic.List<Identifier> initialValueNames_ = new();
+    private System.Collections.Generic.List<Expression?> initialValueValues_ = new();
+    private int currentPartFirstInitialValue_ = 0;
+
+    public void installInitialValue(Identifier ident, Expression expr)
+    {
+        for (int i = 0; i < initialValueNames_.Count; i++)
+        {
+            if (ident == initialValueNames_[i])
+            {
+                if (i >= currentPartFirstInitialValue_)
+                {
+                    setNextLocation(expr.location());
+                    message(InterpreterMessages.duplicateInitialValue, ident.name().ToString());
+                }
+                return;
+            }
+        }
+        initialValueValues_.Add(expr);
+        initialValueNames_.Add(ident);
+    }
+
+    // Compile all definitions
+    public void compile()
+    {
+        compileInitialValues();
+        initialProcessingMode_?.compile(this);
+        foreach (var mode in processingModeTable_.Values)
+            mode.compile(this);
+    }
+
+    public void compileInitialValues()
+    {
+        var ics = new System.Collections.Generic.List<ConstPtr<InheritedC>>();
+        for (int i = 0; i < initialValueNames_.Count; i++)
+        {
+            Identifier ident = initialValueNames_[i];
+            Expression? expr = initialValueValues_[i];
+            if (expr == null)
+                continue;
+
+            ConstPtr<InheritedC>? icPtr = ident.inheritedC();
+            if (icPtr == null || icPtr.isNull())
+                continue;
+
+            InheritedC ic = icPtr.pointer()!;
+
+            expr.optimize(this, new Environment(), ref expr);
+            ELObj? val = expr.constantValue();
+            if (val != null)
+            {
+                ConstPtr<InheritedC>? tem = ic.make(val, expr.location(), this);
+                if (tem != null && !tem.isNull())
+                    ics.Add(tem);
+            }
+            else
+            {
+                ics.Add(new ConstPtr<InheritedC>(new VarInheritedC(
+                    icPtr,
+                    expr.compile(this, new Environment(), 0, new InsnPtr()),
+                    expr.location())));
+            }
+        }
+        if (ics.Count > 0)
+        {
+            var forceIcs = new System.Collections.Generic.List<ConstPtr<InheritedC>>();
+            initialStyle_ = new VarStyleObj(new ConstPtr<StyleSpec>(new StyleSpec(forceIcs, ics)), null, null, new NodePtr());
+            makePermanent(initialStyle_);
+        }
+    }
+
+    // Character property lookup
+    public ELObj charProperty(StringC propertyName, Char c, Location loc, int argi)
+    {
+        // Default implementation - returns false for most properties
+        string prop = propertyName.ToString();
+        if (prop == "input-whitespace?")
+        {
+            // Standard ASCII whitespace
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f')
+                return trueObj_;
+            return falseObj_;
+        }
+        return falseObj_;
+    }
+
+    // Unit conversion support
+    private Dictionary<string, long> unitTable_ = new()
+    {
+        { "pt", 1000 },          // 1000 units per point (based on 72000 units/inch = 72 points/inch * 1000)
+        { "pc", 12000 },         // 12 points = 1 pica
+        { "in", 72000 },         // 72 points = 1 inch, so 72000 units/inch
+        { "cm", 28346 },         // 72000 / 2.54 ≈ 28346 units/cm
+        { "mm", 2835 },          // 72000 / 25.4 ≈ 2835 units/mm
+        { "px", 1000 },          // Assume 1px = 1pt for screen (CSS standard 96dpi would be 750)
+        { "em", 0 },             // Relative unit - context dependent
+        { "ex", 0 },             // Relative unit - context dependent
+    };
+
+    public long lookupUnit(StringC name)
+    {
+        string key = name.ToString().ToLowerInvariant();
+        if (unitTable_.TryGetValue(key, out long value))
+            return value;
+        return 0;
+    }
+
+    public void installUnit(StringC name, long value)
+    {
+        unitTable_[name.ToString().ToLowerInvariant()] = value;
+    }
 }
 
 // Interpreter error messages
@@ -418,6 +552,8 @@ public enum InterpreterMessages
     divideByZero,
     errorProc,
     notInCharacteristicValue,
+    duplicateInitialValue,
+    caseFail,
     // Parser messages
     unknownTopLevelForm,
     badTopLevelForm,

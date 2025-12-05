@@ -1207,7 +1207,10 @@ public abstract class SosofoObj : ELObj
     public override SosofoObj? asSosofo() { return this; }
     public abstract void process(ProcessContext context);
     public virtual bool isRule() { return false; }
+    public virtual bool isCharacter() { return false; }
     public virtual bool tableBorderStyle(out StyleObj? style) { style = null; return false; }
+    public virtual bool ruleStyle(ProcessContext context, out StyleObj? style) { style = null; return false; }
+    public virtual bool characterStyle(ProcessContext context, out StyleObj? style, FOTBuilder.CharacterNIC nic) { style = null; return false; }
 }
 
 public class AppendSosofoObj : SosofoObj

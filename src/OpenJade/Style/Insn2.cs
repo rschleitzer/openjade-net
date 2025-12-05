@@ -485,14 +485,32 @@ public class SetNonInheritedCsSosofoObj : SosofoObj
         context.endFlowObj();
     }
 
-    public virtual bool isCharacter()
+    public override bool isCharacter()
     {
         return flowObj_.isCharacter();
     }
 
-    public virtual bool isRule()
+    public override bool isRule()
     {
         return flowObj_.isRule();
+    }
+
+    public override bool characterStyle(ProcessContext context, out StyleObj? style, FOTBuilder.CharacterNIC nic)
+    {
+        ELObj? obj = resolve(context);
+        style = null;
+        if (obj != null)
+            return ((SosofoObj)obj).characterStyle(context, out style, nic);
+        return false;
+    }
+
+    public override bool ruleStyle(ProcessContext context, out StyleObj? style)
+    {
+        ELObj? obj = resolve(context);
+        style = null;
+        if (obj != null)
+            return ((SosofoObj)obj).ruleStyle(context, out style);
+        return false;
     }
 }
 
