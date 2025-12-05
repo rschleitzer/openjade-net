@@ -223,7 +223,10 @@ public class FOTBuilder
 
         public GlyphId subst(GlyphId id)
         {
-            throw new NotImplementedException();
+            for (int i = 0; i < pairs.Count; i += 2)
+                if (id.Equals(pairs[i]))
+                    return pairs[i + 1];
+            return id;
         }
     }
 

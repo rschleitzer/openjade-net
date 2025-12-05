@@ -759,7 +759,7 @@ public class MifDoc : IDisposable
         public string PgfLineSpacing = "";
         public long PgfLeading;
         public int PgfNumTabs;
-        public List<TabStop> TabStops = new();
+        public System.Collections.Generic.List<TabStop> TabStops = new();
 
         // Pagination properties
         public string PgfPlacement = "";
@@ -1031,7 +1031,7 @@ public class MifDoc : IDisposable
         public int Pen;
         public int Fill;
         public T_dimension PenWidth;
-        public string ObColor = "";
+        public T_tagstring ObColor = new T_tagstring();
 
         public Object(int pen = 15, int fill = 15, long penWidth = 0, string obColor = "Black")
         {
@@ -1047,11 +1047,21 @@ public class MifDoc : IDisposable
         public void setPen(int p) { Pen = p; setProperties |= (uint)Flags.fPen; }
         public void setFill(int p) { Fill = p; setProperties |= (uint)Flags.fFill; }
         public void setPenWidth(T_dimension p) { PenWidth = p; setProperties |= (uint)Flags.fPenWidth; }
-        public void setObColor(string p) { ObColor = p; setProperties |= (uint)Flags.fObColor; }
+        public void setObColor(string p) { ObColor = new T_tagstring(p); setProperties |= (uint)Flags.fObColor; }
+        public void setObColor(T_tagstring p) { ObColor = p; setProperties |= (uint)Flags.fObColor; }
 
         public void outObjectProperties(MifOutputByteStream os)
         {
-            // TODO: implement object properties output
+            if ((setProperties & (uint)Flags.fID) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ID " << ID << ">";
+            if ((setProperties & (uint)Flags.fPen) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<Pen " << Pen << ">";
+            if ((setProperties & (uint)Flags.fFill) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<Fill " << Fill << ">";
+            if ((setProperties & (uint)Flags.fPenWidth) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<PenWidth " << PenWidth << ">";
+            if ((setProperties & (uint)Flags.fObColor) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ObColor `" << ObColor.ToString() << "'>";
         }
 
         public abstract void @out(MifOutputByteStream os);
@@ -1062,7 +1072,7 @@ public class MifDoc : IDisposable
     {
         public string HeadCap = "";
         public string TailCap = "";
-        public List<T_XY> Points = new();
+        public System.Collections.Generic.List<T_XY> Points = new();
 
         public PolyLine(string cap, int pen = 15, int fill = 15, long penWidth = 0, string obColor = "Black")
             : base(pen, fill, penWidth, obColor)
@@ -1076,7 +1086,17 @@ public class MifDoc : IDisposable
 
         public override void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<PolyLine ";
+            os.indent();
+            outObjectProperties(os);
+            if ((setProperties & ((uint)Flags.fObjectNext << 1)) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<HeadCap " << HeadCap << ">";
+            if ((setProperties & ((uint)Flags.fObjectNext << 2)) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TailCap " << TailCap << ">";
+            for (int i = 0; i < Points.Count; i++)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<Point " << Points[i] << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1105,7 +1125,16 @@ public class MifDoc : IDisposable
 
         public override void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<ImportObject ";
+            os.indent();
+            outObjectProperties(os);
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<ImportObFileDI `" << ImportObFileDI << "'>";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<BitMapDpi " << BitMapDpi << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<ShapeRect " << ShapeRect << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<ImportObFixedSize " << (ImportObFixedSize ? "Yes" : "No") << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<NativeOrigin " << NativeOrigin << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1116,7 +1145,7 @@ public class MifDoc : IDisposable
         public T_dimension NSOffset;
         public T_dimension BLOffset;
         public string AnchorAlign = "";
-        public List<Object> Objects = new();
+        public System.Collections.Generic.List<Object> Objects = new();
 
         public Frame() : base() { }
 
@@ -1128,7 +1157,17 @@ public class MifDoc : IDisposable
 
         public override void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Frame ";
+            os.indent();
+            outObjectProperties(os);
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<ShapeRect " << ShapeRect << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<FrameType " << FrameType << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<NSOffset " << NSOffset << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<BLOffset " << BLOffset << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<AnchorAlign " << AnchorAlign << ">";
+            for (int i = 0; i < Objects.Count; i++) Objects[i].@out(os);
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1156,7 +1195,15 @@ public class MifDoc : IDisposable
 
         public override void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<TextRect ";
+            os.indent();
+            outObjectProperties(os);
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<ShapeRect " << ShapeRect << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<TRNumColumns " << TRNumColumns << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<TRColumnGap " << TRColumnGap << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<TRColumnBalance " << (TRColumnBalance ? "Yes" : "No") << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1166,7 +1213,7 @@ public class MifDoc : IDisposable
         public string PageType = "";
         public string PageTag = "";
         public string PageBackground = "";
-        public List<TextRect> TextRects = new();
+        public System.Collections.Generic.List<TextRect> TextRects = new();
 
         public Page(string pageType, string pageTag = "", string pageBackground = "")
         {
@@ -1186,7 +1233,18 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Page ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<PageType " << PageType << ">";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<PageTag `" << PageTag << "'>";
+            if ((setProperties & 0x4) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<PageBackground `" << PageBackground << "'>";
+            for (int i = 0; i < TextRects.Count; i++)
+                TextRects[i].@out(os);
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1389,7 +1447,20 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Color ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ColorTag `" << ColorTag << "'>";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ColorCyan " << ColorCyan << ">";
+            if ((setProperties & 0x4) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ColorMagenta " << ColorMagenta << ">";
+            if ((setProperties & 0x8) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ColorYellow " << ColorYellow << ">";
+            if ((setProperties & 0x10) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ColorBlack " << ColorBlack << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1400,7 +1471,15 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            if (Colors.Count > 0)
+            {
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<ColorCatalog ";
+                os.indent();
+                foreach (var color in Colors.Values)
+                    color.@out(os);
+                os.undent();
+                _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            }
         }
     }
 
@@ -1441,7 +1520,22 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Ruling ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<RulingTag `" << RulingTag << "'>";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<RulingPenWidth " << new T_dimension(RulingPenWidth) << ">";
+            if ((setProperties & 0x4) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<RulingGap " << new T_dimension(RulingGap) << ">";
+            if ((setProperties & 0x20) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<RulingColor `" << RulingColor << "'>";
+            if ((setProperties & 0x8) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<RulingPen " << RulingPen << ">";
+            if ((setProperties & 0x10) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<RulingLines " << RulingLines << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1452,7 +1546,15 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            if (Rulings.Count > 0)
+            {
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<RulingCatalog ";
+                os.indent();
+                foreach (var ruling in Rulings.Values)
+                    ruling.@out(os);
+                os.undent();
+                _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            }
         }
     }
 
@@ -1486,18 +1588,47 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os, bool resolveCrossReferences = false)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Cell ";
+            os.indent();
+            if ((setProperties & 0x40) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellFill " << CellFill << ">";
+            if ((setProperties & 0x80) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellColor `" << CellColor << "'>";
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellLRuling `" << CellLRuling << "'>";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellBRuling `" << CellBRuling << "'>";
+            if ((setProperties & 0x4) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellRRuling `" << CellRRuling << "'>";
+            if ((setProperties & 0x8) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellTRuling `" << CellTRuling << "'>";
+            if ((setProperties & 0x10) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellColumns " << CellColumns << ">";
+            if ((setProperties & 0x20) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<CellRows " << CellRows << ">";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<CellContent ";
+            os.indent();
+            content().commit(os.stream(), resolveCrossReferences);
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
     // Row class
     public class Row
     {
-        public List<Cell> Cells = new();
+        public System.Collections.Generic.List<Cell> Cells = new();
 
         public void @out(MifOutputByteStream os, bool resolveCrossReferences = false)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Row ";
+            os.indent();
+            for (int i = 0; i < Cells.Count; i++)
+                Cells[i].@out(os, resolveCrossReferences);
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1521,7 +1652,14 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<TblFormat ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblColumnNum " << TblColumnNum << ">";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblColumnWidth " << new T_dimension(TblColumnWidth) << ">";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1538,7 +1676,7 @@ public class MifDoc : IDisposable
         public T_LTRB TblCellMargins;
         public string TblTitlePlacement = "";
         public long TblWidth;
-        public List<TblColumn> TblColumns = new();
+        public System.Collections.Generic.List<TblColumn> TblColumns = new();
 
         public TblFormat() { setProperties = 0; }
         public TblFormat(string tblTag)
@@ -1570,18 +1708,49 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<TblFormat ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblTag `" << TblTag << "'>";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblLIndent " << new T_dimension(TblLIndent) << ">";
+            if ((setProperties & 0x4) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblRIndent " << new T_dimension(TblRIndent) << ">";
+            if ((setProperties & 0x8) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblSpBefore " << new T_dimension(TblSpBefore) << ">";
+            if ((setProperties & 0x10) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblSpAfter " << new T_dimension(TblSpAfter) << ">";
+            if ((setProperties & 0x20) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblAlignment " << TblAlignment << ">";
+            if ((setProperties & 0x40) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblCellMargins " << TblCellMargins << ">";
+            if ((setProperties & 0x100) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblTitlePlacement " << TblTitlePlacement << ">";
+            if ((setProperties & 0x80) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblWidth " << new T_dimension(TblWidth) << ">";
+            for (int i = 0; i < TblColumns.Count; i++)
+                TblColumns[i].@out(os);
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
     // TblCatalog class
     public class TblCatalog
     {
-        public List<TblFormat> TblFormats = new();
+        public System.Collections.Generic.List<TblFormat> TblFormats = new();
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            if (TblFormats.Count > 0)
+            {
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblCatalog ";
+                os.indent();
+                foreach (var tblFormat in TblFormats)
+                    tblFormat.@out(os);
+                os.undent();
+                _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            }
         }
     }
 
@@ -1594,10 +1763,10 @@ public class MifDoc : IDisposable
         public bool TblIDUsed;
         public TblFormat tblFormat = new();
         public int TblNumColumns;
-        public List<long> TblColumnWidths = new();
-        public List<Row> TblH = new();
-        public List<Row> TblBody = new();
-        public List<Row> TblF = new();
+        public System.Collections.Generic.List<long> TblColumnWidths = new();
+        public System.Collections.Generic.List<Row> TblH = new();
+        public System.Collections.Generic.List<Row> TblBody = new();
+        public System.Collections.Generic.List<Row> TblF = new();
 
         public Tbl()
         {
@@ -1614,7 +1783,54 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os, bool resolveCrossReferences = false)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Tbl ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblID " << TblID << ">";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblTag `" << TblTag << "'>";
+
+            if ((setProperties & 0x200) != 0)  // fTblFormat
+                tblFormat.@out(os);
+
+            if ((setProperties & 0x4) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblNumColumns " << TblNumColumns << ">";
+            if ((setProperties & 0x8) != 0)
+                for (int i = 0; i < TblColumnWidths.Count; i++)
+                    _ = os << '\n' << MifOutputByteStream.INDENT << "<TblColumnWidth " << new T_dimension(TblColumnWidths[i]) << ">";
+
+            if (TblH.Count > 0)
+            {
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblH ";
+                os.indent();
+                for (int i = 0; i < TblH.Count; i++)
+                    TblH[i].@out(os, resolveCrossReferences);
+                os.undent();
+                _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            }
+
+            if (TblBody.Count > 0)
+            {
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblBody ";
+                os.indent();
+                for (int i = 0; i < TblBody.Count; i++)
+                    TblBody[i].@out(os, resolveCrossReferences);
+                os.undent();
+                _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            }
+
+            if (TblF.Count > 0)
+            {
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<TblF ";
+                os.indent();
+                for (int i = 0; i < TblF.Count; i++)
+                    TblF[i].@out(os, resolveCrossReferences);
+                os.undent();
+                _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            }
+
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1637,14 +1853,21 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<XRefFormat ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<XRefName `" << XRefName << "'>";
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<XRefDef `" << XRefDef << "'>";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
     // CrossRefInfo class
     public class CrossRefInfo
     {
-        public enum InfoType { PotentialMarker, XRef, HypertextLink }
+        public enum InfoType { PotentialMarker, XRef, HypertextLink, HypertextDestination }
         public InfoType Type;
         public ulong groveIndex;
         public ulong elementIndex;
@@ -1683,7 +1906,7 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            // CrossRefInfo doesn't output itself directly - it's used to construct other objects
         }
     }
 
@@ -1719,7 +1942,24 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<XRef ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<XRefName `" << XRefName << "'>";
+            if ((setProperties & 0x4) != 0)
+            {
+                // escapeSpecialChars in XRefSrcText
+                var escaped = new T_string(XRefSrcText);
+                escaped.escapeSpecialChars();
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<XRefSrcText `" << escaped.ToString() << "'>";
+            }
+            if ((setProperties & 0x2) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<XRefSrcFile `" << XRefSrcFile << "'>";
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
+            if ((setProperties & 0x8) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<String `" << XRefText << "'>";
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<XRefEnd>";
         }
     }
 
@@ -1736,7 +1976,31 @@ public class MifDoc : IDisposable
         public Marker(CrossRefInfo crossRefInfo, bool linkDestinationMode = false)
         {
             setProperties = 0;
-            // TODO: Initialize from crossRefInfo
+            switch (crossRefInfo.type())
+            {
+                case CrossRefInfo.InfoType.PotentialMarker:
+                    if (linkDestinationMode)
+                    {
+                        setMType((int)MarkerType.Hypertext);
+                        setMText("newlink " + crossRefInfo.crossRefText());
+                    }
+                    else
+                    {
+                        setMType((int)MarkerType.XRef);
+                        setMText(crossRefInfo.crossRefText());
+                    }
+                    break;
+                case CrossRefInfo.InfoType.HypertextLink:
+                    setMType((int)MarkerType.Hypertext);
+                    // TODO: handle book component lookup
+                    setMText("gotolink <c\\>" + crossRefInfo.crossRefText());
+                    break;
+                case CrossRefInfo.InfoType.HypertextDestination:
+                    setMText("newlink " + crossRefInfo.crossRefText());
+                    break;
+                default:
+                    break;
+            }
         }
 
         public Marker(string mText, MarkerType mType = MarkerType.XRef)
@@ -1750,7 +2014,18 @@ public class MifDoc : IDisposable
 
         public void @out(MifOutputByteStream os)
         {
-            throw new NotImplementedException();
+            _ = os << '\n' << MifOutputByteStream.INDENT << "<Marker ";
+            os.indent();
+            if ((setProperties & 0x1) != 0)
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<MType " << MType << ">";
+            if ((setProperties & 0x2) != 0)
+            {
+                var escaped = new T_string(MText);
+                escaped.escapeSpecialChars();
+                _ = os << '\n' << MifOutputByteStream.INDENT << "<MText `" << escaped.ToString() << "'>";
+            }
+            os.undent();
+            _ = os << '\n' << MifOutputByteStream.INDENT << ">";
         }
     }
 
@@ -1758,7 +2033,7 @@ public class MifDoc : IDisposable
     public class BookComponent
     {
         public string FileName = "";
-        public List<XRefFormat> XRefFormats = new();
+        public System.Collections.Generic.List<XRefFormat> XRefFormats = new();
         public Document document = new();
         public ColorCatalog colorCatalog = new();
         public PgfCatalog pgfCatalog = new();
@@ -2127,6 +2402,115 @@ public class MifOutputByteStream
         public int data;
         public T_indent(int i) { data = i; }
     }
+
+    // Operator overloads for output chaining (ported from C++)
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, char c)
+    {
+        os.stream().operatorOutput(c);
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, string s)
+    {
+        os.stream().operatorOutput(s);
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, int n)
+    {
+        os.stream().operatorOutput(n.ToString());
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, uint n)
+    {
+        os.stream().operatorOutput(n.ToString());
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, long n)
+    {
+        os.stream().operatorOutput(n.ToString());
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, T_indent i)
+    {
+        int cnt = (i.data == INDENT.data) ? os.CurTagIndent : i.data;
+        for (; cnt > 0; cnt--) os.stream().operatorOutput(' ');
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_dimension d)
+    {
+        long val = d.data;
+        string buf = string.Format("{0}.{1:D3}", val / 1000, Math.Abs(val % 1000)).TrimEnd('0').TrimEnd('.');
+        os.stream().operatorOutput(buf + "pt");
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_string s)
+    {
+        os.stream().operatorOutput('`');
+        os.stream().operatorOutput(s.ToString());
+        os.stream().operatorOutput('\'');
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_tagstring s)
+    {
+        os.stream().operatorOutput('`');
+        os.stream().operatorOutput(s.ToString());
+        os.stream().operatorOutput('\'');
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_boolean b)
+    {
+        os.stream().operatorOutput(b.data ? "Yes" : "No");
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, double p)
+    {
+        os.stream().operatorOutput(string.Format("{0:F6}", p));
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_WH s)
+    {
+        os = os << s.w << " " << s.h;
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_XY s)
+    {
+        os = os << s.x << " " << s.y;
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_LTRB b)
+    {
+        os = os << b.l << " " << b.t << " " << b.r << " " << b.b;
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.T_LTWH b)
+    {
+        os = os << b.l << " " << b.t << " " << b.w << " " << b.h;
+        return os;
+    }
+
+    public static MifOutputByteStream operator <<(MifOutputByteStream os, MifDoc.CrossRefInfo cri)
+    {
+        var crossRefInfos = MifDoc.CurInstance!.crossRefInfos();
+        uint idx = (uint)crossRefInfos.Count;
+        crossRefInfos.Add(cri);
+        os.stream().operatorOutput(MifDoc.escapeChar());
+        byte[] idxBytes = BitConverter.GetBytes(idx);
+        foreach (byte b in idxBytes) os.stream().sputc((sbyte)b);
+        return os;
+    }
 }
 
 // TmpOutputByteStream - temporary output byte stream (memory-based)
@@ -2302,7 +2686,7 @@ public class MifFOTBuilder : FOTBuilder
     public struct IndexEntryNIC
     {
         public StringC sortString;
-        public List<StringC> components;
+        public System.Collections.Generic.List<StringC> components;
         public bool pageNumber;
         public bool startsPageRange;
         public bool endsPageRange;
@@ -2310,7 +2694,7 @@ public class MifFOTBuilder : FOTBuilder
         public IndexEntryNIC()
         {
             sortString = new StringC();
-            components = new List<StringC>();
+            components = new System.Collections.Generic.List<StringC>();
             pageNumber = true;
             startsPageRange = false;
             endsPageRange = false;

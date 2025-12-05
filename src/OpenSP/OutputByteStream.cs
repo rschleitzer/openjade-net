@@ -57,6 +57,13 @@ public abstract class OutputByteStream : Link
         return this;
     }
 
+    // OutputByteStream &operator<<(char);
+    public OutputByteStream operatorOutput(char c)
+    {
+        sputc((sbyte)c);
+        return this;
+    }
+
     // OutputByteStream &operator<<(const char *);
     public OutputByteStream operatorOutput(string s)
     {
