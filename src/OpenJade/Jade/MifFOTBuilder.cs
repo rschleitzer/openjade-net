@@ -61,6 +61,10 @@ public static class MifMessages
 {
     public static readonly MessageType0 missingTableColumnFlowObject = new MessageType0(
         MessageType.Severity.warning, null, 5000, "table cell refers to undefined column");
+    public static readonly MessageType2 cannotOpenOutputError = new MessageType2(
+        MessageType.Severity.error, null, 5001, "MIF: cannot open output file %1 (%2)");
+    public static readonly MessageType1 systemIdNotFilename = new MessageType1(
+        MessageType.Severity.error, null, 5002, "MIF: could not convert system identifier %1 to a single filename");
 }
 
 // StringHash helper class
@@ -126,7 +130,10 @@ public class MifDoc : IDisposable
         public long data;
         public T_dimension(long u = 0) { data = u; }
         public static implicit operator long(T_dimension d) => d.data;
+        public static implicit operator T_dimension(long d) => new T_dimension(d);
+        public static implicit operator T_dimension(int d) => new T_dimension(d);
         public static T_dimension operator -(T_dimension a, T_dimension b) => new T_dimension(a.data - b.data);
+        public static T_dimension operator /(T_dimension a, int b) => new T_dimension(a.data / b);
     }
 
     // T_string class - MIF string type
@@ -875,6 +882,14 @@ public class MifDoc : IDisposable
         {
             setProperties = 0;
             base.clearSetProperties();
+        }
+
+        public void copyFrom(ParagraphFormat f)
+        {
+            setFrom(f, (uint)Flags.fAll, (uint)FontFormat.Flags.fAll);
+            setProperties = f.setProperties;
+            base.setProperties = ((FontFormat)f).setProperties;
+            TabStops = new System.Collections.Generic.List<TabStop>(f.TabStops);
         }
 
         public uint compare(ParagraphFormat f)
@@ -2098,7 +2113,24 @@ public class MifDoc : IDisposable
         public XRef(CrossRefInfo crossRefInfo)
         {
             setProperties = 0;
-            // TODO: Initialize from crossRefInfo
+            switch (crossRefInfo.type())
+            {
+                case CrossRefInfo.InfoType.XRef:
+                    {
+                        int bookComponentIdx = crossRefInfo.sgmlId.size() > 0
+                            ? MifDoc.CurInstance!.elements().bookComponentIndex(crossRefInfo.groveIndex, crossRefInfo.sgmlId)
+                            : MifDoc.CurInstance!.elements().bookComponentIndex(crossRefInfo.groveIndex, crossRefInfo.elementIndex);
+                        string targetFileName = "<c\\>" + MifDoc.CurInstance.bookComponents()[bookComponentIdx].FileName;
+                        setXRefSrcFile(targetFileName);
+                        setXRefName(MifDoc.sPageNumXRefFormatName);
+                        setXRefSrcText(crossRefInfo.crossRefText());
+                        setXRefText("000");
+                    }
+                    break;
+                default:
+                    System.Diagnostics.Debug.Assert(false);
+                    break;
+            }
         }
 
         public XRef(string xRefName, string xRefSrcText, string xRefText, string xRefSrcFile)
@@ -2165,9 +2197,15 @@ public class MifDoc : IDisposable
                     }
                     break;
                 case CrossRefInfo.InfoType.HypertextLink:
-                    setMType((int)MarkerType.Hypertext);
-                    // TODO: handle book component lookup
-                    setMText("gotolink <c\\>" + crossRefInfo.crossRefText());
+                    {
+                        setMType((int)MarkerType.Hypertext);
+                        int bookComponentIdx = crossRefInfo.sgmlId.size() > 0
+                            ? MifDoc.CurInstance!.elements().bookComponentIndex(crossRefInfo.groveIndex, crossRefInfo.sgmlId)
+                            : MifDoc.CurInstance!.elements().bookComponentIndex(crossRefInfo.groveIndex, crossRefInfo.elementIndex);
+                        string targetFileName = "<c>" + MifDoc.CurInstance.bookComponents()[bookComponentIdx].FileName;
+                        string mtext = "gotolink " + targetFileName + ":" + crossRefInfo.crossRefText();
+                        setMText(mtext);
+                    }
                     break;
                 case CrossRefInfo.InfoType.HypertextDestination:
                     setMText("newlink " + crossRefInfo.crossRefText());
@@ -2411,7 +2449,75 @@ public class MifDoc : IDisposable
     // Instance methods
     public void commit()
     {
-        // TODO: implement full commit
+        string outDir = rootOutputFileLoc();
+        string outFileName = "";
+
+        // Extract filename from path
+        int i;
+        for (i = outDir.Length - 1; i >= 0; i--)
+            if (outDir[i] == '/' || outDir[i] == '\\')
+                break;
+        if (outDir.Length - (i + 1) > 0)
+            outFileName = outDir.Substring(i + 1);
+        outDir = outDir.Substring(0, i + 1);
+
+        if (BookComponents_.Count > 1)
+        {
+            string bookFileLoc = rootOutputFileLoc();
+            string fileNameExt = "";
+
+            // Extract file extension
+            int idx;
+            for (idx = bookFileLoc.Length; idx > 0; idx--)
+                if (bookFileLoc[idx - 1] == '.')
+                    break;
+            if (idx > 0 && bookFileLoc.Length - idx > 0)
+                fileNameExt = bookFileLoc.Substring(idx);
+            else
+                fileNameExt = "mif";
+
+            // Assign filenames to book components
+            for (int j = 0; j < BookComponents_.Count; j++)
+            {
+                string fileName = (j + 1).ToString() + "." + fileNameExt;
+                BookComponents_[j].FileName = fileName;
+            }
+
+            // Write book file
+            try
+            {
+                using (var bookFileStream = new System.IO.FileStream(bookFileLoc, System.IO.FileMode.Create))
+                {
+                    var bookFile = new FileOutputByteStream();
+                    bookFile.attach(bookFileStream);
+
+                    MifOutputByteStream os = new MifOutputByteStream(0);
+                    os.setStream(bookFile);
+
+                    _ = os << "<Book 5.0>";
+                    for (int j = 0; j < BookComponents_.Count; j++)
+                    {
+                        _ = os << "\n<BookComponent"
+                              << "\n  <FileName `<c\\>" << BookComponents_[j].FileName << "'>"
+                              << "\n>";
+                    }
+                }
+            }
+            catch (System.Exception)
+            {
+                App.message(MifMessages.cannotOpenOutputError,
+                    new StringMessageArg(new StringC(bookFileLoc)),
+                    new ErrnoMessageArg(0));
+            }
+        }
+        else if (BookComponents_.Count == 1)
+        {
+            BookComponents_[0].FileName = outFileName;
+        }
+
+        // Commit all book components
+        for (int j = 0; j < BookComponents_.Count; j++)
+            BookComponents_[j].commit(outDir);
     }
 
     public System.Collections.Generic.List<BookComponent> bookComponents() => BookComponents_;
@@ -4010,20 +4116,90 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void currentNodePageNumber(NodePtr node)
     {
-        // TODO: Requires CrossRefInfo.CrossRefType and ElementSet.TReference enums
-        throw new NotImplementedException();
+        ulong n = 0;
+        if (node.elementIndex(ref n) == AccessResult.accessOK)
+        {
+            GroveString id = new GroveString();
+            node.getId(id);
+            if (!mifDoc.bookComponent().pageNumXRefFormatGenerated)
+            {
+                mifDoc.bookComponent().XRefFormats.Add(
+                    new MifDoc.XRefFormat(MifDoc.sPageNumXRefFormatName, @"<$pagenum\>"));
+                mifDoc.bookComponent().pageNumXRefFormatGenerated = true;
+            }
+            ulong groveIndex = node.groveIndex();
+            _ = mifDoc.os() << new MifDoc.CrossRefInfo(
+                    groveIndex, n, mifDoc.os().CurTagIndent,
+                    MifDoc.CrossRefInfo.InfoType.XRef, id.data(), id.size());
+            if (id.size() > 0)
+                mifDoc.elements().setReferencedFlag(
+                    MifDoc.ElementSet.ReferenceType.PageReference, groveIndex, new StringC(id.data(), id.size()));
+            else
+                mifDoc.elements().setReferencedFlag(
+                    MifDoc.ElementSet.ReferenceType.PageReference, groveIndex, n);
+        }
     }
 
     public override void startLink(Address address)
     {
-        // TODO: Requires CrossRefInfo.CrossRefType and ElementSet.TReference enums
-        throw new NotImplementedException();
+        switch (address.type)
+        {
+            case Address.Type.resolvedNode:
+                {
+                    ulong n = 0;
+                    if (address.node.elementIndex(ref n) == AccessResult.accessOK)
+                    {
+                        GroveString id = new GroveString();
+                        address.node.getId(id);
+                        ulong groveIndex = address.node.groveIndex();
+                        linkStack.Add(new LinkInfo(
+                            new MifDoc.CrossRefInfo(groveIndex, n, 0,
+                                MifDoc.CrossRefInfo.InfoType.HypertextLink,
+                                id.data(), id.size())));
+                        if (id.size() > 0)
+                            mifDoc.elements().setReferencedFlag(
+                                MifDoc.ElementSet.ReferenceType.LinkReference, groveIndex,
+                                new StringC(id.data(), id.size()));
+                        else
+                            mifDoc.elements().setReferencedFlag(
+                                MifDoc.ElementSet.ReferenceType.LinkReference, groveIndex, n);
+                    }
+                    break;
+                }
+
+            case Address.Type.idref:
+                {
+                    StringC id = address.@params[0];
+                    nuint i;
+                    for (i = 0; i < id.size(); i++)
+                        if (id[i] == ' ')
+                            break;
+                    linkStack.Add(new LinkInfo(
+                        new MifDoc.CrossRefInfo(address.node.groveIndex(), 0, 0,
+                            MifDoc.CrossRefInfo.InfoType.HypertextLink,
+                            id.data(), i)));
+                    mifDoc.elements().setReferencedFlag(
+                        MifDoc.ElementSet.ReferenceType.LinkReference, address.node.groveIndex(),
+                        new StringC(id.data(), i));
+                    break;
+                }
+
+            case Address.Type.none:
+            default:
+                linkStack.Add(new LinkInfo());
+                break;
+        }
     }
 
     public override void endLink()
     {
-        // TODO: Requires LinkInfo implementation
-        throw new NotImplementedException();
+        System.Diagnostics.Debug.Assert(linkStack.Count > 0);
+        if (linkStack[linkStack.Count - 1].openedInMif)
+            LinkInfo.pendingMifClosings++;
+        linkStack.RemoveAt(linkStack.Count - 1);
+
+        // MifDoc::Marker marker( MifDoc::T_string( "" ), MifDoc::Marker::Hypertext );
+        // marker.out( mifDoc.os() );
     }
 
     public override void startLineField(LineFieldNIC nic)
@@ -4074,11 +4250,98 @@ public class MifFOTBuilder : FOTBuilder
         doEndParagraph();
     }
 
-    public void doStartParagraph(ParagraphNIC nic, bool servesAsWrapper = false,
+    public void doStartParagraph(DisplayNIC nic, bool servesAsWrapper = false,
                                   long height = 0, bool allowNegativeLeading = false)
     {
-        // TODO: Requires full MifDoc API including Para, FontFormat.fFSize
-        throw new NotImplementedException();
+        startDisplay(nic);
+
+        DisplayInfo? curDs = displayStack.First?.Value;
+        System.Diagnostics.Debug.Assert(curDs != null);
+        curDs!.isParagraph = true;
+
+        nextFormat.setPgfWithPrev(curDs.mayViolateKeepBefore
+                                    ? curDs.keepWithPrevious
+                                    : (curDs.firstParaOutputed
+                                         ? curDs.keepWithinPageInEffect
+                                         : false));
+        nextFormat.setPgfWithNext(curDs.keepWithNext);
+        curDs.firstParaOutputed = true;
+
+        processDisplaySpaceStack();
+        switch (pendingBreak)
+        {
+            case Symbol.symbolPage:
+                nextFormat.setPgfPlacement(MifDoc.sPageTop);
+                break;
+            case Symbol.symbolColumn:
+                nextFormat.setPgfPlacement(MifDoc.sColumnTop);
+                break;
+            default:
+                nextFormat.setPgfPlacement(MifDoc.sAnywhere);
+                break;
+        }
+        pendingBreak = Symbol.symbolFalse;
+
+        long lineSpacing;
+        long extraSpaceBefore = 0;
+        if (servesAsWrapper)
+        {
+            if (height < 2000)   // FrameMaker minimum is 2pt
+            {
+                if (allowNegativeLeading)
+                    nextFormat.setPgfLeading(height - 2000);
+                else
+                    pendingEffectiveDisplaySpace.nominal
+                      -= (pendingEffectiveDisplaySpace.nominal > 2000)
+                            ? 2000 : pendingEffectiveDisplaySpace.nominal;
+                     // try to steal as much as possible from space before
+                height = 2000;
+            }
+            //if( effectiveDisplaySpace.nominal <= 0 )
+             //    extraSpaceBefore = 1; // FrameMaker bug workaround
+            //nextFormat.setFSize( height );
+            lineSpacing = height;
+            nextFormat.setFColor(MifDoc.sWhite);
+            nextFormat.setPgfLineSpacing(MifDoc.sFixed);
+        }
+        else
+        {
+            //nextFormat.setFSize( computeLengthSpec( nextFormat.FotLineSpacingSpec.length ) );
+            lineSpacing = computeLengthSpec(nextFormat.FotLineSpacingSpec);
+            if (nextFormat.FotMinLeading.hasLength) // but ignore the actual min-leading value
+                nextFormat.PgfLineSpacing = MifDoc.sProportional;
+            else
+                nextFormat.PgfLineSpacing = MifDoc.sFixed;
+        }
+
+        nextFormat.setPgfSpBefore(pendingEffectiveDisplaySpace.nominal + extraSpaceBefore);
+        pendingEffectiveDisplaySpace.clear();
+
+        nextFormat.setPgfLIndent(computeLengthSpec(nextFormat.FotStartIndentSpec));
+        nextFormat.setPgfFIndent(computeLengthSpec(nextFormat.FotFirstLineStartIndentSpec)
+                                   + nextFormat.PgfLIndent);
+        nextFormat.setPgfRIndent(computeLengthSpec(nextFormat.FotEndIndentSpec));
+
+        nextFormat.setPgfPlacementStyle(
+            nextFormat.FotSpan > 1 ? MifDoc.sStraddle : MifDoc.sNormal);
+        start();
+
+        MifDoc.Para p = new MifDoc.Para(mifDoc.curTagStream().content().stream().CurTagIndent + 4);
+        p.setParagraphFormat(mifDoc.curFormat());
+        p.format().updateFrom(format());
+        p.format().FSize = mifDoc.curFormat().FSize;
+        p.format().ffSetProperties() &= ~(uint)MifDoc.FontFormat.Flags.fFSize;
+        if (p.format().FSize != lineSpacing)
+            p.format().setFSize(lineSpacing);
+        p.curFormat().updateFrom(p.format());
+        // assert( mifDoc.curPara( false ) == NULL );
+        mifDoc.setCurPara(p);
+        mifDoc.enterPara(mifDoc.curPara()!);
+        lastFlowObjectWasWhitespace = false;
+        outPendingInlineStatements();
+
+        // mifDoc.curFormat().out( mifDoc.os() );
+        // mifDoc.beginParaLine();
     }
 
     public void doEndParagraph(bool sustainFormatStack = false, bool sustainDisplayStack = false,
@@ -4147,14 +4410,157 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void externalGraphic(ExternalGraphicNIC nic)
     {
-        // TODO: Requires T_pathname/T_keyword constructors and Frame.Objects API
-        throw new NotImplementedException();
+        bool isInline = MifDoc.Para.currentlyOpened ? true : false;
+
+        if (!isInline)
+            startDisplay(nic);
+        start();
+
+        MifDoc.T_pathname mifPathname = new MifDoc.T_pathname();
+        if (systemIdToMifPathname(nic.entitySystemId, ref mifPathname))
+        {
+            MifDoc.T_keyword mifAlignment = new MifDoc.T_keyword(MifDoc.sLeft);
+            switch (format().FotDisplayAlignment)
+            {
+                case Symbol.symbolStart:
+                    mifAlignment = new MifDoc.T_keyword(MifDoc.sLeft);
+                    break;
+                case Symbol.symbolEnd:
+                    mifAlignment = new MifDoc.T_keyword(MifDoc.sRight);
+                    break;
+                case Symbol.symbolCenter:
+                    mifAlignment = new MifDoc.T_keyword(MifDoc.sCenter);
+                    break;
+                case Symbol.symbolInside:
+                    mifAlignment = new MifDoc.T_keyword(MifDoc.sInside);
+                    break;
+                case Symbol.symbolOutside:
+                    mifAlignment = new MifDoc.T_keyword(MifDoc.sOutside);
+                    break;
+                default:
+                    System.Diagnostics.Debug.Assert(false);
+                    break;
+            }
+
+            MifDoc.Frame frame
+             = makeAnchoredFrame(new MifDoc.T_keyword(isInline ? MifDoc.sInline : MifDoc.sBelow),
+                                  nic.hasMaxWidth ? computeLengthSpec(nic.maxWidth) : 72000,
+                                  nic.hasMaxHeight ? computeLengthSpec(nic.maxHeight) : 72000,
+                                  mifAlignment);
+
+            MifDoc.ImportObject importObject
+             = new MifDoc.ImportObject(mifPathname, frame.ShapeRect);
+            frame.Objects.Add(importObject);
+
+            if (!isInline)
+                doStartParagraph(nic, true, 0, false);
+            else
+                checkForParagraphReopening();
+            mifDoc.outAFrame(frame.ID, mifDoc.os());
+            if (!isInline)
+                endParagraph();
+            else
+                lastFlowObjectWasWhitespace = false;
+        }
+
+        end();
+        if (!isInline)
+            endDisplay();
     }
 
     public override void rule(RuleNIC nic)
     {
-        // TODO: Requires T_keyword constructors, Frame.Objects, and PolyLine.Points APIs
-        throw new NotImplementedException();
+        bool isInline = (nic.orientation == Symbol.symbolHorizontal || nic.orientation == Symbol.symbolVertical)
+                         ? false : true;
+
+        if (isInline)
+            checkForParagraphReopening();
+
+        if (!isInline)
+            startDisplay(nic);
+        start();
+
+        long indentlessDisplaySize
+              = format().FotCurDisplaySize - computeLengthSpec(format().FotStartIndentSpec)
+                - computeLengthSpec(format().FotEndIndentSpec);
+
+        long ruleHeight
+         = format().FotLineThickness + format().FotLineSep * (format().FotLineRepeat - 1);
+        if (ruleHeight < 0)
+            ruleHeight = 0;
+
+        long ruleLength;
+        long ruleOffset;
+
+        if (nic.hasLength && (ruleLength = computeLengthSpec(nic.length)) > 0)
+        {
+            switch (format().FotDisplayAlignment)
+            {
+                case Symbol.symbolStart:
+                default:
+                    ruleOffset = 0;
+                    break;
+                case Symbol.symbolCenter:
+                    ruleOffset = (indentlessDisplaySize - ruleLength) / 2;
+                    break;
+                case Symbol.symbolEnd:
+                    ruleOffset = indentlessDisplaySize - ruleLength;
+                    break;
+            }
+        }
+        else
+        {
+            ruleOffset = 0;
+            ruleLength = indentlessDisplaySize;
+        }
+
+        MifDoc.Frame frame
+         = makeAnchoredFrame(new MifDoc.T_keyword(MifDoc.sInline), isInline ? ruleLength : indentlessDisplaySize,
+                              ruleHeight);
+
+        if (isInline)
+            frame.setBLOffset(new MifDoc.T_dimension(computeLengthSpec(format().FotPositionPointShiftSpec)));
+        else
+            frame.setBLOffset(new MifDoc.T_dimension(-ruleHeight / 2 + 4000 / 3)); // min font baseline correction
+
+        string capType;
+        switch (format().FotLineCap)
+        {
+            case Symbol.symbolButt:
+            default:
+                capType = MifDoc.sButt;
+                break;
+            case Symbol.symbolRound:
+                capType = MifDoc.sRound;
+                break;
+            case Symbol.symbolSquare:
+                capType = MifDoc.sSquare;
+                break;
+        }
+
+        long curLineVOffset = format().FotLineThickness / 2;
+        for (long i = format().FotLineRepeat; i > 0; i--, curLineVOffset += format().FotLineSep)
+        {
+            MifDoc.PolyLine polyLine = new MifDoc.PolyLine(capType, 0, 0, format().FotLineThickness,
+                                             format().FColor);
+            frame.Objects.Add(polyLine);
+
+            polyLine.setHeadCap(capType);
+            polyLine.setTailCap(capType);
+            polyLine.Points.Add(new MifDoc.T_XY(new MifDoc.T_dimension(ruleOffset), new MifDoc.T_dimension(curLineVOffset)));
+            polyLine.Points.Add(new MifDoc.T_XY(new MifDoc.T_dimension(ruleOffset + ruleLength), new MifDoc.T_dimension(curLineVOffset)));
+        }
+
+        if (!isInline) doStartParagraph(nic, true, 0, true);
+        mifDoc.outAFrame(frame.ID, mifDoc.os());
+        if (!isInline)
+            endParagraph();
+        else
+            lastFlowObjectWasWhitespace = false;
+
+        end();
+        if (!isInline)
+            endDisplay();
     }
 
     public override void pageNumber()
@@ -4201,14 +4607,61 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void endLeader()
     {
-        // TODO: Requires List<TabStop>.Add and ParagraphFormat.fTabStops
-        throw new NotImplementedException();
+        if (!mifDoc.curPara()!.leaderTabsSet)
+        {
+            StringBuilder leaderStr = new StringBuilder();
+            curLeaderStream().commit(leaderStr);
+
+            int numTabs = mifDoc.curFormat().PgfNumTabs + 1;
+            mifDoc.curFormat().setPgfNumTabs(numTabs);
+            mifDoc.curPara()!.format().TabStops.Add(
+                new MifDoc.TabStop(MifDoc.sRight, format().FotCurDisplaySize
+                                        - mifDoc.curFormat().PgfRIndent - 1,
+                                   new MifDoc.T_string(leaderStr.ToString())));
+            mifDoc.curPara()!.format().setPgfNumTabs(numTabs);
+            mifDoc.curPara()!.curFormat().setPgfNumTabs(numTabs);
+            mifDoc.curPara()!.format().setProperties |= (uint)MifDoc.ParagraphFormat.Flags.fTabStops;
+
+            mifDoc.curPara()!.leaderTabsSet = true;
+        }
+
+        if (CurLeaderStream != null)
+        {
+            CurLeaderStream = null;
+        }
+        inLeader = false;
+        lastFlowObjectWasWhitespace = false;
     }
 
     public override void startTable(TableNIC nic)
     {
-        // TODO: Requires List<TblFormat>.Add and doStartParagraph with TableNIC
-        throw new NotImplementedException();
+        startDisplay(nic);
+        start();
+
+        if (!curTable().DefaultTblFormatGenerated)
+        {
+            MifDoc.TblFormat defaultTblFormat = new MifDoc.TblFormat(MifDoc.sDefaultTblFormat);
+            defaultTblFormat.setDSSSLDefaults();
+            mifDoc.tblCatalog().TblFormats.Add(defaultTblFormat);
+            curTable().DefaultTblFormatGenerated = true;
+        }
+
+        long curStartIndent = computeLengthSpec(format().FotStartIndentSpec);
+        curTable().startIndent = curStartIndent;
+
+        curTable().begin(mifDoc);
+        //    curTable().nic = nic;
+        curTable().displayAlignment = format().FotDisplayAlignment;
+
+        if (nic.widthType == TableNIC.WidthType.widthExplicit)
+            curTable().tableWidth = computeLengthSpec(nic.width);
+        else
+            curTable().tableWidth
+             = format().FotCurDisplaySize - curStartIndent
+                - computeLengthSpec(format().FotEndIndentSpec);
+
+        doStartParagraph(nic, true, 0);
+        endParagraph();
     }
 
     public override void endTable()
@@ -4316,8 +4769,68 @@ public class MifFOTBuilder : FOTBuilder
 
     public override void startTableCell(TableCellNIC nic)
     {
-        // TODO: Requires proper Cell/Column handling and computeLengthSpec(TableLengthSpec)
-        throw new NotImplementedException();
+        start();
+
+        TablePart tp = curTable().curTablePart();
+        if (!tp.columnsProcessed)
+            tp.processColumns();
+
+        System.Collections.Generic.List<Cell> Cells = curTable().curRows()[curTable().curRows().Count - 1].Cells;
+        while (nic.columnIndex >= Cells.Count)
+            Cells.Add(new Cell());
+
+        Cell cell = Cells[(int)nic.columnIndex];
+        curTable().CurCell = cell;
+        cell.missing = nic.missing;
+
+        if (nic.nColumnsSpanned != 1)
+        {
+            cell.nColumnsSpanned = nic.nColumnsSpanned;
+            cell.mifCell().setCellColumns((int)nic.nColumnsSpanned);
+        }
+
+        if (nic.nRowsSpanned != 1)
+        {
+            cell.nRowsSpanned = nic.nRowsSpanned;
+            cell.mifCell().setCellRows((int)nic.nRowsSpanned);
+        }
+
+        if (format().FotCellBackground && format().MifBackgroundColor.Length > 0)
+        {
+            cell.mifCell().setCellFill(0);
+            cell.mifCell().setCellColor(format().MifBackgroundColor);
+        }
+
+        long newDisplaySize = 0;
+        for (uint i = nic.columnIndex; i < nic.columnIndex + nic.nColumnsSpanned; i++)
+            if (i < tp.Columns.Count)
+            {
+                if (tp.Columns[(int)i].hasWidth)
+                    newDisplaySize
+                     += computeLengthSpec(tp.Columns[(int)i].width);
+            }
+            else if (!nic.missing)
+            {
+                App.message(MifMessages.missingTableColumnFlowObject);
+                // NOTE: at this point there's already a danger of not realizing
+                // right display space sizes inside cells
+                tp.Columns.Add(new Column());
+                tp.Columns[tp.Columns.Count - 1].hasWidth = true;
+                TableLengthSpec tls = new TableLengthSpec();
+                tls.tableUnitFactor = 1.0;
+                tp.Columns[tp.Columns.Count - 1].width = tls;
+                tp.needsColumnReprocessing = true;
+                if ((int)i > tp.mifTable(mifDoc).TblNumColumns)
+                    tp.mifTable(mifDoc).setTblNumColumns((int)i);
+            }
+
+        newDisplaySize -= format().PgfCellMargins.l + format().PgfCellMargins.r;
+
+        if (newDisplaySize > 0)
+            format().FotCurDisplaySize = newDisplaySize;
+
+        cell.displaySize = format().FotCurDisplaySize;
+        mifDoc.enterTableCell(cell.mifCell());
     }
 
     public override void endTableCell()
@@ -4557,12 +5070,138 @@ public class MifFOTBuilder : FOTBuilder
         return spec.length;
     }
 
+    protected void makeEmptyTextFlow(MifDoc.TextRect textRect)
+    {
+        MifDoc.TextFlow textFlow = new MifDoc.TextFlow(textRect, true);
+        mifDoc.textFlows().Add(textFlow);
+
+        mifDoc.enterTextFlow(textFlow);
+        MifDoc.Para.outSimpleProlog(mifDoc.os());
+        MifDoc.ParaLine.outProlog(mifDoc.os());
+        MifDoc.ParaLine.outEpilog(mifDoc.os());
+        MifDoc.Para.outEpilog(mifDoc.os());
+        mifDoc.exitTextFlow();
+    }
+
+    protected void setupHeaderFooterParagraphFormat(MifDoc.ParagraphFormat hpf, MifDoc.ParagraphFormat fpf,
+                                                    MifDoc.T_dimension textRectWidth)
+    {
+        MifDoc.TabStop centerTS = new MifDoc.TabStop(MifDoc.sCenter, (long)(textRectWidth / 2));
+        MifDoc.TabStop rightTS = new MifDoc.TabStop(MifDoc.sRight, (long)textRectWidth);
+
+        hpf.setFrom(FotSimplePageSequence.paragraphFormat, 0, (uint)MifDoc.FontFormat.Flags.fAll);
+        hpf.TabStops.Add(centerTS);
+        hpf.TabStops.Add(rightTS);
+        hpf.setProperties |= (uint)MifDoc.ParagraphFormat.Flags.fTabStops;
+        fpf.copyFrom(hpf);
+        hpf.setFSize(((format().FotBottomMargin - format().FotFooterMargin) * 3) / 2);
+        fpf.setFSize((format().FotHeaderMargin * 3) / 2);
+        hpf.setPgfTag(MifDoc.sHeader);
+        fpf.setPgfTag(MifDoc.sFooter);
+
+        mifDoc.pgfCatalog().ParaFormats.Add(hpf);
+        mifDoc.pgfCatalog().ParaFormats.Add(fpf);
+
+        hpf.clearSetProperties();
+        fpf.clearSetProperties();
+    }
+
     protected void setupSimplePageSequence()
     {
-        // TODO: Full implementation requires Page, TextRect, and TextFlow setup
-        // For now, just set up the text flow for the body
-        if (FotSimplePageSequence.BodyTextFlow != null)
-            mifDoc.enterTextFlow(FotSimplePageSequence.BodyTextFlow);
+        MifDoc.Page firstMasterPage = new MifDoc.Page(MifDoc.sOtherMasterPage, MifDoc.sFirst);
+        MifDoc.Page rightMasterPage = new MifDoc.Page(MifDoc.sRightMasterPage, MifDoc.sRight);
+        MifDoc.Page leftMasterPage = new MifDoc.Page(MifDoc.sLeftMasterPage, MifDoc.sLeft);
+        MifDoc.Page bodyPage = new MifDoc.Page(MifDoc.sBodyPage, MifDoc.sNONE, MifDoc.sFirst);
+
+        MifDoc.T_LTWH bodyRect = new MifDoc.T_LTWH();
+        MifDoc.T_LTWH headerRect = new MifDoc.T_LTWH();
+        MifDoc.T_LTWH footerRect = new MifDoc.T_LTWH();
+
+        bodyRect.l = format().FotLeftMargin;
+        bodyRect.t = format().FotTopMargin;
+        bodyRect.w = format().FotPageWidth - format().FotLeftMargin - format().FotRightMargin;
+        bodyRect.h = format().FotPageHeight - format().FotTopMargin - format().FotBottomMargin;
+
+        headerRect.l = format().FotLeftMargin;
+        headerRect.t = 0;
+        headerRect.w = bodyRect.w;
+        headerRect.h = format().FotTopMargin;
+
+        footerRect.l = format().FotLeftMargin;
+        footerRect.t = format().FotPageHeight - format().FotBottomMargin;
+        footerRect.w = bodyRect.w;
+        footerRect.h = format().FotBottomMargin;
+
+        MifDoc.TextRect firstBodyTextRect = new MifDoc.TextRect(bodyRect, (int)format().FotPageNColumns,
+            format().FotPageColumnSep, format().FotPageBalanceColumns);
+        MifDoc.TextRect rightBodyTextRect = new MifDoc.TextRect(bodyRect, (int)format().FotPageNColumns,
+            format().FotPageColumnSep, format().FotPageBalanceColumns);
+        MifDoc.TextRect leftBodyTextRect = new MifDoc.TextRect(bodyRect, (int)format().FotPageNColumns,
+            format().FotPageColumnSep, format().FotPageBalanceColumns);
+        MifDoc.TextRect bodyTextRect = new MifDoc.TextRect(bodyRect, (int)format().FotPageNColumns,
+            format().FotPageColumnSep, format().FotPageBalanceColumns);
+        MifDoc.TextRect firstHeaderTextRect = new MifDoc.TextRect(headerRect);
+        MifDoc.TextRect rightHeaderTextRect = new MifDoc.TextRect(headerRect);
+        MifDoc.TextRect leftHeaderTextRect = new MifDoc.TextRect(headerRect);
+        MifDoc.TextRect firstFooterTextRect = new MifDoc.TextRect(footerRect);
+        MifDoc.TextRect rightFooterTextRect = new MifDoc.TextRect(footerRect);
+        MifDoc.TextRect leftFooterTextRect = new MifDoc.TextRect(footerRect);
+
+        firstMasterPage.TextRects.Add(firstHeaderTextRect);
+        firstMasterPage.TextRects.Add(firstBodyTextRect);
+        firstMasterPage.TextRects.Add(firstFooterTextRect);
+
+        rightMasterPage.TextRects.Add(rightHeaderTextRect);
+        rightMasterPage.TextRects.Add(rightBodyTextRect);
+        rightMasterPage.TextRects.Add(rightFooterTextRect);
+
+        leftMasterPage.TextRects.Add(leftHeaderTextRect);
+        leftMasterPage.TextRects.Add(leftBodyTextRect);
+        leftMasterPage.TextRects.Add(leftFooterTextRect);
+
+        bodyPage.TextRects.Add(bodyTextRect);
+        mifDoc.pages().Add(bodyPage);
+        mifDoc.pages().Add(firstMasterPage);
+        mifDoc.pages().Add(rightMasterPage);
+        mifDoc.pages().Add(leftMasterPage);
+
+        MifDoc.ParagraphFormat headerPF = new MifDoc.ParagraphFormat();
+        headerPF.setDSSSLDefaults();
+        MifDoc.ParagraphFormat footerPF = new MifDoc.ParagraphFormat();
+        footerPF.setDSSSLDefaults();
+        setupHeaderFooterParagraphFormat(headerPF, footerPF, new MifDoc.T_dimension(bodyRect.w));
+
+        FotSimplePageSequence.BodyTextFlow = new MifDoc.TextFlow(bodyTextRect, true,
+            FotSimplePageSequence.paragraphFormat, MifDoc.sDefaultPgfFormat);
+        FotSimplePageSequence.FirstHeaderTextFlow = new MifDoc.TextFlow(firstHeaderTextRect, false,
+            headerPF, MifDoc.sHeader);
+        FotSimplePageSequence.FirstFooterTextFlow = new MifDoc.TextFlow(firstFooterTextRect, false,
+            footerPF, MifDoc.sFooter);
+        FotSimplePageSequence.LeftHeaderTextFlow = new MifDoc.TextFlow(leftHeaderTextRect, false,
+            headerPF, MifDoc.sHeader);
+        FotSimplePageSequence.LeftFooterTextFlow = new MifDoc.TextFlow(leftFooterTextRect, false,
+            footerPF, MifDoc.sFooter);
+        FotSimplePageSequence.RightHeaderTextFlow = new MifDoc.TextFlow(rightHeaderTextRect, false,
+            headerPF, MifDoc.sHeader);
+        FotSimplePageSequence.RightFooterTextFlow = new MifDoc.TextFlow(rightFooterTextRect, false,
+            footerPF, MifDoc.sFooter);
+
+        makeEmptyTextFlow(firstBodyTextRect);
+        makeEmptyTextFlow(leftBodyTextRect);
+        makeEmptyTextFlow(rightBodyTextRect);
+
+        mifDoc.textFlows().Add(FotSimplePageSequence.BodyTextFlow);
+        mifDoc.textFlows().Add(FotSimplePageSequence.FirstHeaderTextFlow);
+        mifDoc.textFlows().Add(FotSimplePageSequence.FirstFooterTextFlow);
+        mifDoc.textFlows().Add(FotSimplePageSequence.LeftHeaderTextFlow);
+        mifDoc.textFlows().Add(FotSimplePageSequence.LeftFooterTextFlow);
+        mifDoc.textFlows().Add(FotSimplePageSequence.RightHeaderTextFlow);
+        mifDoc.textFlows().Add(FotSimplePageSequence.RightFooterTextFlow);
+
+        mifDoc.document().setDTwoSides(true);
+        mifDoc.document().setDParity(MifDoc.sFirstRight);
+
+        mifDoc.enterTextFlow(FotSimplePageSequence.BodyTextFlow);
     }
 
     protected void beginHeader()
@@ -4695,13 +5334,255 @@ public class MifFOTBuilder : FOTBuilder
 
     protected void outPendingInlineStatements()
     {
-        throw new NotImplementedException();
+        if (linkStack.Count > 1
+            && linkStack[linkStack.Count - 2].openedInMif
+            && !linkStack[linkStack.Count - 2].forcesNoLink())
+        {
+            LinkInfo.pendingMifClosings++;
+            linkStack[linkStack.Count - 2].openedInMif = false;
+        }
+
+        for (; LinkInfo.pendingMifClosings > 0; LinkInfo.pendingMifClosings--)
+        {
+            MifDoc.Marker marker = new MifDoc.Marker(new MifDoc.T_string(""), MifDoc.Marker.MarkerType.Hypertext);
+            marker.@out(mifDoc.os());
+        }
+
+        if (indexEntryStack.Count > 0)
+        {
+            indexEntryStack[indexEntryStack.Count - 1].@out(mifDoc.os());
+            indexEntryStack.RemoveAt(indexEntryStack.Count - 1);
+        }
+
+        for (int i = 0; i < nodeStack.Count; i++)
+        {
+            ulong n = 0;
+            if (nodeStack[i].node.elementIndex(ref n) == AccessResult.accessOK)
+            {
+                GroveString id = new GroveString();
+                nodeStack[i].node.getId(id);
+                ulong groveIndex = nodeStack[i].node.groveIndex();
+                _ = mifDoc.os() << new MifDoc.CrossRefInfo(
+                        groveIndex, n, mifDoc.os().CurTagIndent,
+                        MifDoc.CrossRefInfo.InfoType.PotentialMarker, id.data(), id.size());
+                if (id.size() > 0)
+                    mifDoc.elements().setBookComponentIndex(
+                        groveIndex, new StringC(id.data(), id.size()),
+                        mifDoc.bookComponents().Count - 1);
+                else
+                    mifDoc.elements().setBookComponentIndex(
+                        groveIndex, n, mifDoc.bookComponents().Count - 1);
+            }
+        }
+        NodeInfo.nonEmptyElementsOpened = 0;
+        nodeStack.Clear();
+
+        if (linkStack.Count > 0
+            && !linkStack[linkStack.Count - 1].openedInMif
+            && !linkStack[linkStack.Count - 1].forcesNoLink())
+        {
+            linkStack[linkStack.Count - 1].crossRefInfo!.tagIndent = mifDoc.os().CurTagIndent;
+            _ = mifDoc.os() << linkStack[linkStack.Count - 1].crossRefInfo!;
+            linkStack[linkStack.Count - 1].openedInMif = true;
+        }
     }
 
     protected void outString(Char[] s, nuint n, MifTmpOutputByteStream? o = null,
                             bool inParagraph = true, StringBuilder? targetString = null)
     {
-        throw new NotImplementedException();
+        MifOutputByteStream? outS
+         = (o != null) ? o.stream()
+                       : ((targetString != null) ? null : mifDoc.os());
+
+        MifDoc.ParagraphFormat? curPFormat
+         = inParagraph
+            ? (mifDoc.curPara(false) != null ? mifDoc.curPara()!.curFormat() : mifDoc.curFormat())
+            : null;
+        MifDoc.T_string paraFFamily = new MifDoc.T_string();
+        if (curPFormat != null)
+            paraFFamily = new MifDoc.T_string(curPFormat.FFamily);
+        bool stringOpened = false;
+        bool thisFlowObjectIsWhitespace;
+
+        for (nuint i = 0; i < n; i++)
+        {
+            Char c = s[i];
+            thisFlowObjectIsWhitespace = false;
+            string? outStr = null;
+            char outChr = '\0';
+            string? outSpecialChar = null;
+            bool hasOutput = false;
+
+            switch (c)
+            {
+                case '\n': break;
+                case '\r':
+                    if (!inParagraph)
+                    {
+                        outChr = ' '; hasOutput = true;
+                    }
+                    else
+                    {
+                        switch (format().FotLines)
+                        {
+                            case Symbol.symbolNone:
+                            case Symbol.symbolWrap:
+                                switch (format().FotInputWhitespaceTreatment)
+                                {
+                                    case Symbol.symbolIgnore: break;
+                                    case Symbol.symbolCollapse:
+                                        if (lastFlowObjectWasWhitespace) break;
+                                        goto case Symbol.symbolPreserve;
+                                    case Symbol.symbolPreserve:
+                                    default:
+                                        outChr = ' '; hasOutput = true;
+                                        break;
+                                }
+                                break;
+                            default:
+                                // Hard return - output special char
+                                if (outS != null && stringOpened)
+                                {
+                                    _ = outS << "'>";
+                                    stringOpened = false;
+                                }
+                                mifDoc.outSpecialChar(MifDoc.sHardReturn, outS);
+                                MifDoc.ParaLine.outEpilog(outS!);
+                                MifDoc.ParaLine.outProlog(outS!);
+                                break;
+                        }
+                        thisFlowObjectIsWhitespace = true;
+                    }
+                    break;
+                case '\t':
+                    if (!inParagraph)
+                    {
+                        outStr = "\\t"; hasOutput = true;
+                    }
+                    else
+                    {
+                        switch (format().FotInputWhitespaceTreatment)
+                        {
+                            case Symbol.symbolIgnore: break;
+                            case Symbol.symbolCollapse:
+                                if (lastFlowObjectWasWhitespace) break;
+                                goto case Symbol.symbolPreserve;
+                            case Symbol.symbolPreserve:
+                            default:
+                                outStr = "\\t"; hasOutput = true;
+                                break;
+                        }
+                        thisFlowObjectIsWhitespace = true;
+                    }
+                    break;
+                case '>': outStr = "\\>"; hasOutput = true; break;
+                case '\'': outStr = "\\q"; hasOutput = true; break;
+                case '`': outStr = "\\Q"; hasOutput = true; break;
+                case '\\': outStr = "\\\\"; hasOutput = true; break;
+                case ' ':
+                    if (!inParagraph)
+                    {
+                        outChr = ' '; hasOutput = true;
+                    }
+                    else
+                    {
+                        switch (format().FotInputWhitespaceTreatment)
+                        {
+                            case Symbol.symbolIgnore: break;
+                            case Symbol.symbolCollapse:
+                                if (lastFlowObjectWasWhitespace) break;
+                                goto case Symbol.symbolPreserve;
+                            case Symbol.symbolPreserve:
+                            default:
+                                outChr = ' '; hasOutput = true;
+                                break;
+                        }
+                        thisFlowObjectIsWhitespace = true;
+                    }
+                    break;
+                case 0x00A0: outSpecialChar = MifDoc.sHardSpace; hasOutput = true; break;
+                case 0x00A2: outSpecialChar = MifDoc.sCent; hasOutput = true; break;
+                case 0x00A3: case 0x20A4: outSpecialChar = MifDoc.sPound; hasOutput = true; break;
+                case 0x00A5: outSpecialChar = MifDoc.sYen; hasOutput = true; break;
+                case 0x2002: outSpecialChar = MifDoc.sEnSpace; hasOutput = true; break;
+                case 0x2003: outSpecialChar = MifDoc.sEmSpace; hasOutput = true; break;
+                case 0x2009: outSpecialChar = MifDoc.sThinSpace; hasOutput = true; break;
+                case 0x2010: outSpecialChar = MifDoc.sSoftHyphen; hasOutput = true; break;
+                case 0x2011: outSpecialChar = MifDoc.sHardHyphen; hasOutput = true; break;
+                case 0x2013: outSpecialChar = MifDoc.sEnDash; hasOutput = true; break;
+                case 0x2014: outSpecialChar = MifDoc.sEmDash; hasOutput = true; break;
+                case 0x2020: outSpecialChar = MifDoc.sDagger; hasOutput = true; break;
+                case 0x2021: outSpecialChar = MifDoc.sDoubleDagger; hasOutput = true; break;
+                case 0x2022: outSpecialChar = MifDoc.sBullet; hasOutput = true; break;
+                default:
+                    if (c >= 0x80)
+                    {
+                        ulong code = CharTable[c];
+                        if ((code & CHAR_TABLE_SYMBOL_FLAG) != 0)
+                        {
+                            // Symbol font char - use hex output
+                            if (curPFormat != null)
+                            {
+                                uint charCode = (uint)(code & 0xff);
+                                if (targetString != null)
+                                    mifDoc.outHexChar(charCode, new MifDoc.T_string(targetString.ToString()));
+                                else if (outS != null)
+                                    mifDoc.outHexChar(charCode, outS);
+                            }
+                        }
+                        else if (code != 0)
+                        {
+                            uint charCode = (uint)(code & 0xff);
+                            if (targetString != null)
+                                mifDoc.outHexChar(charCode, new MifDoc.T_string(targetString.ToString()));
+                            else if (outS != null)
+                                mifDoc.outHexChar(charCode, outS);
+                        }
+                    }
+                    else
+                    {
+                        outChr = (char)c; hasOutput = true;
+                    }
+                    break;
+            }
+
+            if (hasOutput)
+            {
+                if (curPFormat != null && !stringOpened && outS != null)
+                {
+                    _ = outS << '\n' << MifOutputByteStream.INDENT << "<String `";
+                    stringOpened = true;
+                }
+                if (outChr != '\0')
+                {
+                    if (targetString != null)
+                        targetString.Append(outChr);
+                    else if (outS != null)
+                        _ = outS << outChr;
+                }
+                else if (outStr != null)
+                {
+                    if (targetString != null)
+                        targetString.Append(outStr);
+                    else if (outS != null)
+                        _ = outS << outStr;
+                }
+                else if (outSpecialChar != null && inParagraph)
+                {
+                    if (outS != null && stringOpened)
+                    {
+                        _ = outS << "'>";
+                        stringOpened = false;
+                    }
+                    mifDoc.outSpecialChar(outSpecialChar, outS);
+                }
+            }
+
+            lastFlowObjectWasWhitespace = thisFlowObjectIsWhitespace;
+        }
+
+        if (outS != null && stringOpened)
+            _ = outS << "'>";
     }
 
     protected void startDisplay(DisplayNIC nic)
@@ -4782,17 +5663,97 @@ public class MifFOTBuilder : FOTBuilder
     protected MifDoc.Frame makeAnchoredFrame(MifDoc.T_keyword frameType, long width, long height,
                                              MifDoc.T_keyword anchorAlign = default)
     {
-        throw new NotImplementedException();
+        mifDoc.aFrames().Add(new MifDoc.Frame());
+        MifDoc.Frame frame = mifDoc.aFrames()[mifDoc.aFrames().Count - 1];
+
+        frame.setFrameType(frameType);
+        frame.setAnchorAlign(anchorAlign);
+        frame.setShapeRect(new MifDoc.T_LTWH(0, 0, width, height));
+
+        return frame;
+    }
+
+    protected enum TComponent { cName, cUp, cRoot, cRootDrive }
+
+    protected void addComponent(ref string target, TComponent cType, StringC component)
+    {
+        target += '<';
+        target += cType == TComponent.cName ? 'c' : (cType == TComponent.cUp ? 'u' : 'r');
+        target += '\\';
+        target += '>';
+        if (cType == TComponent.cName || cType == TComponent.cRootDrive)
+            for (nuint i = 0; i < component.size(); i++)
+                target += (char)component[i];
     }
 
     protected bool systemIdToMifPathname(StringC systemId, ref MifDoc.T_pathname mifPathname)
     {
-        throw new NotImplementedException();
+        StringC filename = new StringC();
+        StringC component = new StringC();
+        int result;
+
+        if ((result = systemIdFilename(systemId, ref filename)) < 0)
+        {
+            App.message(MifMessages.systemIdNotFilename, new StringMessageArg(systemId));
+            return false;
+        }
+        else
+        {
+            string pathStr = "";
+            bool firstComponent = true;
+            nuint i = 0;
+            do
+            {
+                component.resize(0);
+                while (i < filename.size() && filename[i] != '\\' && filename[i] != '/')
+                    component.operatorPlusAssign(filename[i++]);
+                switch ((int)component.size())
+                {
+                    case 2:
+                        if (firstComponent && component[1] == ':')
+                            addComponent(ref pathStr, TComponent.cRootDrive, component);
+                        else if (component[0] == '.' && component[1] == '.')
+                            addComponent(ref pathStr, TComponent.cUp, component);
+                        else
+                            goto add_component;
+                        break;
+                    case 1:
+                        if (component[0] != '.')
+                            goto add_component;
+                        break;
+                    case 0:
+                        if (firstComponent && filename.size() > 0)
+                            addComponent(ref pathStr, TComponent.cRoot, component);
+                        break;
+                    default:
+                    add_component:
+                        addComponent(ref pathStr, TComponent.cName, component);
+                        break;
+                }
+                firstComponent = false;
+                i++;
+            } while (i < filename.size());
+            mifPathname = new MifDoc.T_pathname(pathStr);
+        }
+
+        return result == 0 ? false : true;
     }
 
     protected int systemIdFilename(StringC systemId, ref StringC filename)
     {
-        throw new NotImplementedException();
+        if (systemId.size() == 0)
+            return -1;
+
+        // Simplified implementation: treat systemId as a file path directly
+        // The C++ version uses EntityManager to resolve and validate the path
+        // For now, just copy the systemId to filename
+        filename.resize(0);
+        for (nuint i = 0; i < systemId.size(); i++)
+            filename.operatorPlusAssign(systemId[i]);
+
+        // Return 1 to indicate success (file path extracted)
+        // Return 0 if file doesn't exist, -1 for error
+        return 1;
     }
 
     // Fields
