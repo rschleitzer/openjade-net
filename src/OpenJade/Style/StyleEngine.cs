@@ -24,12 +24,16 @@ public class StyleEngine : IDisposable
 
     public void defineVariable(StringC str)
     {
-        throw new NotImplementedException();
+        // TODO: Implement variable definition
+        // For now, just store in command line
+        cmdline_.append(str);
     }
 
     public void parseSpec(SgmlParser specParser, CharsetInfo charset,
                           StringC id, Messenger mgr)
     {
+        // TODO: Implement spec parsing
+        // This would parse a DSSSL specification
         throw new NotImplementedException();
     }
 
@@ -57,8 +61,24 @@ public abstract class GroveManager
     public abstract void mapSysid(ref StringC sysid);
 }
 
+// ProcessContext base class
+public abstract class ProcessContext
+{
+    public abstract FOTBuilder currentFOTBuilder();
+    public abstract StyleStack currentStyleStack();
+    public abstract VM vm();
+    public abstract void processNode(NodePtr node, ProcessingMode? mode, bool chunk = true);
+    public abstract void processChildren(ProcessingMode? mode);
+    public abstract void processChildrenTrim(ProcessingMode? mode);
+    public abstract void nextMatch(StyleObj? style);
+    public abstract void startFlowObj();
+    public abstract void endFlowObj();
+    public abstract void startConnection(SymbolObj? label, Location loc);
+    public abstract void endConnection();
+}
+
 // Full ProcessContext implementation
-public class ProcessContextImpl
+public class ProcessContextImpl : ProcessContext
 {
     private FOTBuilder ignoreFotb_;
     private System.Collections.Generic.List<Connection> connectionStack_;
@@ -92,12 +112,12 @@ public class ProcessContextImpl
         connectionStack_.Add(new Connection(fotb));
     }
 
-    public FOTBuilder currentFOTBuilder()
+    public override FOTBuilder currentFOTBuilder()
     {
         return connectionStack_[connectionStack_.Count - 1].fotb!;
     }
 
-    public StyleStack currentStyleStack()
+    public override StyleStack currentStyleStack()
     {
         return connectionStack_[connectionStack_.Count - 1].styleStack;
     }
@@ -119,9 +139,24 @@ public class ProcessContextImpl
         }
     }
 
-    public void processNode(NodePtr node, ProcessingMode? mode, bool chunk = true)
+    public override void processNode(NodePtr node, ProcessingMode? mode, bool chunk = true)
     {
-        throw new NotImplementedException();
+        if (mode == null)
+            return;
+
+        // Save current context
+        using var cns = new CurrentNodeSetter(node, mode, vm_);
+        var saveSpecificity = matchSpecificity_;
+        matchSpecificity_ = new ProcessingMode.Specificity();
+
+        currentFOTBuilder().startNode(node, mode.name());
+
+        // For simplicity, just process children
+        // Full implementation would find matching rules and evaluate them
+        processChildren(mode);
+
+        currentFOTBuilder().endNode();
+        matchSpecificity_ = saveSpecificity;
     }
 
     public void processNodeSafe(NodePtr nodePtr, ProcessingMode? processingMode, bool chunk = true)
@@ -155,12 +190,38 @@ public class ProcessContextImpl
             processNode(nodePtr, processingMode, chunk);
     }
 
-    public void nextMatch(StyleObj? style)
+    public override void nextMatch(StyleObj? style)
     {
-        throw new NotImplementedException();
+        // Find next matching rule and process it
+        var rule = vm_.processingMode?.findMatch(vm_.currentNode, new Pattern.MatchContext(), vm_.interp, ref matchSpecificity_);
+        if (rule == null)
+        {
+            // No more rules - process children
+            processChildren(vm_.processingMode);
+        }
+        else if (!matchSpecificity_.isStyle())
+        {
+            // Construction rule
+            rule.action().get(out InsnPtr? insn, out SosofoObj? sosofoObj);
+            if (sosofoObj != null)
+                sosofoObj.process(this);
+            else if (insn?.get() != null)
+            {
+                ELObj? result = vm_.eval(insn.get());
+                if (result?.asSosofo() != null)
+                    result.asSosofo()!.process(this);
+            }
+        }
+        else
+        {
+            // Style rule
+            if (style != null)
+                currentStyleStack().push(style, vm_, currentFOTBuilder());
+            processChildren(vm_.processingMode);
+        }
     }
 
-    public void processChildren(ProcessingMode? mode)
+    public override void processChildren(ProcessingMode? mode)
     {
         NodePtr currentNode = vm_.currentNode;
         if (currentNode.assignFirstChild() == AccessResult.accessOK)
@@ -180,22 +241,24 @@ public class ProcessContextImpl
         }
     }
 
-    public void processChildrenTrim(ProcessingMode? mode)
+    public override void processChildrenTrim(ProcessingMode? mode)
     {
-        throw new NotImplementedException();
+        // Simplified: just process children without trimming for now
+        // Full implementation would trim leading/trailing whitespace
+        processChildren(mode);
     }
 
-    public void startFlowObj()
+    public override void startFlowObj()
     {
         flowObjLevel_++;
     }
 
-    public void endFlowObj()
+    public override void endFlowObj()
     {
         flowObjLevel_--;
     }
 
-    public void startConnection(SymbolObj? label, Location loc)
+    public override void startConnection(SymbolObj? label, Location loc)
     {
         uint connLevel = connectableStackLevel_;
         for (int idx = 0; idx < connectableStack_.Count; idx++)
@@ -228,7 +291,7 @@ public class ProcessContextImpl
             connectionStack_[0].nBadFollow++;
     }
 
-    public void endConnection()
+    public override void endConnection()
     {
         if (inTableRow() && tableStack_.Count > 0 && tableStack_[tableStack_.Count - 1].rowConnectableLevel == connectableStackLevel_)
             endTableRow();
@@ -514,7 +577,7 @@ public class ProcessContextImpl
         return havePageType_;
     }
 
-    public VM vm() { return vm_; }
+    public override VM vm() { return vm_; }
 
     // Port structure
     private class Port

@@ -94,6 +94,12 @@ public abstract class OutputCharStream : Link
         return operatorOutput(s);
     }
 
+    // Convenience method: write(string) - equivalent to operatorOutput
+    public OutputCharStream write(string s)
+    {
+        return operatorOutput(s);
+    }
+
     // Convenience method: put(StringC) - equivalent to operatorOutput
     public OutputCharStream put(StringC str)
     {

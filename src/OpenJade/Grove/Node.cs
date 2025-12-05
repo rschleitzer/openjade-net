@@ -1462,6 +1462,13 @@ public class NodePtr
         return node.getGi(ref str);
     }
 
+    public AccessResult getId(GroveString str)
+    {
+        if (node == null)
+            return AccessResult.accessNull;
+        return node.getId(ref str);
+    }
+
     public AccessResult getOrigin(ref NodePtr ptr)
     {
         if (node == null)

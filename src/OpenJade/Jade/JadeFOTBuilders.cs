@@ -62,35 +62,7 @@ public static class FOTBuilderFactory
     }
 }
 
-// TeX FOT Builder - produces TeX/LaTeX output
-public class TeXFOTBuilder : FOTBuilder
-{
-    private OutputByteStream? stream_;
-    private Messenger? messenger_;
-
-    public TeXFOTBuilder(OutputByteStream stream, Messenger messenger)
-    {
-        stream_ = stream;
-        messenger_ = messenger;
-    }
-
-    public override void characters(Char[] data, nuint size)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void startParagraph(FOTBuilder.ParagraphNIC nic)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void endParagraph()
-    {
-        throw new NotImplementedException();
-    }
-
-    // Additional TeX-specific implementations would go here
-}
+// TeXFOTBuilder is implemented in TeXFOTBuilder.cs
 
 // HTML FOT Builder - produces HTML output
 public class HtmlFOTBuilder : FOTBuilder
@@ -163,33 +135,7 @@ public class RtfFOTBuilder : FOTBuilder
     // Additional RTF-specific implementations would go here
 }
 
-// SGML FOT Builder - produces SGML output
-public class SgmlFOTBuilder : FOTBuilder
-{
-    private OutputCharStream? stream_;
-
-    public SgmlFOTBuilder(OutputCharStream stream)
-    {
-        stream_ = stream;
-    }
-
-    public override void characters(Char[] data, nuint size)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void startParagraph(FOTBuilder.ParagraphNIC nic)
-    {
-        throw new NotImplementedException();
-    }
-
-    public override void endParagraph()
-    {
-        throw new NotImplementedException();
-    }
-
-    // Additional SGML-specific implementations would go here
-}
+// SgmlFOTBuilder is implemented in SgmlFOTBuilder.cs
 
 // Transform FOT Builder - produces transformed SGML/XML output
 public class TransformFOTBuilder : FOTBuilder

@@ -1047,14 +1047,28 @@ public class FunctionObj : ELObj
     public override FunctionObj? asFunction() { return this; }
 }
 
-public class SosofoObj : ELObj
+public abstract class SosofoObj : ELObj
 {
     public override SosofoObj? asSosofo() { return this; }
+    public abstract void process(ProcessContext context);
 }
 
 public class AppendSosofoObj : SosofoObj
 {
+    private System.Collections.Generic.List<SosofoObj> v_ = new();
+
     public override AppendSosofoObj? asAppendSosofo() { return this; }
+
+    public void append(SosofoObj sosofo)
+    {
+        v_.Add(sosofo);
+    }
+
+    public override void process(ProcessContext context)
+    {
+        foreach (var sosofo in v_)
+            sosofo.process(context);
+    }
 }
 
 public class ColorObj : ELObj

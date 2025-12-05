@@ -9,7 +9,7 @@ using Char = System.UInt32;
 using Boolean = System.Boolean;
 
 // The DSSSL Interpreter
-public class Interpreter : IInterpreter
+public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
 {
     // Singleton objects
     private ErrorObj errorObj_ = new ErrorObj();
@@ -143,5 +143,21 @@ public class Interpreter : IInterpreter
     public void setNodeLocation(NodePtr node)
     {
         // Set the current location for error reporting
+    }
+
+    // IMessenger implementation
+    public void dispatchMessage(Message msg)
+    {
+        message(msg.type.severity(), new Location(), msg.type.ToString());
+    }
+
+    public void initMessage(Message msg)
+    {
+        // Initialize message with context
+    }
+
+    public void setNextLocation(Location loc)
+    {
+        // Set the next location for error messages
     }
 }

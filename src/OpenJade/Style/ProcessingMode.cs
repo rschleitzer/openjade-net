@@ -65,7 +65,7 @@ public class ProcessingMode : Named
         }
     }
 
-    public Rule? findMatch(NodePtr nd, Pattern.MatchContext context, Messenger mgr,
+    public Rule? findMatch(NodePtr nd, Pattern.MatchContext context, IMessenger? mgr,
                            ref Specificity specificity)
     {
         GroveString gi = new GroveString();
@@ -92,7 +92,7 @@ public class ProcessingMode : Named
     public void setDefined() { defined_ = true; }
 
     private Rule? findElementMatch(StringC gi, NodePtr nd,
-                                   Pattern.MatchContext context, Messenger mgr,
+                                   Pattern.MatchContext context, IMessenger? mgr,
                                    ref Specificity specificity)
     {
         GroveRules gr = groveRulesForNode(nd, mgr);
@@ -138,7 +138,7 @@ public class ProcessingMode : Named
         return null;
     }
 
-    private Rule? findRootMatch(NodePtr nd, Pattern.MatchContext context, Messenger mgr,
+    private Rule? findRootMatch(NodePtr nd, Pattern.MatchContext context, IMessenger? mgr,
                                 ref Specificity specificity)
     {
         for (int ruleType = (int)specificity.ruleType; ruleType < nRuleType; ruleType++)
@@ -160,7 +160,7 @@ public class ProcessingMode : Named
         return null;
     }
 
-    private GroveRules groveRulesForNode(NodePtr nd, Messenger mgr)
+    private GroveRules groveRulesForNode(NodePtr nd, IMessenger? mgr)
     {
         uint groveIndex = nd.groveIndex();
         // Ensure we have enough GroveRules
@@ -174,7 +174,7 @@ public class ProcessingMode : Named
     }
 
     private static void elementRuleAdvance(NodePtr nd, Pattern.MatchContext context,
-                                           Messenger mgr, ref Specificity specificity,
+                                           IMessenger? mgr, ref Specificity specificity,
                                            System.Collections.Generic.List<ElementRule> vec)
     {
         // Find next matching rule starting from specificity.nextRuleIndex
@@ -351,7 +351,7 @@ public class ProcessingMode : Named
             }
         }
 
-        public void build(System.Collections.Generic.List<ElementRule>[] rules, NodePtr nd, Messenger mgr)
+        public void build(System.Collections.Generic.List<ElementRule>[] rules, NodePtr nd, IMessenger? mgr)
         {
             built = true;
             for (int ruleType = 0; ruleType < nRuleType; ruleType++)
