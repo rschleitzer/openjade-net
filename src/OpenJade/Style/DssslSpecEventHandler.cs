@@ -78,7 +78,8 @@ public class DssslSpecEventHandler : ArcDirector
         public override void makeInputSource(DssslSpecEventHandler eh, out InputSource? inputSource)
         {
             TextInputSourceOrigin origin = new TextInputSourceOrigin(text_);
-            inputSource = new InternalInputSource(origin.text().@string(), origin);
+            StringC str = origin.text().@string();
+            inputSource = new InternalInputSource(str, origin);
         }
     }
 

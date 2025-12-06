@@ -793,7 +793,8 @@ public class StringObj : ELObj
 
     public StringObj(StringC str)
     {
-        str_ = str;
+        // Make a copy since the input StringC may be reused by the parser
+        str_ = new StringC(str);
     }
 
     public StringObj(Char[] data, nuint size)

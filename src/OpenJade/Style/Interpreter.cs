@@ -25,8 +25,15 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     private Dictionary<string, SymbolObj> symbolTable_ = new();
     private Dictionary<string, Identifier> identTable_ = new();
 
-    public Interpreter()
+    // Extension table for backend-specific flow objects
+    private FOTBuilder.ExtensionTableEntry[]? extensionTable_;
+
+    public Interpreter() : this(null) { }
+
+    public Interpreter(FOTBuilder.ExtensionTableEntry[]? extensionTable)
     {
+        extensionTable_ = extensionTable;
+
         // Create the default/initial processing mode
         initialProcessingMode_ = new ProcessingMode(new StringC()); // Empty name = initial mode
 
@@ -962,6 +969,58 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         }
         invalidCharacteristicValue(ident, loc);
         return false;
+    }
+
+    public void installExtensionFlowObjectClass(Identifier ident, StringC pubid, Location loc)
+    {
+        FlowObj? tem = null;
+        if (debugMode_)
+            Console.Error.WriteLine($"installExtensionFlowObjectClass: {ident.name()}, pubid: {pubid}");
+        if (extensionTable_ != null)
+        {
+            foreach (var ep in extensionTable_)
+            {
+                if (ep.pubid == null)
+                    break;
+                if (pubid.ToString() == ep.pubid)
+                {
+                    if (ep.flowObj != null)
+                    {
+                        var cFlowObj = ep.flowObj.asCompoundExtensionFlowObj();
+                        if (cFlowObj != null)
+                        {
+                            if (debugMode_)
+                                Console.Error.WriteLine($"  -> Found compound extension flow object");
+                            tem = new CompoundExtensionFlowObj(cFlowObj);
+                        }
+                        else
+                        {
+                            if (debugMode_)
+                                Console.Error.WriteLine($"  -> Found extension flow object");
+                            tem = new ExtensionFlowObj(ep.flowObj);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        if (tem == null)
+        {
+            if (pubid.ToString() == "UNREGISTERED::James Clark//Flow Object Class::formatting-instruction")
+            {
+                if (debugMode_)
+                    Console.Error.WriteLine($"  -> Creating FormattingInstructionFlowObj");
+                tem = new FormattingInstructionFlowObj();
+            }
+            else
+            {
+                if (debugMode_)
+                    Console.Error.WriteLine($"  -> Creating UnknownFlowObj");
+                tem = new UnknownFlowObj();
+            }
+        }
+        makePermanent(tem);
+        ident.setFlowObj(tem);
     }
 }
 

@@ -18,7 +18,11 @@ public class StyleEngine : IDisposable
                        int unitsPerInch, bool debugMode, bool dsssl2,
                        bool strictMode, FOTBuilder.ExtensionTableEntry[]? extensionTable = null)
     {
-        interpreter_ = new Interpreter();
+        interpreter_ = new Interpreter(extensionTable);
+        interpreter_.setUnitsPerInch(unitsPerInch);
+        interpreter_.setDebugMode(debugMode);
+        interpreter_.setDsssl2(dsssl2);
+        interpreter_.setStrictMode(strictMode);
         cmdline_ = new StringC();
     }
 
@@ -86,11 +90,9 @@ public class StyleEngine : IDisposable
             }
 
             // Process body elements
-            int bodyCount = 0;
             for (IListIter<DssslSpecEventHandler.BodyElement> iter = part.iter();
                  iter.done() == 0; iter.next())
             {
-                bodyCount++;
                 DssslSpecEventHandler.BodyElement body = iter.cur()!;
                 body.makeInputSource(specHandler, out InputSource? inputSource);
                 if (inputSource != null)
@@ -287,6 +289,7 @@ public class ProcessContextImpl : ProcessContext
         // Find matching rule and execute it
         var context = new Pattern.MatchContext();
         var rule = mode.findMatch(node, context, vm_.interp, ref matchSpecificity_);
+
         if (rule != null)
         {
             // Get the action's instruction and sosofo

@@ -115,23 +115,15 @@ public class SchemeParser : Messenger
     public void parse()
     {
         // Main parsing entry point
-        int formCount = 0;
         for (;;)
         {
             Token tok;
             if (!getToken(TokenAllow.OpenParen | TokenAllow.EndOfEntity, out tok))
-            {
                 break;
-            }
             if (tok == Token.EndOfEntity)
-            {
                 break;
-            }
-            formCount++;
             if (!parseTopLevel())
-            {
                 break;
-            }
         }
     }
 
@@ -139,9 +131,7 @@ public class SchemeParser : Messenger
     {
         Token tok;
         if (!getToken(TokenAllow.Identifier | TokenAllow.KeyDefine, out tok))
-        {
             return false;
-        }
         if (tok == Token.Identifier)
         {
             Identifier ident = lookup(currentToken_);
@@ -170,6 +160,8 @@ public class SchemeParser : Messenger
                         return doDeclareInitialValue();
                     case Identifier.SyntacticKey.declareCharacteristic:
                         return doDeclareCharacteristic();
+                    case Identifier.SyntacticKey.declareFlowObjectClass:
+                        return doDeclareFlowObjectClass();
                     default:
                         break;
                 }
@@ -1021,8 +1013,8 @@ public class SchemeParser : Messenger
             }
             else if (e != null)
             {
-                // Content expression - add with null key
-                keys.Add(null);
+                // Content expression - add only to exprs (not keys)
+                // MakeExpression.compile expects content to be at the end of exprs_ beyond keys_.Count
                 exprs.Add(e);
             }
         }
@@ -1896,6 +1888,26 @@ public class SchemeParser : Messenger
         // (declare-characteristic name public-id expression)
         // Skip - requires full characteristic system implementation
         return skipForm();
+    }
+
+    private bool doDeclareFlowObjectClass()
+    {
+        // (declare-flow-object-class name public-id)
+        if (interp_.debugMode())
+            Console.Error.WriteLine("doDeclareFlowObjectClass: starting");
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        Identifier ident = interp_.lookup(currentToken_);
+        if (!getToken(TokenAllow.String, out tok))
+            return false;
+        if (interp_.debugMode())
+            Console.Error.WriteLine($"doDeclareFlowObjectClass: ident={ident.name()}, pubid={currentToken_}");
+        interp_.installExtensionFlowObjectClass(ident, currentToken_, loc);
+        if (!getToken(TokenAllow.CloseParen, out tok))
+            return false;
+        return true;
     }
 
     private bool skipForm()
