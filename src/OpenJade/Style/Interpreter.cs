@@ -18,8 +18,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     private TrueObj trueObj_ = new TrueObj();
     private FalseObj falseObj_ = new FalseObj();
     private int unitsPerInch_ = 72000; // Default: 1000 units per point
-    private bool dsssl2_;
-    private bool strictMode_;
+    private bool dsssl2_ = false;
+    private bool strictMode_ = false;
 
     // Symbol and identifier tables
     private Dictionary<string, SymbolObj> symbolTable_ = new();
@@ -30,8 +30,11 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     }
 
     public int unitsPerInch() { return unitsPerInch_; }
+    public void setUnitsPerInch(int u) { unitsPerInch_ = u; }
     public bool dsssl2() { return dsssl2_; }
+    public void setDsssl2(bool d) { dsssl2_ = d; }
     public bool strictMode() { return strictMode_; }
+    public void setStrictMode(bool s) { strictMode_ = s; }
 
     public void makePermanent(ELObj obj)
     {
