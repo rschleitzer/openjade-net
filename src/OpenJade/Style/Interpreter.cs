@@ -29,6 +29,101 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     {
         // Create the default/initial processing mode
         initialProcessingMode_ = new ProcessingMode(new StringC()); // Empty name = initial mode
+
+        // Register syntactic keywords
+        installSyntacticKey("define", Identifier.SyntacticKey.define);
+        installSyntacticKey("define-unit", Identifier.SyntacticKey.defineUnit);
+        installSyntacticKey("element", Identifier.SyntacticKey.element);
+        installSyntacticKey("or-element", Identifier.SyntacticKey.orElement);
+        installSyntacticKey("default", Identifier.SyntacticKey.defaultEntity);
+        installSyntacticKey("root", Identifier.SyntacticKey.root);
+        installSyntacticKey("id", Identifier.SyntacticKey.id);
+        installSyntacticKey("mode", Identifier.SyntacticKey.mode);
+        installSyntacticKey("declare-initial-value", Identifier.SyntacticKey.declareInitialValue);
+        installSyntacticKey("declare-characteristic", Identifier.SyntacticKey.declareCharacteristic);
+        installSyntacticKey("declare-flow-object-class", Identifier.SyntacticKey.declareFlowObjectClass);
+        installSyntacticKey("declare-default-language", Identifier.SyntacticKey.declareDefaultLanguage);
+        installSyntacticKey("quote", Identifier.SyntacticKey.quote);
+        installSyntacticKey("quasiquote", Identifier.SyntacticKey.quasiquote);
+        installSyntacticKey("unquote", Identifier.SyntacticKey.unquote);
+        installSyntacticKey("unquote-splicing", Identifier.SyntacticKey.unquoteSplicing);
+        installSyntacticKey("if", Identifier.SyntacticKey.ifKey);
+        installSyntacticKey("cond", Identifier.SyntacticKey.cond);
+        installSyntacticKey("case", Identifier.SyntacticKey.caseKey);
+        installSyntacticKey("and", Identifier.SyntacticKey.and);
+        installSyntacticKey("or", Identifier.SyntacticKey.or);
+        installSyntacticKey("let", Identifier.SyntacticKey.let);
+        installSyntacticKey("let*", Identifier.SyntacticKey.letStar);
+        installSyntacticKey("letrec", Identifier.SyntacticKey.letrec);
+        installSyntacticKey("lambda", Identifier.SyntacticKey.lambda);
+        installSyntacticKey("make", Identifier.SyntacticKey.make);
+        installSyntacticKey("style", Identifier.SyntacticKey.style);
+        installSyntacticKey("with-mode", Identifier.SyntacticKey.withMode);
+
+        // Install flow objects
+        installFlowObjs();
+    }
+
+    private void installFlowObjs()
+    {
+        // Core flow objects
+        installFlowObj("sequence", new SequenceFlowObj());
+        installFlowObj("display-group", new DisplayGroupFlowObj());
+        installFlowObj("paragraph", new ParagraphFlowObj());
+        installFlowObj("paragraph-break", new ParagraphBreakFlowObj());
+        installFlowObj("line-field", new LineFieldFlowObj());
+        installFlowObj("score", new ScoreFlowObj());
+        installFlowObj("external-graphic", new ExternalGraphicFlowObj());
+        installFlowObj("rule", new RuleFlowObj());
+        installFlowObj("leader", new LeaderFlowObj());
+        installFlowObj("character", new CharacterFlowObj());
+        installFlowObj("box", new BoxFlowObj());
+        installFlowObj("alignment-point", new AlignmentPointFlowObj());
+        installFlowObj("sideline", new SidelineFlowObj());
+
+        // Simple page
+        installFlowObj("simple-page-sequence", new SimplePageSequenceFlowObj());
+
+        // Tables
+        installFlowObj("table", new TableFlowObj());
+        installFlowObj("table-part", new TablePartFlowObj());
+        installFlowObj("table-column", new TableColumnFlowObj());
+        installFlowObj("table-row", new TableRowFlowObj());
+        installFlowObj("table-cell", new TableCellFlowObj());
+        installFlowObj("table-border", new TableBorderFlowObj());
+
+        // Online
+        installFlowObj("link", new LinkFlowObj());
+        installFlowObj("scroll", new ScrollFlowObj());
+        installFlowObj("marginalia", new MarginaliaFlowObj());
+        installFlowObj("multi-mode", new MultiModeFlowObj());
+
+        // Math
+        installFlowObj("math-sequence", new MathSequenceFlowObj());
+        installFlowObj("fraction", new FractionFlowObj());
+        installFlowObj("unmath", new UnmathFlowObj());
+        installFlowObj("superscript", new SuperscriptFlowObj());
+        installFlowObj("subscript", new SubscriptFlowObj());
+        installFlowObj("script", new ScriptFlowObj());
+        installFlowObj("mark", new MarkFlowObj());
+        installFlowObj("fence", new FenceFlowObj());
+        installFlowObj("radical", new RadicalFlowObj());
+        installFlowObj("math-operator", new MathOperatorFlowObj());
+        installFlowObj("grid", new GridFlowObj());
+        installFlowObj("grid-cell", new GridCellFlowObj());
+    }
+
+    private void installFlowObj(string name, FlowObj flowObj)
+    {
+        Identifier ident = lookup(makeStringC(name));
+        ident.setFlowObj(flowObj);
+        makePermanent(flowObj);
+    }
+
+    private void installSyntacticKey(string name, Identifier.SyntacticKey key)
+    {
+        Identifier ident = lookup(makeStringC(name));
+        ident.setSyntacticKey(key);
     }
 
     public int unitsPerInch() { return unitsPerInch_; }

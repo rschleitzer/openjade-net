@@ -6,6 +6,7 @@ namespace OpenJade.Style;
 using OpenSP;
 using OpenJade.Grove;
 using OpenJade.SPGrove;
+using OpenJade.Jade;
 using Char = System.UInt32;
 using Boolean = System.Boolean;
 
@@ -114,6 +115,10 @@ public abstract class DssslApp : GroveApp, IGroveManager
         docParser.allLinkTypesActivated();
         docParser.parseAll(groveBuilder);
 
+        // Mark the grove as complete
+        if (groveBuilder is GroveBuilderMessageEventHandler gbeh)
+            gbeh.markComplete();
+
         // Store in grove table
         groveTable_[sysidKey] = rootNode;
         return true;
@@ -158,6 +163,10 @@ public abstract class DssslApp : GroveApp, IGroveManager
 
         // Process the document
         se.process(rootNode_, fotb);
+
+        // Close FOT builder if it has a close method
+        if (fotb is SgmlFOTBuilder sgmlFotb)
+            sgmlFotb.close();
     }
 
     private Boolean initSpecParser()

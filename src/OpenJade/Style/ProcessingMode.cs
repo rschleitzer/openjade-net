@@ -144,7 +144,8 @@ public class ProcessingMode : Named
         GroveRules gr = groveRulesForNode(nd, mgr);
 
         // First try element-specific rules
-        string giKey = gi.ToString();
+        // Use lowercase for lookup since SGML element names are case-insensitive
+        string giKey = gi.ToString().ToLowerInvariant();
         for (int ruleType = (int)specificity.ruleType; ruleType < nRuleType; ruleType++)
         {
             if (gr.elementTable.TryGetValue(giKey, out ElementRules? er))
@@ -287,9 +288,23 @@ public class ProcessingMode : Named
         {
             if (expr_ == null)
                 return;
-            insn_ = expr_.compile(interp, new Environment(), 0, new InsnPtr(new ReturnInsn(0)));
-            // For construction rules, we could pre-evaluate constant sosofos
-            // For now, just compile the expression
+            Expression e = expr_;
+            e.optimize(interp, new Environment(), ref e);
+            expr_ = e;
+            ELObj? tem = expr_.constantValue();
+            if (tem != null)
+            {
+                if (ruleType == RuleType.constructionRule)
+                {
+                    sosofo_ = tem.asSosofo();
+                    if (sosofo_ != null)
+                        return;
+                }
+            }
+            InsnPtr check = new InsnPtr();
+            if (ruleType == RuleType.constructionRule)
+                check = new InsnPtr(new CheckSosofoInsn(defLoc_, check));
+            insn_ = expr_.compile(interp, new Environment(), 0, check);
         }
 
         public void get(out InsnPtr? insn, out SosofoObj? sosofo)

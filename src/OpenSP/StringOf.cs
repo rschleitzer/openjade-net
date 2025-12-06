@@ -306,7 +306,29 @@ public class String<T> where T : struct
     {
         if (obj is String<T> other)
             return operatorEqual(other);
+        if (obj is string str)
+            return EqualsString(str);
         return false;
+    }
+
+    // Compare with a C# string (case-insensitive for SGML compatibility)
+    public bool EqualsString(string str)
+    {
+        if (str == null)
+            return length_ == 0;
+        if (length_ != (nuint)str.Length)
+            return false;
+        for (nuint i = 0; i < length_; i++)
+        {
+            // Compare as uppercase for case-insensitivity
+            uint c1 = Convert.ToUInt32(ptr_![i]);
+            uint c2 = (uint)char.ToUpperInvariant(str[(int)i]);
+            if (c1 >= 'a' && c1 <= 'z')
+                c1 = c1 - 'a' + 'A';
+            if (c1 != c2)
+                return false;
+        }
+        return true;
     }
 
     // Override GetHashCode (required when overriding Equals)

@@ -115,15 +115,23 @@ public class SchemeParser : Messenger
     public void parse()
     {
         // Main parsing entry point
+        int formCount = 0;
         for (;;)
         {
             Token tok;
             if (!getToken(TokenAllow.OpenParen | TokenAllow.EndOfEntity, out tok))
+            {
                 break;
+            }
             if (tok == Token.EndOfEntity)
+            {
                 break;
+            }
+            formCount++;
             if (!parseTopLevel())
+            {
                 break;
+            }
         }
     }
 
@@ -131,7 +139,9 @@ public class SchemeParser : Messenger
     {
         Token tok;
         if (!getToken(TokenAllow.Identifier | TokenAllow.KeyDefine, out tok))
+        {
             return false;
+        }
         if (tok == Token.Identifier)
         {
             Identifier ident = lookup(currentToken_);
@@ -304,6 +314,12 @@ public class SchemeParser : Messenger
                         expr = new ConstantExpression(interp_.makeChar(0), in_?.currentLocation() ?? new Location());
                     return true;
                 }
+            case Token.CloseParen:
+                // CloseParen can be allowed to signal end of a list - expr stays null
+                return true;
+            case Token.Keyword:
+                // Keyword token - expr stays null, tok is set
+                return true;
             default:
                 return false;
         }
@@ -1680,10 +1696,14 @@ public class SchemeParser : Messenger
         // Parse action expression
         Expression? action;
         if (!parseExpression(TokenAllow.Expr, out action, out key, out tok))
+        {
             return false;
+        }
 
         if (!expectCloseParen())
+        {
             return false;
+        }
 
         // Register root rule
         Pattern rootPattern = new RootPattern();
@@ -1909,7 +1929,9 @@ public class SchemeParser : Messenger
     {
         tok = Token.EndOfEntity;
         if (in_ == null)
+        {
             return false;
+        }
 
         skipWhitespaceAndComments();
 

@@ -44,6 +44,7 @@ public class SgmlFOTBuilder : FOTBuilder
     public void close()
     {
         os_.put((Char)'<').put((Char)'/').write("fot").put((Char)'>').put((Char)RE);
+        os_.flush();
     }
 
     public override void characters(Char[] data, nuint size)
@@ -788,6 +789,16 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void setEscapementSpaceAfter(InlineSpace @is) { inlineSpaceC("escapement-space-after", @is); }
 
     // Page sequence methods
+    public override void startSimplePageSequence(FOTBuilder? headerFooter)
+    {
+        startSimplePageSequenceSerial();
+    }
+
+    public override void endSimplePageSequence()
+    {
+        endSimplePageSequenceSerial();
+    }
+
     public override void startSimplePageSequenceSerial()
     {
         flushPendingElements();

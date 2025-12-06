@@ -1334,7 +1334,8 @@ public class StyleExpression : Expression
                 forceIcs.Add(null);
                 exprs_[i].markBoundVars(boundVars, false);
             }
-            else if (maybeStyleKeyword(keys_[i])
+            else if (keys_[i] != null
+                && maybeStyleKeyword(keys_[i])
                 && !(keys_[i]!.syntacticKey(out sk) && sk == Identifier.SyntacticKey.keyUse)
                 && keys_[i]!.inheritedC() != null)
             {
@@ -1374,8 +1375,8 @@ public class StyleExpression : Expression
                         exprs_[i].location()));
                 }
             }
-            else if (!maybeStyleKeyword(keys_[i]))
-            { /* skip non-style-keywords */ }
+            else if (keys_[i] == null || !maybeStyleKeyword(keys_[i]))
+            { /* skip non-style-keywords or content expressions */ }
             else if (keys_[i]!.syntacticKey(out sk) && sk == Identifier.SyntacticKey.keyUse)
             {
                 if (!hasUse)

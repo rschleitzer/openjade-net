@@ -93,10 +93,19 @@ public class LocChunk : Chunk
 public class ParentChunk : LocChunk
 {
     public Chunk? nextSibling;
+    public Chunk? firstChild;  // First child chunk (for C# chunk linking)
 
     public ParentChunk()
     {
         nextSibling = null;
+        firstChild = null;
+    }
+
+    public override Chunk? after()
+    {
+        // In C++, returns pointer after this chunk (i.e., first child)
+        // In C#, we track this explicitly
+        return firstChild ?? nextSibling;
     }
 }
 
@@ -151,13 +160,6 @@ public class ElementChunk : ParentChunk
     public static StringC key(ElementChunk chunk)
     {
         return chunk.id()!;
-    }
-
-    public override Chunk? after()
-    {
-        // Unsafe pointer arithmetic equivalent - return address after this chunk
-        // In C#, we need a different approach - chunks are managed objects
-        return nextSibling;
     }
 
     public override AccessResult getFollowing(GroveImpl grove, out Chunk? chunk, out uint nNodes)
@@ -450,6 +452,9 @@ public class GroveImpl
             tailPtrSetter_(chunk);
             tailPtrSetter_ = null;
         }
+        // Set up tail setter for the next sibling
+        if (chunk is ParentChunk pc)
+            tailPtrSetter_ = (c) => { pc.nextSibling = c; };
         maybePulse();
     }
 
@@ -464,10 +469,17 @@ public class GroveImpl
             if (tailPtrSetter_ != null)
             {
                 tailPtrSetter_(pendingData_);
-                tailPtrSetter_ = null;
+                // Set up for next sibling of pendingData_
+                tailPtrSetter_ = (c) => { pendingData_.setNextChunk(c); };
             }
         }
+        // Now link the new chunk
         chunk.origin = origin_;
+        if (tailPtrSetter_ != null)
+        {
+            tailPtrSetter_(chunk);
+            tailPtrSetter_ = null;
+        }
         pendingData_ = chunk;
         maybePulse();
     }
@@ -501,6 +513,8 @@ public class GroveImpl
             tailPtrSetter_(chunk);
             tailPtrSetter_ = null;
         }
+        // Set up tail setter for the first child of this element
+        tailPtrSetter_ = (c) => { chunk.firstChild = c; };
         // hasId handling would add to idTable_ in full impl
         maybePulse();
     }
@@ -518,7 +532,9 @@ public class GroveImpl
             }
             pendingData_ = null;
         }
-        tailPtrSetter_ = (c) => { origin_!.nextSibling = c; };
+        // Capture the current origin (the element being popped) before changing it
+        var poppedElement = origin_;
+        tailPtrSetter_ = (c) => { poppedElement!.nextSibling = c; };
         origin_ = origin_!.origin;
         if ((Chunk?)origin_ == root_)
             finishDocumentElement();
@@ -862,21 +878,25 @@ public class ChunkNode : BaseNode
         // The forwarding chunk has origin = null, so it will stop
         // the iteration before after() can return null.
         Chunk? p = chunk_.after();
-        while (p == grove().completeLimit())
+        while (p == grove().completeLimit() && !grove().complete())
             if (!grove().waitForMoreNodes())
                 return AccessResult.accessTimeout;
         if (p?.origin != chunk_.origin)
             return AccessResult.accessNull;
-        return p!.setNodePtrFirst(ref ptr, this);
+        if (p == null)
+            return AccessResult.accessNull;
+        return p.setNodePtrFirst(ref ptr, this);
     }
 
     public override AccessResult nextChunkAfter(ref NodePtr ptr)
     {
         Chunk? p = chunk_.after();
-        while (p == grove().completeLimit())
+        while (p == grove().completeLimit() && !grove().complete())
             if (!grove().waitForMoreNodes())
                 return AccessResult.accessTimeout;
-        return p!.setNodePtrFirst(ref ptr, this);
+        if (p == null)
+            return AccessResult.accessNull;
+        return p.setNodePtrFirst(ref ptr, this);
     }
 
     public override AccessResult firstSibling(ref NodePtr ptr)
@@ -1258,7 +1278,7 @@ public class ElementNode : ChunkNode
 
     public override AccessResult nextChunkSibling(ref NodePtr ptr)
     {
-        while (chunk().nextSibling == null)
+        while (chunk().nextSibling == null && !grove().complete())
         {
             if (!grove().maybeMoreSiblings(chunk()))
             {
@@ -1271,7 +1291,14 @@ public class ElementNode : ChunkNode
             if (!grove().waitForMoreNodes())
                 return AccessResult.accessTimeout;
         }
-        return chunk().nextSibling!.setNodePtrFirst(ref ptr, this);
+        if (chunk().nextSibling == null)
+        {
+            // Grove is complete but no sibling
+            if ((Chunk?)chunk() == grove().root()?.documentElement)
+                return AccessResult.accessNotInClass;
+            return AccessResult.accessNull;
+        }
+        return chunk().nextSibling.setNodePtrFirst(ref ptr, this);
     }
 
     public override AccessResult nextChunkAfter(ref NodePtr ptr)
@@ -1286,7 +1313,8 @@ public class ElementNode : ChunkNode
     public override AccessResult firstChild(ref NodePtr ptr)
     {
         Chunk? p = chunk().after();
-        while (p == grove().completeLimit())
+        // Only wait if grove is not complete and we're at the complete limit
+        while (p == grove().completeLimit() && !grove().complete())
         {
             if (!grove().waitForMoreNodes())
                 return AccessResult.accessTimeout;
@@ -1403,6 +1431,11 @@ public class CharsChunk : LocChunk
 
     protected Chunk? nextChunk;  // Link to next chunk
 
+    public void setNextChunk(Chunk? next)
+    {
+        nextChunk = next;
+    }
+
     public Char[]? data()
     {
         return chars_;
@@ -1506,21 +1539,25 @@ public class DataNode : ChunkNode
         // The forwarding chunk has origin = null, so it will stop
         // the iteration before after() can return null.
         Chunk? p = chunk_.after();
-        while (p == grove().completeLimit())
+        while (p == grove().completeLimit() && !grove().complete())
             if (!grove().waitForMoreNodes())
                 return AccessResult.accessTimeout;
         if (p?.origin != chunk_.origin)
             return AccessResult.accessNull;
-        return p!.setNodePtrFirst(ref ptr, this);
+        if (p == null)
+            return AccessResult.accessNull;
+        return p.setNodePtrFirst(ref ptr, this);
     }
 
     public override AccessResult nextChunkAfter(ref NodePtr ptr)
     {
         Chunk? p = chunk_.after();
-        while (p == grove().completeLimit())
+        while (p == grove().completeLimit() && !grove().complete())
             if (!grove().waitForMoreNodes())
                 return AccessResult.accessTimeout;
-        return p!.setNodePtrFirst(ref ptr, this);
+        if (p == null)
+            return AccessResult.accessNull;
+        return p.setNodePtrFirst(ref ptr, this);
     }
 
     public override AccessResult siblingsIndex(out uint index)
@@ -5296,6 +5333,12 @@ public class GroveBuilderMessageEventHandler : ErrorCountEventHandler
     }
 
     ~GroveBuilderMessageEventHandler()
+    {
+        grove_.setComplete();
+    }
+
+    // Explicitly mark the grove as complete after parsing
+    public void markComplete()
     {
         grove_.setComplete();
     }

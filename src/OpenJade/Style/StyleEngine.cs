@@ -76,17 +76,21 @@ public class StyleEngine : IDisposable
             DssslSpecEventHandler.Part part = parts[partIndex];
 
             // Process declarations first
+            int declCount = 0;
             for (IListIter<DssslSpecEventHandler.DeclarationElement> diter = part.diter();
                  diter.done() == 0; diter.next())
             {
+                declCount++;
                 DssslSpecEventHandler.DeclarationElement decl = diter.cur()!;
                 processDeclaration(decl, charset);
             }
 
             // Process body elements
+            int bodyCount = 0;
             for (IListIter<DssslSpecEventHandler.BodyElement> iter = part.iter();
                  iter.done() == 0; iter.next())
             {
+                bodyCount++;
                 DssslSpecEventHandler.BodyElement body = iter.cur()!;
                 body.makeInputSource(specHandler, out InputSource? inputSource);
                 if (inputSource != null)
@@ -301,7 +305,9 @@ public class ProcessContextImpl : ProcessContext
                 ELObj? result = vm_.eval(insn.pointer(), null, null);
                 SosofoObj? resultSosofo = result?.asSosofo();
                 if (resultSosofo != null)
+                {
                     resultSosofo.process(this);
+                }
             }
         }
         else
@@ -378,13 +384,17 @@ public class ProcessContextImpl : ProcessContext
 
     public override void processChildren(ProcessingMode? mode)
     {
-        NodePtr currentNode = vm_.currentNode;
-        if (currentNode.assignFirstChild() == AccessResult.accessOK)
+        // Make a copy of the current node ptr to avoid modifications from inner processing
+        NodePtr currentNode = new NodePtr(vm_.currentNode);
+        AccessResult res = currentNode.assignFirstChild();
+        if (res == AccessResult.accessOK)
         {
             do
             {
                 processNode(currentNode, mode);
-            } while (currentNode.assignNextChunkSibling() == AccessResult.accessOK);
+                AccessResult sibRes = currentNode.assignNextChunkSibling();
+                if (sibRes != AccessResult.accessOK) break;
+            } while (true);
         }
         else
         {

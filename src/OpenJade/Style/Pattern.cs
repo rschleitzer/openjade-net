@@ -556,9 +556,17 @@ public class Pattern
                     return false;
                 if (ndGi.size() != gi_.size())
                     return false;
+                // SGML element names are case-insensitive
                 for (nuint i = 0; i < gi_.size(); i++)
                 {
-                    if (ndGi.data()![i] != gi_.data()![i])
+                    Char c1 = ndGi.data()![i];
+                    Char c2 = gi_.data()![i];
+                    // Compare case-insensitively for ASCII letters
+                    if (c1 >= 'A' && c1 <= 'Z')
+                        c1 = c1 - 'A' + 'a';
+                    if (c2 >= 'A' && c2 <= 'Z')
+                        c2 = c2 - 'A' + 'a';
+                    if (c1 != c2)
                         return false;
                 }
             }

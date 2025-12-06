@@ -26,6 +26,10 @@ public abstract class GroveApp : ParserApp
         // (In the original C++, this runs in a separate thread)
         int result = base.generateEvents(eceh);
 
+        // Mark the grove as complete after parsing
+        if (eceh is GroveBuilderMessageEventHandler gbeh)
+            gbeh.markComplete();
+
         // Now that the grove is built, process it
         processGrove();
         rootNode_.clear();
