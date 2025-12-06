@@ -709,7 +709,7 @@ public class SchemeParser : Messenger
     {
         expr = null;
         Location loc = in_?.currentLocation() ?? new Location();
-        System.Collections.Generic.List<Identifier> vars = new System.Collections.Generic.List<Identifier>();
+        System.Collections.Generic.List<Identifier?> vars = new System.Collections.Generic.List<Identifier?>();
         System.Collections.Generic.List<Expression> inits = new System.Collections.Generic.List<Expression>();
         Expression? body;
 
@@ -724,7 +724,7 @@ public class SchemeParser : Messenger
     {
         expr = null;
         Location loc = in_?.currentLocation() ?? new Location();
-        System.Collections.Generic.List<Identifier> vars = new System.Collections.Generic.List<Identifier>();
+        System.Collections.Generic.List<Identifier?> vars = new System.Collections.Generic.List<Identifier?>();
         System.Collections.Generic.List<Expression> inits = new System.Collections.Generic.List<Expression>();
         Expression? body;
 
@@ -739,7 +739,7 @@ public class SchemeParser : Messenger
     {
         expr = null;
         Location loc = in_?.currentLocation() ?? new Location();
-        System.Collections.Generic.List<Identifier> vars = new System.Collections.Generic.List<Identifier>();
+        System.Collections.Generic.List<Identifier?> vars = new System.Collections.Generic.List<Identifier?>();
         System.Collections.Generic.List<Expression> inits = new System.Collections.Generic.List<Expression>();
         Expression? body;
 
@@ -750,7 +750,7 @@ public class SchemeParser : Messenger
         return true;
     }
 
-    private bool parseBindingsAndBody(System.Collections.Generic.List<Identifier> vars, System.Collections.Generic.List<Expression> inits, out Expression? body)
+    private bool parseBindingsAndBody(System.Collections.Generic.List<Identifier?> vars, System.Collections.Generic.List<Expression> inits, out Expression? body)
     {
         body = null;
         Token tok;
@@ -794,8 +794,8 @@ public class SchemeParser : Messenger
         if (!getToken(TokenAllow.OpenParen | TokenAllow.Identifier, out tok))
             return false;
 
-        System.Collections.Generic.List<Identifier> formals = new System.Collections.Generic.List<Identifier>();
-        System.Collections.Generic.List<Expression> defaults = new System.Collections.Generic.List<Expression>();
+        System.Collections.Generic.List<Identifier?> formals = new System.Collections.Generic.List<Identifier?>();
+        System.Collections.Generic.List<Expression?> defaults = new System.Collections.Generic.List<Expression?>();
         int nRequired = 0;
         bool hasRest = false;
         int nKey = 0;
@@ -829,7 +829,7 @@ public class SchemeParser : Messenger
     private const int formalRest = 2;
     private const int formalKey = 3;
 
-    private bool parseFormals(System.Collections.Generic.List<Identifier> formals, System.Collections.Generic.List<Expression> inits,
+    private bool parseFormals(System.Collections.Generic.List<Identifier?> formals, System.Collections.Generic.List<Expression?> inits,
                               out int nRequired, out bool hasRest, out int nKey)
     {
         nRequired = 0;

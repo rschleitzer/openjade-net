@@ -443,9 +443,9 @@ public class IfExpression : Expression
 {
     private Expression test_;
     private Expression consequent_;
-    private Expression alternate_;
+    private Expression? alternate_;
 
-    public IfExpression(Expression test, Expression consequent, Expression alternate, Location loc)
+    public IfExpression(Expression test, Expression consequent, Expression? alternate, Location loc)
         : base(loc)
     {
         test_ = test;
@@ -455,7 +455,7 @@ public class IfExpression : Expression
 
     public override bool canEval(bool maybeCall)
     {
-        return test_.canEval(maybeCall) && consequent_.canEval(maybeCall) && alternate_.canEval(maybeCall);
+        return test_.canEval(maybeCall) && consequent_.canEval(maybeCall) && (alternate_?.canEval(maybeCall) ?? true);
     }
 
     public override void optimize(Interpreter interp, Environment env, ref Expression expr)
@@ -479,21 +479,30 @@ public class IfExpression : Expression
 
     public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
     {
-        alternate_.optimize(interp, env, ref alternate_);
-        if (alternate_.constantValue() == interp.makeFalse())
+        if (alternate_ != null)
+        {
+            alternate_.optimize(interp, env, ref alternate_);
+            if (alternate_.constantValue() == interp.makeFalse())
+                return test_.compile(interp, env, stackPos,
+                    new InsnPtr(new AndInsn(optimizeCompile(consequent_, interp, env, stackPos, next), next)));
+            else
+                return test_.compile(interp, env, stackPos,
+                    new InsnPtr(new TestInsn(optimizeCompile(consequent_, interp, env, stackPos, next),
+                        alternate_.compile(interp, env, stackPos, next))));
+        }
+        else
+        {
+            // No alternate: return unspecified value if test is false
             return test_.compile(interp, env, stackPos,
                 new InsnPtr(new AndInsn(optimizeCompile(consequent_, interp, env, stackPos, next), next)));
-        else
-            return test_.compile(interp, env, stackPos,
-                new InsnPtr(new TestInsn(optimizeCompile(consequent_, interp, env, stackPos, next),
-                    alternate_.compile(interp, env, stackPos, next))));
+        }
     }
 
     public override void markBoundVars(BoundVarList vars, bool shared)
     {
         test_.markBoundVars(vars, shared);
         consequent_.markBoundVars(vars, shared);
-        alternate_.markBoundVars(vars, shared);
+        alternate_?.markBoundVars(vars, shared);
     }
 }
 
