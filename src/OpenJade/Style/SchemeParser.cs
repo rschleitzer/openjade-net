@@ -87,7 +87,7 @@ public class SchemeParser : Messenger
         in_ = input;
         currentToken_ = new StringC();
         defMode_ = interp.initialProcessingMode();
-        dsssl2_ = false;  // TODO: interp.dsssl2()
+        dsssl2_ = interp.dsssl2();
         lang_ = null;
         afiiPublicId_ = "ISO/IEC 10036/RA//Glyphs";
         pushedBack_ = noChar;
@@ -188,8 +188,7 @@ public class SchemeParser : Messenger
                 break;
             }
 
-            // TODO: validate name and add standard char
-            // interp_.addStandardChar(name, currentToken_);
+            interp_.addStandardChar(name, currentToken_);
         }
     }
 
@@ -824,51 +823,95 @@ public class SchemeParser : Messenger
         return true;
     }
 
-    private bool parseFormals(System.Collections.Generic.List<Identifier> formals, System.Collections.Generic.List<Expression> defaults,
+    // Formal types for argument parsing
+    private const int formalRequired = 0;
+    private const int formalOptional = 1;
+    private const int formalRest = 2;
+    private const int formalKey = 3;
+
+    private bool parseFormals(System.Collections.Generic.List<Identifier> formals, System.Collections.Generic.List<Expression> inits,
                               out int nRequired, out bool hasRest, out int nKey)
     {
         nRequired = 0;
         hasRest = false;
         nKey = 0;
         Token tok;
-        bool seenOptional = false;
+
+        int type = formalRequired;
+
+        TokenAllow allowed = TokenAllow.CloseParen | TokenAllow.Identifier
+                           | TokenAllow.HashOptional | TokenAllow.HashRest | TokenAllow.HashKey;
+
+        int[] argCount = new int[4];
 
         for (;;)
         {
-            if (!getToken(TokenAllow.Identifier | TokenAllow.CloseParen | TokenAllow.HashOptional | TokenAllow.HashRest | TokenAllow.HashKey, out tok))
+            if (!getToken(allowed, out tok))
                 return false;
 
-            if (tok == Token.CloseParen)
-                break;
-
-            if (tok == Token.HashOptional)
+            switch (tok)
             {
-                seenOptional = true;
-                continue;
-            }
-            if (tok == Token.HashRest)
-            {
-                if (!getToken(TokenAllow.Identifier, out tok))
+                case Token.HashOptional:
+                    allowed |= TokenAllow.OpenParen;
+                    allowed &= ~TokenAllow.HashOptional;
+                    type = formalOptional;
+                    break;
+                case Token.HashRest:
+                    allowed = TokenAllow.Identifier;
+                    type = formalRest;
+                    break;
+                case Token.HashKey:
+                    allowed = TokenAllow.OpenParen | TokenAllow.CloseParen | TokenAllow.Identifier;
+                    type = formalKey;
+                    break;
+                case Token.OpenParen:
+                    {
+                        // Parse (var init) form for optional/key args with defaults
+                        if (!getToken(TokenAllow.Identifier, out tok))
+                            return false;
+                        argCount[type]++;
+                        formals.Add(lookup(currentToken_));
+                        // Resize inits to hold optional + key args
+                        while (inits.Count < argCount[formalOptional] + argCount[formalKey])
+                            inits.Add(null!);
+                        // Parse init expression
+                        Identifier.SyntacticKey key;
+                        Expression? initExpr;
+                        if (!parseExpression(TokenAllow.Expr, out initExpr, out key, out tok))
+                            return false;
+                        inits[inits.Count - 1] = initExpr!;
+                        if (!getToken(TokenAllow.CloseParen, out tok))
+                            return false;
+                    }
+                    break;
+                case Token.Identifier:
+                    {
+                        formals.Add(lookup(currentToken_));
+                        argCount[type]++;
+                        if (type == formalRest)
+                            allowed = TokenAllow.HashKey | TokenAllow.CloseParen;
+                        // For optional/key without init, add null placeholder
+                        if (type == formalOptional || type == formalKey)
+                        {
+                            while (inits.Count < argCount[formalOptional] + argCount[formalKey])
+                                inits.Add(null!);
+                        }
+                    }
+                    break;
+                case Token.CloseParen:
+                    goto done;
+                default:
                     return false;
-                formals.Add(lookup(currentToken_));
-                hasRest = true;
-                continue;
-            }
-            if (tok == Token.HashKey)
-            {
-                // TODO: handle keyword arguments
-                continue;
-            }
-
-            if (tok == Token.Identifier)
-            {
-                formals.Add(lookup(currentToken_));
-                defaults.Add(null!);
-                if (!seenOptional)
-                    nRequired++;
             }
         }
-
+    done:
+        nRequired = argCount[formalRequired];
+        int nOptional = argCount[formalOptional];
+        nKey = argCount[formalKey];
+        hasRest = argCount[formalRest] > 0;
+        // Ensure inits has correct size
+        while (inits.Count < nOptional + nKey)
+            inits.Add(null!);
         return true;
     }
 

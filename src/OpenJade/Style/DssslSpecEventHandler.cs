@@ -215,7 +215,7 @@ public class DssslSpecEventHandler : ArcDirector
             if (specPart_ == null)
             {
                 eh.mgr_?.setNextLocation(refLoc_);
-                // TODO: eh.mgr_?.message(InterpreterMessages.missingPart, new StringMessageArg(id_));
+                eh.message(InterpreterMessages.missingPart, id_);
                 return null;
             }
             return specPart_.resolve(eh);
@@ -384,7 +384,7 @@ public class DssslSpecEventHandler : ArcDirector
                 if (!loc_.origin().isNull())
                 {
                     eh.mgr_?.setNextLocation(loc_);
-                    // TODO: eh.mgr_?.message(InterpreterMessages.noParts);
+                    eh.message(InterpreterMessages.noParts);
                 }
                 return null;
             }
@@ -506,6 +506,29 @@ public class DssslSpecEventHandler : ArcDirector
 
     public int cancelPtr() { return errorHandler_.cancelPtr(); }
 
+    // Helper to send InterpreterMessages via the messenger
+    private void message(InterpreterMessages msg)
+    {
+        string text = msg switch
+        {
+            InterpreterMessages.useLoop => "circular use of specification parts",
+            InterpreterMessages.specNotArc => "specification document does not have the DSSSL architecture as a base architecture",
+            InterpreterMessages.noParts => "document did not contain any style-specifications or external-specifications",
+            _ => msg.ToString()
+        };
+        mgr_?.message(MessageType.Severity.error, mgr_.nextLocation(), text);
+    }
+
+    private void message(InterpreterMessages msg, StringC arg)
+    {
+        string text = msg switch
+        {
+            InterpreterMessages.missingPart => $"no style-specification or external-specification with ID {arg}",
+            _ => $"{msg}: {arg}"
+        };
+        mgr_?.message(MessageType.Severity.error, mgr_.nextLocation(), text);
+    }
+
     public void load(SgmlParser specParser, CharsetInfo charset, StringC id, System.Collections.Generic.List<Part> parts)
     {
         parser_ = specParser;
@@ -548,7 +571,7 @@ public class DssslSpecEventHandler : ArcDirector
         parts.Add(part);
         if (part.setMark())
         {
-            // TODO: mgr_?.message(InterpreterMessages.useLoop);
+            message(InterpreterMessages.useLoop);
             return;
         }
         System.Collections.Generic.List<PartHeader> use = part.use();
@@ -567,7 +590,7 @@ public class DssslSpecEventHandler : ArcDirector
         ArcEngine.parseAll(parser, mgr_!, this, cancelPtr());
         if (!gotArc_)
         {
-            // TODO: mgr_?.message(InterpreterMessages.specNotArc);
+            message(InterpreterMessages.specNotArc);
         }
     }
 

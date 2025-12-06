@@ -407,6 +407,20 @@ public abstract class Messenger : IMessenger
         nextLocation_ = new Location(loc);
     }
 
+    public Location nextLocation()
+    {
+        return nextLocation_;
+    }
+
+    // Simple message method for string-based error messages
+    public void message(MessageType.Severity severity, Location loc, string text)
+    {
+        Message msg = new Message(0);
+        msg.type = new MessageType0(severity, null, 0, text);
+        msg.loc = new Location(loc);
+        dispatchMessage(msg);
+    }
+
     public virtual void initMessage(Message msg)
     {
     }

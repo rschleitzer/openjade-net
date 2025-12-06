@@ -40,6 +40,11 @@ public class BoundVarList : System.Collections.Generic.List<BoundVar>
 {
     public BoundVarList() { }
 
+    public BoundVarList(BoundVarList other)
+    {
+        AddRange(other);
+    }
+
     public BoundVarList(System.Collections.Generic.List<Identifier?> idents)
     {
         foreach (var id in idents)
@@ -50,6 +55,17 @@ public class BoundVarList : System.Collections.Generic.List<BoundVar>
     {
         for (int i = 0; i < n && i < idents.Count; i++)
             Add(new BoundVar(idents[i], flags & ~BoundVar.usedFlag));
+    }
+
+    public void resize(int n)
+    {
+        if (n < Count)
+            RemoveRange(n, Count - n);
+        else
+        {
+            while (Count < n)
+                Add(new BoundVar(null, 0));
+        }
     }
 
     public void append(Identifier? id, uint flags)
@@ -1652,7 +1668,7 @@ public class LambdaExpression : Expression
         BoundVarList formalVars = new BoundVarList(formals_, sig_.nRequiredArgs);
         for (int i = 0; i < sig_.nOptionalArgs + sig_.nKeyArgs; i++)
         {
-            if (inits_[i] != null)
+            if (i < inits_.Count && inits_[i] != null)
                 inits_[i]!.markBoundVars(formalVars, false);
             formalVars.append(formals_[sig_.nRequiredArgs + i], 0);
         }
@@ -1662,7 +1678,108 @@ public class LambdaExpression : Expression
         InsnPtr code = optimizeCompile(body_, interp,
             new Environment(formalVars, boundVars), formals_.Count,
             new InsnPtr(new ReturnInsn(formals_.Count)));
-        // TODO: Handle optional/rest/key args varargs code generation
+
+        // Handle optional/rest/key args varargs code generation
+        if (sig_.nOptionalArgs > 0 || sig_.restArg || sig_.nKeyArgs > 0)
+        {
+            var entryPoints = new System.Collections.Generic.List<InsnPtr>(
+                sig_.nOptionalArgs + (sig_.restArg || sig_.nKeyArgs > 0 ? 1 : 0) + 1);
+            for (int i = 0; i < entryPoints.Capacity; i++)
+                entryPoints.Add(new InsnPtr());
+
+            // Last entry point is for all optional args supplied, and other args
+            entryPoints[entryPoints.Count - 1] = code;
+
+            // Box the rest arg if necessary
+            if (sig_.restArg && formalVars[formalVars.Count - 1].boxed())
+                entryPoints[entryPoints.Count - 1] = new InsnPtr(
+                    new BoxStackInsn(-1 - sig_.nKeyArgs, entryPoints[entryPoints.Count - 1]));
+
+            if (sig_.nKeyArgs > 0)
+            {
+                // For each keyword argument test whether it is null, and if so initialize it
+                for (int i = sig_.nOptionalArgs + sig_.nKeyArgs - 1; i >= sig_.nOptionalArgs; i--)
+                {
+                    int offset = i - (sig_.nOptionalArgs + sig_.nKeyArgs);
+                    InsnPtr set = new InsnPtr(new SetKeyArgInsn(offset, entryPoints[entryPoints.Count - 1]));
+                    if (formalVars[sig_.nRequiredArgs + i].boxed())
+                        set = new InsnPtr(new BoxInsn(set));
+                    if (i < inits_.Count && inits_[i] != null)
+                    {
+                        BoundVarList f = new BoundVarList(formalVars);
+                        f.resize(sig_.nRequiredArgs + i + (sig_.restArg ? 1 : 0));
+                        set = optimizeCompile(inits_[i]!, interp,
+                            new Environment(f, boundVars), formals_.Count, set);
+                    }
+                    else
+                        set = new InsnPtr(new ConstantInsn(interp.makeFalse(), set));
+                    entryPoints[entryPoints.Count - 1] = new InsnPtr(
+                        new TestNullInsn(offset, set, entryPoints[entryPoints.Count - 1]));
+                }
+            }
+
+            if (sig_.restArg || sig_.nKeyArgs > 0)
+            {
+                // Build code for when no rest/key args supplied
+                var codeNoRest = code;
+                for (int i = sig_.nOptionalArgs + sig_.nKeyArgs - 1; i >= sig_.nOptionalArgs; i--)
+                {
+                    if (formalVars[sig_.nRequiredArgs + i].boxed())
+                        codeNoRest = new InsnPtr(new BoxInsn(codeNoRest));
+                    if (i < inits_.Count && inits_[i] != null)
+                    {
+                        BoundVarList f = new BoundVarList(formalVars);
+                        f.resize(sig_.nRequiredArgs + i + (sig_.restArg ? 1 : 0));
+                        codeNoRest = optimizeCompile(inits_[i]!, interp,
+                            new Environment(f, boundVars), f.Count, codeNoRest);
+                    }
+                    else
+                        codeNoRest = new InsnPtr(new ConstantInsn(interp.makeFalse(), codeNoRest));
+                }
+                if (sig_.restArg)
+                {
+                    if (formalVars[formalVars.Count - 1].boxed())
+                        codeNoRest = new InsnPtr(new BoxInsn(codeNoRest));
+                    codeNoRest = new InsnPtr(new ConstantInsn(interp.makeNil(), codeNoRest));
+                }
+                entryPoints[sig_.nOptionalArgs] = codeNoRest;
+            }
+
+            // Build entry points for optional args
+            for (int i = sig_.nOptionalArgs - 1; i >= 0; i--)
+            {
+                InsnPtr tem = entryPoints[i + 1];
+                if (formalVars[sig_.nRequiredArgs + i].boxed())
+                    tem = new InsnPtr(new BoxInsn(tem));
+                if (i < inits_.Count && inits_[i] != null)
+                {
+                    BoundVarList f = new BoundVarList(formalVars);
+                    f.resize(sig_.nRequiredArgs + i);
+                    entryPoints[i] = optimizeCompile(inits_[i]!, interp,
+                        new Environment(f, boundVars), f.Count, tem);
+                }
+                else
+                    entryPoints[i] = new InsnPtr(new ConstantInsn(interp.makeFalse(), tem));
+            }
+
+            // Box optional args if needed in higher entry points
+            for (int i = 0; i < sig_.nOptionalArgs; i++)
+            {
+                if (formalVars[sig_.nRequiredArgs + i].boxed())
+                {
+                    for (int j = i; j < sig_.nOptionalArgs; j++)
+                        entryPoints[j + 1] = new InsnPtr(
+                            new BoxArgInsn(i + sig_.nRequiredArgs, entryPoints[j + 1]));
+                    if (sig_.nKeyArgs > 0 || sig_.restArg)
+                        entryPoints[entryPoints.Count - 1] = new InsnPtr(
+                            new BoxStackInsn(i - sig_.nKeyArgs - (sig_.restArg ? 1 : 0) - sig_.nOptionalArgs,
+                                entryPoints[entryPoints.Count - 1]));
+                }
+            }
+
+            code = new InsnPtr(new VarargsInsn(sig_, entryPoints, location()));
+        }
+
         for (int i = 0; i < sig_.nRequiredArgs; i++)
             if (formalVars[i].boxed())
                 code = new InsnPtr(new BoxArgInsn(i, code));

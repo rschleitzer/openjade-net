@@ -18,6 +18,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     private TrueObj trueObj_ = new TrueObj();
     private FalseObj falseObj_ = new FalseObj();
     private int unitsPerInch_ = 72000; // Default: 1000 units per point
+    private bool dsssl2_;
+    private bool strictMode_;
 
     // Symbol and identifier tables
     private Dictionary<string, SymbolObj> symbolTable_ = new();
@@ -28,6 +30,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     }
 
     public int unitsPerInch() { return unitsPerInch_; }
+    public bool dsssl2() { return dsssl2_; }
+    public bool strictMode() { return strictMode_; }
 
     public void makePermanent(ELObj obj)
     {
@@ -165,6 +169,59 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     private bool debugMode_ = false;
     public bool debugMode() { return debugMode_; }
     public void setDebugMode(bool debug) { debugMode_ = debug; }
+
+    // Named character table for standard characters
+    private struct CharPart
+    {
+        public int c;
+        public uint defPart;
+    }
+    private Dictionary<string, CharPart> namedCharTable_ = new();
+    private uint dPartIndex_ = 0;
+
+    public void addStandardChar(StringC name, StringC num)
+    {
+        if (!int.TryParse(num.ToString(), out int n))
+        {
+            message(InterpreterMessages.invalidCharNumber, num.ToString());
+            return;
+        }
+
+        string key = name.ToString();
+        if (namedCharTable_.TryGetValue(key, out CharPart def))
+        {
+            if (dPartIndex_ < def.defPart)
+                namedCharTable_[key] = new CharPart { c = n, defPart = dPartIndex_ };
+            else if (def.defPart == dPartIndex_ && def.c != n)
+                message(InterpreterMessages.duplicateCharName, key);
+        }
+        else
+        {
+            namedCharTable_[key] = new CharPart { c = n, defPart = dPartIndex_ };
+        }
+    }
+
+    public void addNameChar(StringC name)
+    {
+        string key = name.ToString();
+        if (!namedCharTable_.TryGetValue(key, out CharPart cp))
+        {
+            message(InterpreterMessages.badCharName, key);
+            return;
+        }
+        // FIXME: set lexical category for character
+    }
+
+    public void addSeparatorChar(StringC name)
+    {
+        string key = name.ToString();
+        if (!namedCharTable_.TryGetValue(key, out CharPart cp))
+        {
+            message(InterpreterMessages.badCharName, key);
+            return;
+        }
+        // FIXME: set lexical category for character
+    }
 
     // Create a StringC from string
     public StringC makeStringC(string s)
@@ -864,4 +921,7 @@ public enum InterpreterMessages
     badContentMap,
     // Identifier messages
     identifierLoop,
+    // Character definition messages
+    duplicateCharName,
+    badCharName,
 }

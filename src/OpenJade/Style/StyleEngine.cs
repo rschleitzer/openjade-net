@@ -564,7 +564,7 @@ public class ProcessContextImpl : ProcessContext
             c.ports[i].fotb = fotbs[i];
         }
         connectableStackLevel_++;
-        // TODO: deal with !hasPrincipalPort
+        // FIXME: deal with !hasPrincipalPort (matching upstream ProcessContext.cxx:382)
     }
 
     public override void popPorts()
