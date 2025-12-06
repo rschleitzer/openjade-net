@@ -522,6 +522,9 @@ internal class ArcProcessor : ContentState
         metaDtd_ = new Ptr<Dtd>(new Dtd(name_, true));
         metaMapCache_.resize(docDtd_.pointer()!.nElementTypeIndex());
 
+        // Initialize ContentState with the meta-DTD
+        startContent(metaDtd_.pointer()!);
+
         valid_ = true;
         currentAttributes_.resize(metaDtd_.pointer()!.nCurrentAttribute());
     }

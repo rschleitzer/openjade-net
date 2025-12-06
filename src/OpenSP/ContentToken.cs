@@ -1199,16 +1199,22 @@ public class MatchState
     // Boolean tryTransition(const ElementType *);
     public Boolean tryTransition(ElementType? to)
     {
+        // If no content model (pos_ is null), allow any transition
+        if (pos_ == null)
+            return true;
         LeafContentToken? newpos;
-        return pos_!.tryTransition(to, andState_, ref minAndDepth_, out newpos) &&
+        return pos_.tryTransition(to, andState_, ref minAndDepth_, out newpos) &&
                (pos_ = newpos) != null || pos_ == newpos;
     }
 
     // Boolean tryTransitionPcdata();
     public Boolean tryTransitionPcdata()
     {
+        // If no content model (pos_ is null), allow PCDATA
+        if (pos_ == null)
+            return true;
         LeafContentToken? newpos;
-        Boolean result = pos_!.tryTransitionPcdata(andState_, ref minAndDepth_, out newpos);
+        Boolean result = pos_.tryTransitionPcdata(andState_, ref minAndDepth_, out newpos);
         if (result)
             pos_ = newpos;
         return result;
@@ -1217,25 +1223,31 @@ public class MatchState
     // void possibleTransitions(Vector<const ElementType *> &) const;
     public void possibleTransitions(Vector<ElementType?> v)
     {
-        pos_!.possibleTransitions(andState_, minAndDepth_, v);
+        if (pos_ != null)
+            pos_.possibleTransitions(andState_, minAndDepth_, v);
     }
 
     // Boolean isFinished() const;
     public Boolean isFinished()
     {
-        return pos_!.isFinal() && minAndDepth_ == 0;
+        // If no content model, consider it finished
+        if (pos_ == null)
+            return true;
+        return pos_.isFinal() && minAndDepth_ == 0;
     }
 
     // const LeafContentToken *impliedStartTag() const;
     public LeafContentToken? impliedStartTag()
     {
-        return pos_!.impliedStartTag(andState_, minAndDepth_);
+        return pos_?.impliedStartTag(andState_, minAndDepth_);
     }
 
     // const LeafContentToken *invalidExclusion(const ElementType *) const;
     public LeafContentToken? invalidExclusion(ElementType? e)
     {
-        LeafContentToken? token = pos_!.transitionToken(e, andState_, minAndDepth_);
+        if (pos_ == null)
+            return null;
+        LeafContentToken? token = pos_.transitionToken(e, andState_, minAndDepth_);
         if (token != null && !token.inherentlyOptional() && !token.orGroupMember())
             return token;
         else

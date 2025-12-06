@@ -245,13 +245,22 @@ public class ProcessContextImpl : ProcessContext
     public void process(NodePtr node)
     {
         Interpreter interp = vm_.interp;
+
+        // Get the document element from the document node
+        NodePtr docElement = new NodePtr();
+        if (node.getDocumentElement(ref docElement) != AccessResult.accessOK)
+        {
+            // Fallback: try to use node directly if it's already an element
+            docElement = node;
+        }
+
         StyleObj? style = interp.initialStyle();
         if (style != null)
         {
             currentStyleStack().push(style, vm(), currentFOTBuilder());
             currentFOTBuilder().startSequence();
         }
-        processNode(node, interp.initialProcessingMode());
+        processNode(docElement, interp.initialProcessingMode());
         if (style != null)
         {
             currentFOTBuilder().endSequence();

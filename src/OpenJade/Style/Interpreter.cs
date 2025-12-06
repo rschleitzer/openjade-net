@@ -27,6 +27,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
 
     public Interpreter()
     {
+        // Create the default/initial processing mode
+        initialProcessingMode_ = new ProcessingMode(new StringC()); // Empty name = initial mode
     }
 
     public int unitsPerInch() { return unitsPerInch_; }

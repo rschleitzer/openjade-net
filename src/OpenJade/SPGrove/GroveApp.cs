@@ -20,14 +20,17 @@ public abstract class GroveApp : ParserApp
         return GroveBuilder.make(0, this, null, false, ref rootNode_);
     }
 
-    public new int generateEvents(ErrorCountEventHandler eceh)
+    protected override int generateEvents(ErrorCountEventHandler eceh)
     {
-        var args = new GenerateEventArgs(eceh, this);
-        // In the original, this spawns a thread
-        // For now, we do it synchronously
+        // First, parse the document and build the grove
+        // (In the original C++, this runs in a separate thread)
+        int result = base.generateEvents(eceh);
+
+        // Now that the grove is built, process it
         processGrove();
         rootNode_.clear();
-        return args.run();
+
+        return result;
     }
 
     public abstract void processGrove();

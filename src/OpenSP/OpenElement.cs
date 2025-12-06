@@ -20,10 +20,19 @@ public class OpenElement : Link
         elementType_ = type;
         netEnabling_ = net;
         included_ = included;
-        matchState_ = new MatchState(type!.definition()!.compiledModelGroup());
+        var def = type?.definition();
+        if (def != null)
+        {
+            matchState_ = new MatchState(def.compiledModelGroup());
+            declaredContent_ = def.declaredContent();
+        }
+        else
+        {
+            matchState_ = new MatchState();
+            declaredContent_ = ElementDefinition.DeclaredContent.modelGroup;
+        }
         map_ = map;
         startLocation_ = new Location(startLocation);
-        declaredContent_ = type.definition()!.declaredContent();
     }
 
     public ElementType? type()

@@ -106,9 +106,10 @@ public class String<T> where T : struct
         {
             foreach (char c in s)
             {
-                // Handle conversion from char to T (requires T to be value type)
-                // This only works properly for String<char>
-                operatorPlusAssign((T)(object)c);
+                // Handle conversion from char to T
+                // Must convert via Convert to handle different numeric types
+                T value = (T)Convert.ChangeType((uint)c, typeof(T));
+                operatorPlusAssign(value);
             }
         }
         return this;

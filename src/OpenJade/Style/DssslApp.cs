@@ -40,11 +40,48 @@ public abstract class DssslApp : GroveApp, IGroveManager
         debugMode_ = false;
         dsssl2_ = false;
         strictMode_ = false;
+        registerOption('G', null);
+        registerOption('2', null);
+        registerOption('d', "dsssl_spec");
+        registerOption('V', "variable[=value]");
+        registerOption('s', null);
+    }
+
+    public override void processOption(char opt, string? arg)
+    {
+        switch (opt)
+        {
+            case 'G':
+                debugMode_ = true;
+                break;
+            case '2':
+                dsssl2_ = true;
+                break;
+            case 'd':
+                dssslSpecId_.resize(0);
+                dssslSpecSysid_.assign(arg ?? "");
+                dssslSpecOption_ = true;
+                splitOffId(ref dssslSpecSysid_, out dssslSpecId_);
+                break;
+            case 'V':
+                {
+                    StringC var = new StringC();
+                    var.assign(arg ?? "");
+                    defineVars_.Add(var);
+                }
+                break;
+            case 's':
+                strictMode_ = true;
+                break;
+            default:
+                base.processOption(opt, arg);
+                break;
+        }
     }
 
     public abstract FOTBuilder? makeFOTBuilder(out FOTBuilder.Extension? ext);
 
-    public new int processSysid(StringC sysid)
+    public override int processSysid(StringC sysid)
     {
         rootSystemId_ = sysid;
         return base.processSysid(sysid);
@@ -135,6 +172,8 @@ public abstract class DssslApp : GroveApp, IGroveManager
         // Create spec parser params
         SgmlParser.Params parms = new SgmlParser.Params();
         parms.sysid = dssslSpecSysid_;
+        parms.entityManager.operatorAssign(entityManager().pointer());
+        parms.options = options_;
 
         specParser_ = new SgmlParser(parms);
         specParser_.allLinkTypesActivated();
