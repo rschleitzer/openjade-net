@@ -114,7 +114,7 @@ public class JadeApp : DssslApp
         }
     }
 
-    public override FOTBuilder? makeFOTBuilder(out FOTBuilder.Extension? ext)
+    public override FOTBuilder? makeFOTBuilder(out FOTBuilder.ExtensionTableEntry[]? ext)
     {
         ext = null;
 

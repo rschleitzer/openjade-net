@@ -11,13 +11,13 @@ using Boolean = System.Boolean;
 // Factory class for creating FOT builders
 public static class FOTBuilderFactory
 {
-    public static FOTBuilder makeTeXFOTBuilder(OutputByteStream stream, Messenger messenger, out FOTBuilder.Extension? ext)
+    public static FOTBuilder makeTeXFOTBuilder(OutputByteStream stream, Messenger messenger, out FOTBuilder.ExtensionTableEntry[]? ext)
     {
         ext = null;
         return new TeXFOTBuilder(stream, messenger);
     }
 
-    public static FOTBuilder makeHtmlFOTBuilder(StringC basename, CmdLineApp app, out FOTBuilder.Extension? ext)
+    public static FOTBuilder makeHtmlFOTBuilder(StringC basename, CmdLineApp app, out FOTBuilder.ExtensionTableEntry[]? ext)
     {
         ext = null;
         return new HtmlFOTBuilder(basename, app);
@@ -29,7 +29,7 @@ public static class FOTBuilderFactory
         Ptr<ExtendEntityManager> entityManager,
         CharsetInfo charsetInfo,
         Messenger messenger,
-        out FOTBuilder.Extension? ext)
+        out FOTBuilder.ExtensionTableEntry[]? ext)
     {
         ext = null;
         return new RtfFOTBuilder(stream, options, entityManager, charsetInfo, messenger);
@@ -44,9 +44,9 @@ public static class FOTBuilderFactory
         CmdLineApp app,
         bool xml,
         System.Collections.Generic.List<StringC> options,
-        out FOTBuilder.Extension? ext)
+        out FOTBuilder.ExtensionTableEntry[]? extensions)
     {
-        ext = null;
+        extensions = TransformFOTBuilder.GetExtensions();
         return new TransformFOTBuilder(app, xml, options);
     }
 
@@ -55,7 +55,7 @@ public static class FOTBuilderFactory
         Ptr<ExtendEntityManager> entityManager,
         CharsetInfo charsetInfo,
         CmdLineApp app,
-        out FOTBuilder.Extension? ext)
+        out FOTBuilder.ExtensionTableEntry[]? ext)
     {
         ext = null;
         return new MifFOTBuilder(fileLoc, entityManager, charsetInfo, app);

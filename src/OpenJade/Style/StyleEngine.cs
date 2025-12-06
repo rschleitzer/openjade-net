@@ -16,7 +16,7 @@ public class StyleEngine : IDisposable
 
     public StyleEngine(Messenger mgr, GroveManager groveManager,
                        int unitsPerInch, bool debugMode, bool dsssl2,
-                       bool strictMode, FOTBuilder.Extension? extensionTable = null)
+                       bool strictMode, FOTBuilder.ExtensionTableEntry[]? extensionTable = null)
     {
         interpreter_ = new Interpreter();
         cmdline_ = new StringC();

@@ -80,7 +80,7 @@ public abstract class DssslApp : GroveApp, IGroveManager
         }
     }
 
-    public abstract FOTBuilder? makeFOTBuilder(out FOTBuilder.Extension? ext);
+    public abstract FOTBuilder? makeFOTBuilder(out FOTBuilder.ExtensionTableEntry[]? extensions);
 
     public override int processSysid(StringC sysid)
     {
@@ -143,7 +143,7 @@ public abstract class DssslApp : GroveApp, IGroveManager
             return;
 
         // Create FOT builder
-        FOTBuilder? fotb = makeFOTBuilder(out FOTBuilder.Extension? extensions);
+        FOTBuilder? fotb = makeFOTBuilder(out FOTBuilder.ExtensionTableEntry[]? extensions);
         if (fotb == null)
             return;
 

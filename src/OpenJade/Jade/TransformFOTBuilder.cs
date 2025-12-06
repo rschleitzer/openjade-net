@@ -22,6 +22,16 @@ public class TransformFOTBuilder : FOTBuilder
     private ReState state_;
     private bool preserveSdata_;
     private System.Collections.Generic.List<bool> preserveSdataStack_;
+    private System.Collections.Generic.Stack<OpenFile> openFileStack_ = new();
+
+    // Tracks an open output file for entity flow objects
+    private class OpenFile
+    {
+        public StringC systemId = new StringC();
+        public OutputCharStream? saveOs;
+        public FileOutputByteStream? fileByteStream;
+        public OutputCharStream? os;
+    }
 
     public enum ReState
     {
@@ -271,16 +281,53 @@ public class TransformFOTBuilder : FOTBuilder
         output(";");
     }
 
-    // Start external entity
+    // Start external entity - opens a new output file
     public void startEntity(StringC systemId)
     {
-        // Would open a new output file here for multi-file output
+        flushPendingRe();
+        var ofp = new OpenFile();
+        ofp.systemId = new StringC(systemId);
+        ofp.saveOs = os_;
+
+        // Convert StringC to filename string
+        string filename = systemId.ToString();
+        if (!string.IsNullOrEmpty(filename))
+        {
+            ofp.fileByteStream = new FileOutputByteStream();
+            if (ofp.fileByteStream.open(filename))
+            {
+                // Use RecordOutputCharStream to handle line endings properly
+                ofp.os = new RecordOutputCharStream(
+                    new EncodeOutputCharStream(ofp.fileByteStream, app_!.outputCodingSystem()!));
+                os_ = ofp.os;
+            }
+            else
+            {
+                // Could not open file
+                ofp.fileByteStream = null;
+                ofp.os = null;
+            }
+        }
+        openFileStack_.Push(ofp);
     }
 
-    // End external entity
+    // End external entity - closes the current file and restores previous output
     public void endEntity()
     {
-        // Would close the external entity file
+        flushPendingRe();
+        if (openFileStack_.Count > 0)
+        {
+            var of = openFileStack_.Pop();
+            if (of.os != null)
+            {
+                of.os.flush();
+            }
+            if (of.fileByteStream != null)
+            {
+                of.fileByteStream.close();
+            }
+            os_ = of.saveOs;
+        }
     }
 
     public override void formattingInstruction(StringC s)
@@ -292,16 +339,20 @@ public class TransformFOTBuilder : FOTBuilder
     // Extension flow object handling
     public override void extension(ExtensionFlowObj fo, NodePtr currentNode)
     {
-        // Handle transform extension flow objects
+        if (fo is TransformExtensionFlowObj tfo)
+            tfo.atomic(this, currentNode);
     }
 
     public override void startExtension(ExtensionFlowObj fo, NodePtr currentNode, System.Collections.Generic.List<FOTBuilder?> fotbs)
     {
-        // Handle compound transform extension flow objects
+        if (fo is TransformCompoundExtensionFlowObj tfo)
+            tfo.start(this, currentNode);
     }
 
     public override void endExtension(ExtensionFlowObj fo)
     {
+        if (fo is TransformCompoundExtensionFlowObj tfo)
+            tfo.end(this);
     }
 
     // Setters
@@ -350,5 +401,287 @@ public class TransformFOTBuilder : FOTBuilder
     public override void endSequence()
     {
         end();
+    }
+
+    // Static extensions array for registration
+    public static FOTBuilder.ExtensionTableEntry[] GetExtensions()
+    {
+        return new FOTBuilder.ExtensionTableEntry[]
+        {
+            new FOTBuilder.ExtensionTableEntry
+            {
+                pubid = "UNREGISTERED::James Clark//Flow Object Class::entity",
+                flowObj = new EntityFlowObj()
+            },
+            new FOTBuilder.ExtensionTableEntry
+            {
+                pubid = "UNREGISTERED::James Clark//Flow Object Class::entity-ref",
+                flowObj = new EntityRefFlowObj()
+            },
+            new FOTBuilder.ExtensionTableEntry
+            {
+                pubid = "UNREGISTERED::James Clark//Flow Object Class::element",
+                flowObj = new ElementFlowObj()
+            },
+            new FOTBuilder.ExtensionTableEntry
+            {
+                pubid = "UNREGISTERED::James Clark//Flow Object Class::empty-element",
+                flowObj = new EmptyElementFlowObj()
+            },
+            new FOTBuilder.ExtensionTableEntry
+            {
+                pubid = "UNREGISTERED::James Clark//Flow Object Class::document-type",
+                flowObj = new DocumentTypeFlowObj()
+            },
+            new FOTBuilder.ExtensionTableEntry
+            {
+                pubid = "UNREGISTERED::James Clark//Flow Object Class::processing-instruction",
+                flowObj = new ProcessingInstructionFlowObj()
+            },
+            new FOTBuilder.ExtensionTableEntry
+            {
+                pubid = "UNREGISTERED::James Clark//Flow Object Class::formatting-instruction",
+                flowObj = new FormattingInstructionFlowObj()
+            }
+        };
+    }
+}
+
+// Base class for atomic transform extension flow objects
+public class TransformExtensionFlowObj : FOTBuilder.ExtensionFlowObj
+{
+    public virtual void atomic(TransformFOTBuilder fotb, NodePtr nd) { }
+}
+
+// Base class for compound transform extension flow objects
+public class TransformCompoundExtensionFlowObj : FOTBuilder.CompoundExtensionFlowObj
+{
+    public virtual void start(TransformFOTBuilder fotb, NodePtr nd) { }
+    public virtual void end(TransformFOTBuilder fotb) { }
+}
+
+// Entity flow object - creates a new output file
+public class EntityFlowObj : TransformCompoundExtensionFlowObj
+{
+    private StringC systemId_ = new StringC();
+
+    public override void start(TransformFOTBuilder fotb, NodePtr nd)
+    {
+        fotb.startEntity(systemId_);
+    }
+
+    public override void end(TransformFOTBuilder fotb)
+    {
+        fotb.endEntity();
+    }
+
+    public override bool hasNIC(StringC name)
+    {
+        return name.ToString() == "system-id";
+    }
+
+    public override void setNIC(StringC name, IExtensionFlowObjValue value)
+    {
+        if (name.ToString() == "system-id")
+            value.convertString(out systemId_);
+    }
+
+    public override FOTBuilder.ExtensionFlowObj copy()
+    {
+        var c = new EntityFlowObj();
+        c.systemId_ = new StringC(systemId_);
+        return c;
+    }
+}
+
+// Entity reference flow object
+public class EntityRefFlowObj : TransformExtensionFlowObj
+{
+    private StringC name_ = new StringC();
+
+    public override void atomic(TransformFOTBuilder fotb, NodePtr nd)
+    {
+        fotb.entityRef(name_);
+    }
+
+    public override bool hasNIC(StringC name)
+    {
+        return name.ToString() == "name";
+    }
+
+    public override void setNIC(StringC name, IExtensionFlowObjValue value)
+    {
+        if (name.ToString() == "name")
+            value.convertString(out name_);
+    }
+
+    public override FOTBuilder.ExtensionFlowObj copy()
+    {
+        var c = new EntityRefFlowObj();
+        c.name_ = new StringC(name_);
+        return c;
+    }
+}
+
+// Element flow object
+public class ElementFlowObj : TransformCompoundExtensionFlowObj
+{
+    private TransformFOTBuilder.ElementNIC nic_ = new TransformFOTBuilder.ElementNIC();
+
+    public override void start(TransformFOTBuilder fotb, NodePtr nd)
+    {
+        fotb.startElement(nic_);
+    }
+
+    public override void end(TransformFOTBuilder fotb)
+    {
+        fotb.endElement();
+    }
+
+    public override bool hasNIC(StringC name)
+    {
+        string n = name.ToString();
+        return n == "gi" || n == "attributes";
+    }
+
+    public override void setNIC(StringC name, IExtensionFlowObjValue value)
+    {
+        string n = name.ToString();
+        if (n == "gi")
+            value.convertString(out nic_.gi);
+        // attributes would need special handling
+    }
+
+    public override FOTBuilder.ExtensionFlowObj copy()
+    {
+        var c = new ElementFlowObj();
+        c.nic_.gi = new StringC(nic_.gi);
+        return c;
+    }
+}
+
+// Empty element flow object
+public class EmptyElementFlowObj : TransformExtensionFlowObj
+{
+    private TransformFOTBuilder.ElementNIC nic_ = new TransformFOTBuilder.ElementNIC();
+
+    public override void atomic(TransformFOTBuilder fotb, NodePtr nd)
+    {
+        fotb.emptyElement(nic_);
+    }
+
+    public override bool hasNIC(StringC name)
+    {
+        string n = name.ToString();
+        return n == "gi" || n == "attributes";
+    }
+
+    public override void setNIC(StringC name, IExtensionFlowObjValue value)
+    {
+        string n = name.ToString();
+        if (n == "gi")
+            value.convertString(out nic_.gi);
+    }
+
+    public override FOTBuilder.ExtensionFlowObj copy()
+    {
+        var c = new EmptyElementFlowObj();
+        c.nic_.gi = new StringC(nic_.gi);
+        return c;
+    }
+}
+
+// Document type flow object
+public class DocumentTypeFlowObj : TransformExtensionFlowObj
+{
+    private TransformFOTBuilder.DocumentTypeNIC nic_ = new TransformFOTBuilder.DocumentTypeNIC();
+
+    public override void atomic(TransformFOTBuilder fotb, NodePtr nd)
+    {
+        fotb.documentType(nic_);
+    }
+
+    public override bool hasNIC(StringC name)
+    {
+        string n = name.ToString();
+        return n == "name" || n == "system-id" || n == "public-id";
+    }
+
+    public override void setNIC(StringC name, IExtensionFlowObjValue value)
+    {
+        string n = name.ToString();
+        if (n == "name")
+            value.convertString(out nic_.name);
+        else if (n == "system-id")
+            value.convertString(out nic_.systemId);
+        else if (n == "public-id")
+            value.convertString(out nic_.publicId);
+    }
+
+    public override FOTBuilder.ExtensionFlowObj copy()
+    {
+        var c = new DocumentTypeFlowObj();
+        c.nic_.name = new StringC(nic_.name);
+        c.nic_.systemId = new StringC(nic_.systemId);
+        c.nic_.publicId = new StringC(nic_.publicId);
+        return c;
+    }
+}
+
+// Processing instruction flow object
+public class ProcessingInstructionFlowObj : TransformExtensionFlowObj
+{
+    private StringC data_ = new StringC();
+
+    public override void atomic(TransformFOTBuilder fotb, NodePtr nd)
+    {
+        fotb.processingInstruction(data_);
+    }
+
+    public override bool hasNIC(StringC name)
+    {
+        return name.ToString() == "data";
+    }
+
+    public override void setNIC(StringC name, IExtensionFlowObjValue value)
+    {
+        if (name.ToString() == "data")
+            value.convertString(out data_);
+    }
+
+    public override FOTBuilder.ExtensionFlowObj copy()
+    {
+        var c = new ProcessingInstructionFlowObj();
+        c.data_ = new StringC(data_);
+        return c;
+    }
+}
+
+// Formatting instruction flow object
+public class FormattingInstructionFlowObj : TransformExtensionFlowObj
+{
+    private StringC data_ = new StringC();
+
+    public override void atomic(TransformFOTBuilder fotb, NodePtr nd)
+    {
+        fotb.formattingInstruction(data_);
+    }
+
+    public override bool hasNIC(StringC name)
+    {
+        return name.ToString() == "data";
+    }
+
+    public override void setNIC(StringC name, IExtensionFlowObjValue value)
+    {
+        if (name.ToString() == "data")
+            value.convertString(out data_);
+    }
+
+    public override FOTBuilder.ExtensionFlowObj copy()
+    {
+        var c = new FormattingInstructionFlowObj();
+        c.data_ = new StringC(data_);
+        return c;
     }
 }
