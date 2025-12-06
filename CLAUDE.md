@@ -454,3 +454,8 @@ When in doubt:
 - Keep the original structure
 - Keep the original algorithm
 - Just make it valid C#
+
+## Git Commit Guidelines
+
+- **One-line commit messages only.** No multi-paragraph essays. State what changed in a single concise line.
+- **No AI attribution or marketing.** Do not append "Generated with Claude", "Co-Authored-By: Claude", robot emojis, or any similar vanity footers. The code speaks for itself.
