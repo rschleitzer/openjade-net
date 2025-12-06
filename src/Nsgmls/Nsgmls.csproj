@@ -13,4 +13,10 @@
     <ProjectReference Include="..\OpenSP\OpenSP.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="sgml\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

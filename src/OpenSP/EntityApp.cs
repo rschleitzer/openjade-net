@@ -149,6 +149,15 @@ public abstract class EntityApp : CmdLineApp
             // filenames specified on command-line must exist
             v.push_back(convertInput(catalogSysids_[i]));
 
+        // Check for bundled catalog relative to executable
+        string? exeDir = Path.GetDirectoryName(Environment.ProcessPath);
+        if (exeDir != null)
+        {
+            string localCatalog = Path.Combine(exeDir, "sgml", "catalog");
+            if (File.Exists(localCatalog))
+                v.push_back(convertInput(localCatalog));
+        }
+
         // Get catalog files from environment (or compile-time default)
         string? catalogFiles = Environment.GetEnvironmentVariable("SGML_CATALOG_FILES");
         if (catalogFiles == null)
