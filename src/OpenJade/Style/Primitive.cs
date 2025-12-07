@@ -3926,6 +3926,59 @@ public class AssqPrimitiveObj : PrimitiveObj
     }
 }
 
+// Node-list=? primitive - tests if two node lists contain the same nodes in the same order
+// C++ implementation: upstream/openjade/style/primitive.cxx:3882
+public class NodeListEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public NodeListEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl1 = args[0]?.asNodeList();
+        if (nl1 == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+
+        // Same object - equal
+        if (nl1 == args[1])
+            return interp.makeTrue();
+
+        NodeListObj? nl2 = args[1]?.asNodeList();
+        if (nl2 == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 1, args[1]);
+
+        // Iterate through both lists comparing nodes
+        while (true)
+        {
+            NodePtr? nd1 = nl1.nodeListFirst(ctx, interp);
+            NodePtr? nd2 = nl2.nodeListFirst(ctx, interp);
+
+            if (nd1 == null || !nd1)
+            {
+                // nl1 exhausted - equal if nl2 is also exhausted
+                if (nd2 == null || !nd2)
+                    return interp.makeTrue();
+                else
+                    return interp.makeFalse();
+            }
+            else if (nd2 == null || !nd2)
+            {
+                // nl2 exhausted but nl1 isn't
+                return interp.makeFalse();
+            }
+            else if (nd1.node == null || nd2.node == null || !nd1.node.Equals(nd2.node))
+            {
+                // Nodes differ
+                return interp.makeFalse();
+            }
+
+            // Move to rest
+            nl1 = nl1.nodeListRest(ctx, interp);
+            nl2 = nl2.nodeListRest(ctx, interp);
+        }
+    }
+}
+
 // Node-list->list primitive - converts a node list to a Scheme list iteratively
 public class NodeListToListPrimitiveObj : PrimitiveObj
 {

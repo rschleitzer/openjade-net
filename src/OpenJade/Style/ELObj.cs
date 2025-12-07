@@ -1554,8 +1554,9 @@ public class PairNodeListObj : NodeListObj
             NodeListObj headRest = head_.nodeListRest(ctx, interp);
             return new PairNodeListObj(headRest, tail_);
         }
-        // When head is exhausted, the rest is the tail (not the tail's rest)
-        return tail_;
+        // When head is exhausted, we've already returned tail's first element via nodeListFirst,
+        // so we need to return the rest of the tail
+        return tail_.nodeListRest(ctx, interp);
     }
 }
 

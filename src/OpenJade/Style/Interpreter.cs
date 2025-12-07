@@ -178,6 +178,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("node-list-length", new NodeListLengthPrimitiveObj());
         installPrimitive("node-list-ref", new NodeListRefPrimitiveObj());
         installPrimitive("node-list-reverse", new NodeListReversePrimitiveObj());
+        installPrimitive("node-list=?", new NodeListEqualPrimitiveObj());
         installPrimitive("node-list->list", new NodeListToListPrimitiveObj());
         installPrimitive("follow", new FollowPrimitiveObj());
         installPrimitive("preced", new PrecedPrimitiveObj());
