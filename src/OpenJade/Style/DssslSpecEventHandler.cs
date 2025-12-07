@@ -669,6 +669,8 @@ public class DssslSpecEventHandler : ArcDirector
         {
             if (ev != null && parent_.gatheringBody_)
             {
+                ulong serial;
+                bool isRe = ev.isRe(out serial);
                 parent_.currentBody_.addChars(ev.data(), ev.dataOffset(), ev.dataLength(), ev.location());
             }
         }

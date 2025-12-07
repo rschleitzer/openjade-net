@@ -115,15 +115,31 @@ public class SchemeParser : Messenger
     public void parse()
     {
         // Main parsing entry point
+        int formCount = 0;
         for (;;)
         {
             Token tok;
             if (!getToken(TokenAllow.OpenParen | TokenAllow.EndOfEntity, out tok))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG SchemeParser.parse: getToken failed after {formCount} forms");
                 break;
+            }
             if (tok == Token.EndOfEntity)
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG SchemeParser.parse: end of entity after {formCount} forms");
                 break;
+            }
+            formCount++;
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG SchemeParser.parse: parsing form {formCount}");
             if (!parseTopLevel())
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG SchemeParser.parse: parseTopLevel failed");
                 break;
+            }
         }
     }
 
@@ -131,13 +147,21 @@ public class SchemeParser : Messenger
     {
         Token tok;
         if (!getToken(TokenAllow.Identifier | TokenAllow.KeyDefine, out tok))
+        {
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG parseTopLevel: getToken failed");
             return false;
+        }
+        if (interp_.debugMode())
+            Console.Error.WriteLine($"DEBUG parseTopLevel: tok={tok}, currentToken={currentToken_}");
         if (tok == Token.Identifier)
         {
             Identifier ident = lookup(currentToken_);
             Identifier.SyntacticKey key;
             if (ident.syntacticKey(out key))
             {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG parseTopLevel: syntacticKey={key}");
                 switch (key)
                 {
                     case Identifier.SyntacticKey.define:
@@ -163,8 +187,15 @@ public class SchemeParser : Messenger
                     case Identifier.SyntacticKey.declareFlowObjectClass:
                         return doDeclareFlowObjectClass();
                     default:
+                        if (interp_.debugMode())
+                            Console.Error.WriteLine($"DEBUG parseTopLevel: unhandled syntacticKey={key}");
                         break;
                 }
+            }
+            else
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG parseTopLevel: no syntacticKey for '{currentToken_}'");
             }
             message(InterpreterMessages.unknownTopLevelForm);
             return skipForm();
@@ -295,7 +326,7 @@ public class SchemeParser : Messenger
             case Token.OpenParen:
                 return parseCall(out expr);
             case Token.Quote:
-                return parseQuote(out expr);
+                return parseQuotedDatum(out expr);  // Shorthand 'datum - no close paren
             case Token.Quasiquote:
                 return parseQuasiquote(out expr);
             case Token.Char:
@@ -436,6 +467,7 @@ public class SchemeParser : Messenger
 
     private bool parseQuote(out Expression? expr)
     {
+        // (quote datum) form - expects close paren
         expr = null;
         ELObj? datum;
         Location loc = in_?.currentLocation() ?? new Location();
@@ -443,6 +475,19 @@ public class SchemeParser : Messenger
         if (!parseDatum(TokenAllow.Expr, out datum, out loc, out tok))
             return false;
         if (!expectCloseParen())
+            return false;
+        expr = new ConstantExpression(datum, loc);
+        return true;
+    }
+
+    private bool parseQuotedDatum(out Expression? expr)
+    {
+        // 'datum shorthand form - no close paren needed
+        expr = null;
+        ELObj? datum;
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+        if (!parseDatum(TokenAllow.Expr, out datum, out loc, out tok))
             return false;
         expr = new ConstantExpression(datum, loc);
         return true;
@@ -550,6 +595,8 @@ public class SchemeParser : Messenger
 
     private bool parseCase(out Expression? expr)
     {
+        if (interp_.debugMode())
+            Console.Error.WriteLine("DEBUG parseCase: starting");
         expr = null;
         Location loc = in_?.currentLocation() ?? new Location();
         Token tok;
@@ -558,7 +605,13 @@ public class SchemeParser : Messenger
         // Parse the key expression
         Expression? keyExpr;
         if (!parseExpression(TokenAllow.Expr, out keyExpr, out key, out tok))
+        {
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG parseCase: parseExpression for key failed");
             return false;
+        }
+        if (interp_.debugMode())
+            Console.Error.WriteLine($"DEBUG parseCase: key parsed, keyExpr={keyExpr?.GetType().Name}");
 
         var cases = new System.Collections.Generic.List<CaseExpression.Case>();
         Expression? elseExpr = null;
@@ -567,13 +620,25 @@ public class SchemeParser : Messenger
         for (;;)
         {
             if (!getToken(TokenAllow.OpenParen | TokenAllow.CloseParen, out tok))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG parseCase: getToken for clause start failed");
                 return false;
+            }
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG parseCase: clause start tok={tok}");
             if (tok == Token.CloseParen)
                 break;
 
             // Parse clause - either ((datums...) expr...) or (else expr...)
             if (!getToken(TokenAllow.OpenParen | TokenAllow.Identifier, out tok))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG parseCase: getToken for datums list start failed");
                 return false;
+            }
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG parseCase: datums list start tok={tok}, currentToken={currentToken_}");
 
             if (tok == Token.Identifier)
             {
@@ -586,6 +651,8 @@ public class SchemeParser : Messenger
                     continue;
                 }
                 // Not else - put it back and treat as datum list error
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG parseCase: unexpected identifier '{currentToken_}' instead of datums list");
                 return false;
             }
 
@@ -596,16 +663,28 @@ public class SchemeParser : Messenger
                 ELObj? datum;
                 Location datumLoc;
                 if (!parseDatum(TokenAllow.Expr | TokenAllow.CloseParen, out datum, out datumLoc, out tok))
+                {
+                    if (interp_.debugMode())
+                        Console.Error.WriteLine("DEBUG parseCase: parseDatum failed");
                     return false;
+                }
                 if (tok == Token.CloseParen)
                     break;
                 datums.Add(datum);
             }
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG parseCase: parsed {datums.Count} datums");
 
             // Parse result expressions
             Expression? result;
             if (!parseBeginUntilClose(out result))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG parseCase: parseBeginUntilClose for result failed");
                 return false;
+            }
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG parseCase: parsed result expression");
 
             var caseItem = new CaseExpression.Case
             {
@@ -615,6 +694,8 @@ public class SchemeParser : Messenger
             cases.Add(caseItem);
         }
 
+        if (interp_.debugMode())
+            Console.Error.WriteLine($"DEBUG parseCase: complete with {cases.Count} cases");
         expr = new CaseExpression(keyExpr!, cases, elseExpr, loc);
         return true;
     }
@@ -721,10 +802,100 @@ public class SchemeParser : Messenger
         System.Collections.Generic.List<Expression> inits = new System.Collections.Generic.List<Expression>();
         Expression? body;
 
-        if (!parseBindingsAndBody(vars, inits, out body))
+        // Check for named let: (let name ((var init) ...) body)
+        Token tok;
+        if (!getToken(TokenAllow.OpenParen | TokenAllow.Identifier, out tok))
             return false;
 
-        expr = new LetExpression(vars, inits, body!, loc);
+        Identifier? name = null;
+        if (tok == Token.Identifier)
+        {
+            // Named let - save the name and parse bindings
+            name = lookup(currentToken_);
+            if (!parseBindingsAndBody(vars, inits, out body))
+                return false;
+        }
+        else
+        {
+            // Regular let - token is already open paren, parse bindings directly
+            if (!parseBindingsAndBody1(vars, inits, out body))
+                return false;
+        }
+
+        if (name != null)
+        {
+            // Named let: (let loop ((x 1)) body) becomes
+            // ((letrec ((loop (lambda (x) body))) loop) 1)
+            System.Collections.Generic.List<Identifier?> loopFormal = new System.Collections.Generic.List<Identifier?> { name };
+            System.Collections.Generic.List<Expression?> emptyInits = new System.Collections.Generic.List<Expression?>();
+            System.Collections.Generic.List<Expression> loopInit = new System.Collections.Generic.List<Expression>
+            {
+                new LambdaExpression(vars, emptyInits, 0, false, 0, body!, loc)
+            };
+            Expression loopRef = new VariableExpression(name, loc);
+            expr = new LetrecExpression(loopFormal, loopInit, loopRef, loc);
+            expr = new CallExpression(expr, inits, loc);
+        }
+        else
+        {
+            expr = new LetExpression(vars, inits, body!, loc);
+        }
+        return true;
+    }
+
+    // Parse bindings and body after the open paren has been consumed
+    private bool parseBindingsAndBody1(System.Collections.Generic.List<Identifier?> vars, System.Collections.Generic.List<Expression> inits, out Expression? body)
+    {
+        body = null;
+        Token tok;
+
+        // Parse each binding (var init) until we hit close paren
+        for (;;)
+        {
+            if (!getToken(TokenAllow.OpenParen | TokenAllow.CloseParen, out tok))
+                return false;
+            if (tok == Token.CloseParen)
+                break;
+
+            // Parse binding (var init)
+            if (!getToken(TokenAllow.Identifier, out tok))
+                return false;
+            vars.Add(lookup(currentToken_));
+
+            Identifier.SyntacticKey key;
+            Expression? init;
+            if (!parseExpression(TokenAllow.Expr, out init, out key, out tok))
+                return false;
+            if (init != null)
+                inits.Add(init);
+            else
+                return false;
+
+            if (!getToken(TokenAllow.CloseParen, out tok))
+                return false;
+        }
+
+        // Parse body expressions
+        System.Collections.Generic.List<Expression> bodyExprs = new System.Collections.Generic.List<Expression>();
+        for (;;)
+        {
+            Identifier.SyntacticKey key;
+            Expression? e;
+            if (!parseExpression(TokenAllow.Expr | TokenAllow.CloseParen, out e, out key, out tok))
+                return false;
+            if (tok == Token.CloseParen)
+                break;
+            if (e != null)
+                bodyExprs.Add(e);
+        }
+
+        if (bodyExprs.Count == 0)
+            body = new ConstantExpression(interp_.makeUnspecified(), new Location());
+        else if (bodyExprs.Count == 1)
+            body = bodyExprs[0];
+        else
+            body = new SequenceExpression(bodyExprs, new Location());
+
         return true;
     }
 
@@ -894,7 +1065,8 @@ public class SchemeParser : Messenger
                     break;
                 case Token.Identifier:
                     {
-                        formals.Add(lookup(currentToken_));
+                        Identifier formal = lookup(currentToken_);
+                        formals.Add(formal);
                         argCount[type]++;
                         if (type == formalRest)
                             allowed = TokenAllow.HashKey | TokenAllow.CloseParen;
@@ -925,6 +1097,8 @@ public class SchemeParser : Messenger
 
     private bool parseBegin(out Expression? expr)
     {
+        if (interp_.debugMode())
+            Console.Error.WriteLine("DEBUG parseBegin: starting");
         expr = null;
         Location loc = in_?.currentLocation() ?? new Location();
         System.Collections.Generic.List<Expression> exprs = new System.Collections.Generic.List<Expression>();
@@ -935,12 +1109,19 @@ public class SchemeParser : Messenger
             Identifier.SyntacticKey key;
             Expression? e;
             if (!parseExpression(TokenAllow.Expr | TokenAllow.CloseParen, out e, out key, out tok))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG parseBegin: parseExpression failed after {exprs.Count} exprs");
                 return false;
+            }
             if (tok == Token.CloseParen)
                 break;
             if (e != null)
                 exprs.Add(e);
         }
+
+        if (interp_.debugMode())
+            Console.Error.WriteLine($"DEBUG parseBegin: parsed {exprs.Count} expressions");
 
         if (exprs.Count == 0)
             expr = new ConstantExpression(interp_.makeUnspecified(), loc);
@@ -1375,7 +1556,13 @@ public class SchemeParser : Messenger
         tok = Token.EndOfEntity;
 
         if (!getToken(allowed, out tok))
+        {
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG parseDatum: getToken failed");
             return false;
+        }
+        if (interp_.debugMode())
+            Console.Error.WriteLine($"DEBUG parseDatum: tok={tok}, currentToken={currentToken_}");
 
         switch (tok)
         {
@@ -1403,8 +1590,15 @@ public class SchemeParser : Messenger
             case Token.False:
                 datum = interp_.makeFalse();
                 return true;
+            case Token.Char:
+                // Character literal like #\A
+                datum = interp_.makeChar(currentToken_.size() > 0 ? currentToken_[0] : 0);
+                return true;
             case Token.OpenParen:
                 return parseDatumList(out datum, out loc);
+            case Token.CloseParen:
+                // CloseParen can be allowed to signal end of a list - datum stays null
+                return true;
             default:
                 return false;
         }
@@ -1457,49 +1651,91 @@ public class SchemeParser : Messenger
     // Definition parsing
     private bool doDefine()
     {
+        if (interp_.debugMode())
+            Console.Error.WriteLine("DEBUG doDefine: starting");
         Token tok;
         if (!getToken(TokenAllow.Identifier | TokenAllow.OpenParen, out tok))
+        {
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG doDefine: getToken failed");
             return false;
+        }
+        if (interp_.debugMode())
+            Console.Error.WriteLine($"DEBUG doDefine: tok={tok}, currentToken={currentToken_}");
 
         if (tok == Token.Identifier)
         {
             // (define var expr)
             Identifier ident = lookup(currentToken_);
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG doDefine: defining variable '{ident.name()}'");
             Expression? expr;
             Identifier.SyntacticKey key;
             if (!parseExpression(TokenAllow.Expr, out expr, out key, out tok))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG doDefine: parseExpression failed");
                 return false;
+            }
             if (!expectCloseParen())
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG doDefine: expectCloseParen failed");
                 return false;
+            }
 
             // Register definition
             ident.setExpression(expr, 0, in_?.currentLocation() ?? new Location());
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG doDefine: variable definition complete");
             return true;
         }
         else
         {
             // (define (name args...) body)
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG doDefine: function definition");
             if (!getToken(TokenAllow.Identifier, out tok))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG doDefine: getToken(Identifier) failed");
                 return false;
+            }
             Identifier name = lookup(currentToken_);
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG doDefine: function name='{name.name()}'");
 
-            System.Collections.Generic.List<Identifier> formals = new System.Collections.Generic.List<Identifier>();
-            System.Collections.Generic.List<Expression> defaults = new System.Collections.Generic.List<Expression>();
+            System.Collections.Generic.List<Identifier?> formals = new System.Collections.Generic.List<Identifier?>();
+            System.Collections.Generic.List<Expression?> defaults = new System.Collections.Generic.List<Expression?>();
             int nRequired;
             bool hasRest;
             int nKey;
             if (!parseFormals(formals, defaults, out nRequired, out hasRest, out nKey))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG doDefine: parseFormals failed");
                 return false;
+            }
+            if (interp_.debugMode())
+                Console.Error.WriteLine($"DEBUG doDefine: parsed {formals.Count} formals");
 
             Expression? body;
             if (!parseBegin(out body))
+            {
+                if (interp_.debugMode())
+                    Console.Error.WriteLine("DEBUG doDefine: parseBegin failed");
                 return false;
+            }
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG doDefine: parsed body");
 
             Location loc = in_?.currentLocation() ?? new Location();
             int nOptional = formals.Count - nRequired - nKey - (hasRest ? 1 : 0);
             Expression lambda = new LambdaExpression(formals, defaults, nOptional, hasRest, nKey, body!, loc);
             // Store the lambda expression for later compilation
             name.setExpression(lambda, 0, loc);
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG doDefine: function definition complete");
             return true;
         }
     }
@@ -1942,6 +2178,8 @@ public class SchemeParser : Messenger
         tok = Token.EndOfEntity;
         if (in_ == null)
         {
+            if (interp_.debugMode())
+                Console.Error.WriteLine("DEBUG getToken: in_ is null");
             return false;
         }
 
@@ -1951,13 +2189,20 @@ public class SchemeParser : Messenger
         if (c < 0)
         {
             tok = Token.EndOfEntity;
-            return (allowed & TokenAllow.EndOfEntity) != 0;
+            bool result = (allowed & TokenAllow.EndOfEntity) != 0;
+            if (!result && interp_.debugMode())
+            {
+                Console.Error.WriteLine($"DEBUG getToken: EndOfEntity not allowed (allowed={allowed})");
+            }
+            return result;
         }
 
         switch (c)
         {
             case '(':
                 tok = Token.OpenParen;
+                if ((allowed & TokenAllow.OpenParen) == 0 && interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG getToken: OpenParen not allowed (allowed={allowed})");
                 return (allowed & TokenAllow.OpenParen) != 0;
             case ')':
                 tok = Token.CloseParen;
@@ -1999,6 +2244,8 @@ public class SchemeParser : Messenger
                     ungetChar(c);
                     return handleIdentifier(allowed, out tok);
                 }
+                if (interp_.debugMode())
+                    Console.Error.WriteLine($"DEBUG getToken: unrecognized char '{(char)c}' (0x{c:X})");
                 return false;
         }
     }
@@ -2143,9 +2390,10 @@ public class SchemeParser : Messenger
 
         if (!hasDigit)
         {
-            // Must be identifier starting with +/-
+            // Must be identifier starting with +/- (like the - or + functions)
+            // currentToken_ already contains the +/- character, so just return it as identifier
             tok = Token.Identifier;
-            return handleIdentifier(allowed, out tok);
+            return (allowed & TokenAllow.Identifier) != 0;
         }
 
         return (allowed & TokenAllow.OtherExpr) != 0;
@@ -2247,7 +2495,8 @@ public class SchemeParser : Messenger
         while (true)
         {
             Xchar c = getChar();
-            if (c < 0 || c == '\n')
+            // Stop at end of entity, LF (0xA), or CR (0xD) - SGML uses CR as RE
+            if (c < 0 || c == '\n' || c == '\r')
                 return;
         }
     }

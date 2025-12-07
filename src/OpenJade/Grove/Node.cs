@@ -1455,14 +1455,14 @@ public class NodePtr
         return node.groveIndex();
     }
 
-    public AccessResult getGi(GroveString str)
+    public AccessResult getGi(ref GroveString str)
     {
         if (node == null)
             return AccessResult.accessNull;
         return node.getGi(ref str);
     }
 
-    public AccessResult getId(GroveString str)
+    public AccessResult getId(ref GroveString str)
     {
         if (node == null)
             return AccessResult.accessNull;
@@ -1490,7 +1490,7 @@ public class NodePtr
         return node.children(ref ptr);
     }
 
-    public AccessResult charChunk(SdataMapper? mapper, GroveString str)
+    public AccessResult charChunk(SdataMapper? mapper, ref GroveString str)
     {
         if (node == null)
             return AccessResult.accessNull;
@@ -1525,7 +1525,7 @@ public class NodePtr
         return node.getAttributes(ref ptr);
     }
 
-    public AccessResult tokens(GroveString str)
+    public AccessResult tokens(ref GroveString str)
     {
         if (node == null)
             return AccessResult.accessNull;
@@ -1640,14 +1640,14 @@ public class NodeListPtr
 
     public static implicit operator bool(NodeListPtr ptr) => ptr.list != null;
 
-    public AccessResult first(NodePtr ptr)
+    public AccessResult first(ref NodePtr ptr)
     {
         if (list == null)
             return AccessResult.accessNull;
         return list.first(ref ptr);
     }
 
-    public AccessResult rest(NodeListPtr ptr)
+    public AccessResult rest(ref NodeListPtr ptr)
     {
         if (list == null)
             return AccessResult.accessNull;

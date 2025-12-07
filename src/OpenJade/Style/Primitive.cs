@@ -429,6 +429,7 @@ public class MinusPrimitiveObj : PrimitiveObj
         int resultDim = dim;
         bool isDouble = (q == ELObj.QuantityType.doubleQuantity);
 
+
         for (int i = 1; i < nArgs; i++)
         {
             lval = 0; dval = 0; dim = 0;
@@ -457,6 +458,7 @@ public class MinusPrimitiveObj : PrimitiveObj
                     intResult -= lval;
             }
         }
+
 
         if (resultDim == 0)
             return isDouble ? (ELObj)interp.makeReal(doubleResult) : interp.makeInteger(intResult);
@@ -783,6 +785,83 @@ public class SymbolToStringPrimitiveObj : PrimitiveObj
     }
 }
 
+// String=? primitive - string equality comparison
+public class StringEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public StringEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s1 = null, s2 = null;
+        nuint n1 = 0, n2 = 0;
+        if (!args[0]!.stringData(out s1, out n1))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        if (!args[1]!.stringData(out s2, out n2))
+            return argError(interp, loc, InterpreterMessages.notAString, 1, args[1]);
+        if (n1 != n2)
+            return interp.makeFalse();
+        for (nuint i = 0; i < n1; i++)
+        {
+            if (s1![i] != s2![i])
+                return interp.makeFalse();
+        }
+        return interp.makeTrue();
+    }
+}
+
+// String<? primitive - string less-than comparison
+public class StringLessPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public StringLessPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s1 = null, s2 = null;
+        nuint n1 = 0, n2 = 0;
+        if (!args[0]!.stringData(out s1, out n1))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        if (!args[1]!.stringData(out s2, out n2))
+            return argError(interp, loc, InterpreterMessages.notAString, 1, args[1]);
+        nuint minLen = n1 < n2 ? n1 : n2;
+        for (nuint i = 0; i < minLen; i++)
+        {
+            if (s1![i] < s2![i])
+                return interp.makeTrue();
+            if (s1![i] > s2![i])
+                return interp.makeFalse();
+        }
+        return n1 < n2 ? interp.makeTrue() : interp.makeFalse();
+    }
+}
+
+// String<=? primitive - string less-than-or-equal comparison
+public class StringLessEqualPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public StringLessEqualPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s1 = null, s2 = null;
+        nuint n1 = 0, n2 = 0;
+        if (!args[0]!.stringData(out s1, out n1))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        if (!args[1]!.stringData(out s2, out n2))
+            return argError(interp, loc, InterpreterMessages.notAString, 1, args[1]);
+        nuint minLen = n1 < n2 ? n1 : n2;
+        for (nuint i = 0; i < minLen; i++)
+        {
+            if (s1![i] < s2![i])
+                return interp.makeTrue();
+            if (s1![i] > s2![i])
+                return interp.makeFalse();
+        }
+        return n1 <= n2 ? interp.makeTrue() : interp.makeFalse();
+    }
+}
+
 // Sosofo? primitive
 public class IsSosofoPrimitiveObj : PrimitiveObj
 {
@@ -977,6 +1056,7 @@ public class EmptyNodeListPrimitiveObj : PrimitiveObj
 public class ChildrenPrimitiveObj : PrimitiveObj
 {
     private static readonly Signature sig = new Signature(1, 0, false);
+    private static bool debugChildren = false; // Set to true for debugging
     public ChildrenPrimitiveObj() : base(sig) { }
 
     public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
@@ -984,16 +1064,42 @@ public class ChildrenPrimitiveObj : PrimitiveObj
         NodePtr? node = null;
         if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
         {
+            if (debugChildren)
+                Console.Error.WriteLine("ChildrenPrimitiveObj: optSingletonNodeList returned false, using MapNodeListObj");
             NodeListObj? nl = args[0]?.asNodeList();
             if (nl != null)
                 return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
             return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
         }
-        if (node == null)
+        if (node == null || !node)
+        {
+            if (debugChildren)
+                Console.Error.WriteLine("ChildrenPrimitiveObj: node is null/empty, returning args[0]");
             return args[0];
-        NodeListPtr? nlp = null;
-        if (node.children(ref nlp) != AccessResult.accessOK)
+        }
+        if (debugChildren)
+        {
+            GroveString gi = new GroveString();
+            if (node.getGi(ref gi) == AccessResult.accessOK)
+            {
+                string giStr = "";
+                for (nuint i = 0; i < gi.size(); i++)
+                    giStr += (char)gi.data()![i];
+                Console.Error.WriteLine($"ChildrenPrimitiveObj: getting children of node with GI '{giStr}'");
+            }
+            else
+                Console.Error.WriteLine($"ChildrenPrimitiveObj: getting children of node (cannot get GI)");
+        }
+        NodeListPtr nlp = new NodeListPtr();
+        var result = node.children(ref nlp);
+        if (result != AccessResult.accessOK)
+        {
+            if (debugChildren)
+                Console.Error.WriteLine($"ChildrenPrimitiveObj: children() returned {result}, returning empty list");
             return interp.makeEmptyNodeList();
+        }
+        if (debugChildren)
+            Console.Error.WriteLine($"ChildrenPrimitiveObj: children() succeeded");
         return new NodeListPtrNodeListObj(nlp!);
     }
 }
@@ -1011,13 +1117,13 @@ public class ParentPrimitiveObj : PrimitiveObj
         {
             if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
                 return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
-            if (node == null)
+            if (node == null || !node)
                 return args[0];
         }
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
         NodePtr parent = new NodePtr();
@@ -1048,7 +1154,7 @@ public class GiPrimitiveObj : PrimitiveObj
             node = ctx.currentNode;
         }
         GroveString str = new GroveString();
-        if (node != null && node.getGi(str) == AccessResult.accessOK)
+        if (node != null && node.getGi(ref str) == AccessResult.accessOK)
             return interp.makeString(str.data(), str.size());
         return interp.makeFalse();
     }
@@ -1075,7 +1181,7 @@ public class IdPrimitiveObj : PrimitiveObj
             node = ctx.currentNode;
         }
         GroveString str = new GroveString();
-        if (node != null && node.getId(str) == AccessResult.accessOK)
+        if (node != null && node.getId(ref str) == AccessResult.accessOK)
             return interp.makeString(str.data(), str.size());
         return interp.makeFalse();
     }
@@ -2412,7 +2518,7 @@ public class DescendantsPrimitiveObj : PrimitiveObj
                 return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
             return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
         }
-        if (node == null)
+        if (node == null || !node)
             return args[0];
         return new DescendantsNodeListObj(node);
     }
@@ -2485,7 +2591,7 @@ public class FollowPrimitiveObj : PrimitiveObj
                 return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
             return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
         }
-        if (node == null)
+        if (node == null || !node)
             return args[0];
         NodePtr next = new NodePtr();
         if (node.nextChunkSibling(ref next) != AccessResult.accessOK)
@@ -2510,7 +2616,7 @@ public class PrecedPrimitiveObj : PrimitiveObj
                 return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
             return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
         }
-        if (node == null)
+        if (node == null || !node)
             return args[0];
         // Get parent's first child, iterate until we reach this node
         NodePtr parent = new NodePtr();
@@ -2566,7 +2672,7 @@ public class DataPrimitiveObj : PrimitiveObj
         NodePtr? node = null;
         if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
             return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
-        if (node == null)
+        if (node == null || !node)
             return interp.makeString(Array.Empty<Char>(), 0);
         return nodeData(node, interp);
     }
@@ -2581,7 +2687,7 @@ public class DataPrimitiveObj : PrimitiveObj
     private static void collectData(NodePtr node, StringObj result)
     {
         GroveString chunk = new GroveString();
-        if (node.charChunk(null, chunk) == AccessResult.accessOK)
+        if (node.charChunk(null, ref chunk) == AccessResult.accessOK)
         {
             if (chunk.data() != null)
                 result.append(chunk.data()!, chunk.size());
@@ -2614,7 +2720,7 @@ public class AttributesPrimitiveObj : PrimitiveObj
                 return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
             return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
         }
-        if (node == null)
+        if (node == null || !node)
             return args[0];
         NamedNodeListPtr atts = new NamedNodeListPtr();
         if (node.getAttributes(ref atts) != AccessResult.accessOK)
@@ -2644,10 +2750,10 @@ public class AttributeStringPrimitiveObj : PrimitiveObj
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
-        if (node == null)
+        if (node == null || !node)
             return interp.makeFalse();
         StringC attName = new StringC(s!, n);
         StringC value = new StringC();
@@ -2669,7 +2775,7 @@ public class AttributeStringPrimitiveObj : PrimitiveObj
             return false;
         // Try tokens first
         GroveString tokens = new GroveString();
-        if (att.tokens(tokens) == AccessResult.accessOK)
+        if (att.tokens(ref tokens) == AccessResult.accessOK)
         {
             if (tokens.data() != null)
                 value.assign(tokens.data()!, tokens.size());
@@ -2682,7 +2788,7 @@ public class AttributeStringPrimitiveObj : PrimitiveObj
             do
             {
                 GroveString chunk = new GroveString();
-                if (child.charChunk(null, chunk) == AccessResult.accessOK && chunk.data() != null)
+                if (child.charChunk(null, ref chunk) == AccessResult.accessOK && chunk.data() != null)
                     value.append(chunk.data()!, chunk.size());
             } while (child.assignNextChunkSibling() == AccessResult.accessOK);
         }
@@ -2711,10 +2817,10 @@ public class InheritedAttributeStringPrimitiveObj : PrimitiveObj
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
-        if (node == null)
+        if (node == null || !node)
             return interp.makeFalse();
         StringC attName = new StringC(s!, n);
         StringC value = new StringC();
@@ -2750,7 +2856,7 @@ public class AncestorPrimitiveObj : PrimitiveObj
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
         StringC gi = new StringC(s!, n);
@@ -2759,7 +2865,7 @@ public class AncestorPrimitiveObj : PrimitiveObj
         while (cur.assignParent() == AccessResult.accessOK)
         {
             GroveString nodeGi = new GroveString();
-            if (cur.getGi(nodeGi) == AccessResult.accessOK)
+            if (cur.getGi(ref nodeGi) == AccessResult.accessOK)
             {
                 if (nodeGi.size() == gi.size())
                 {
@@ -2828,18 +2934,46 @@ public class SelectElementsNodeListObj : NodeListObj
         gis_ = gis;
     }
 
+    private static bool debugSelectElements = false; // Set to true for debugging
+
     public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
     {
+        if (debugSelectElements)
+        {
+            Console.Error.WriteLine($"SelectElementsNodeListObj.nodeListFirst: looking for GIs:");
+            foreach (var gi in gis_)
+                Console.Error.WriteLine($"  - GI: '{gi}'");
+        }
         NodeListObj? nl = nodeList_;
+        int count = 0;
         while (nl != null)
         {
             NodePtr? node = nl.nodeListFirst(ctx, interp);
-            if (node == null)
+            if (node == null || !node)
+            {
+                if (debugSelectElements)
+                    Console.Error.WriteLine($"SelectElementsNodeListObj: examined {count} nodes, no match found");
                 return null;
+            }
+            count++;
+            if (debugSelectElements)
+            {
+                GroveString nodeGi = new GroveString();
+                if (node.getGi(ref nodeGi) == AccessResult.accessOK)
+                    Console.Error.WriteLine($"SelectElementsNodeListObj: examining node with GI '{nodeGi}'");
+                else
+                    Console.Error.WriteLine($"SelectElementsNodeListObj: examining node (cannot get GI)");
+            }
             if (matchesGi(node))
+            {
+                if (debugSelectElements)
+                    Console.Error.WriteLine($"SelectElementsNodeListObj: found match!");
                 return node;
+            }
             nl = nl.nodeListRest(ctx, interp);
         }
+        if (debugSelectElements)
+            Console.Error.WriteLine($"SelectElementsNodeListObj: examined {count} nodes, no match found (nl became null)");
         return null;
     }
 
@@ -2849,7 +2983,7 @@ public class SelectElementsNodeListObj : NodeListObj
         while (nl != null)
         {
             NodePtr? node = nl.nodeListFirst(ctx, interp);
-            if (node == null)
+            if (node == null || !node)
                 return interp.makeEmptyNodeList() as NodeListObj;
             NodeListObj? rest = nl.nodeListRest(ctx, interp);
             if (matchesGi(node))
@@ -2862,7 +2996,7 @@ public class SelectElementsNodeListObj : NodeListObj
     private bool matchesGi(NodePtr node)
     {
         GroveString nodeGi = new GroveString();
-        if (node.getGi(nodeGi) != AccessResult.accessOK)
+        if (node.getGi(ref nodeGi) != AccessResult.accessOK)
             return false;
         foreach (StringC gi in gis_)
         {
@@ -2871,7 +3005,14 @@ public class SelectElementsNodeListObj : NodeListObj
                 bool match = true;
                 for (nuint i = 0; i < gi.size() && match; i++)
                 {
-                    if (nodeGi.data()![i] != gi.data()[i])
+                    // Case-insensitive comparison (SGML GIs are case-insensitive)
+                    // The C++ uses SubstTable for normalization, we do direct comparison
+                    Char c1 = nodeGi.data()![i];
+                    Char c2 = gi.data()[i];
+                    // Convert both to uppercase for comparison
+                    if (c1 >= 'a' && c1 <= 'z') c1 -= 32;
+                    if (c2 >= 'a' && c2 <= 'z') c2 -= 32;
+                    if (c1 != c2)
                         match = false;
                 }
                 if (match)
@@ -2925,7 +3066,8 @@ public class NodeListRefPrimitiveObj : PrimitiveObj
         }
         for (long i = 0; i < k && nl != null; i++)
         {
-            if (nl.nodeListFirst(ctx, interp) == null)
+            var first = nl.nodeListFirst(ctx, interp);
+            if (first == null)
             {
                 interp.setNextLocation(loc);
                 interp.message(InterpreterMessages.outOfRange);
@@ -2934,7 +3076,7 @@ public class NodeListRefPrimitiveObj : PrimitiveObj
             nl = nl.nodeListRest(ctx, interp);
         }
         NodePtr? node = nl?.nodeListFirst(ctx, interp);
-        if (node == null)
+        if (node == null || !node)
         {
             interp.setNextLocation(loc);
             interp.message(InterpreterMessages.outOfRange);
@@ -2960,7 +3102,7 @@ public class NodeListReversePrimitiveObj : PrimitiveObj
         while (nl != null)
         {
             NodePtr? node = nl.nodeListFirst(ctx, interp);
-            if (node == null)
+            if (node == null || !node)
                 break;
             nodes.Add(node);
             nl = nl.nodeListRest(ctx, interp);
@@ -3017,10 +3159,10 @@ public class ElementWithIdPrimitiveObj : PrimitiveObj
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
-        if (node == null)
+        if (node == null || !node)
             return interp.makeEmptyNodeList();
         // Get grove root
         NodePtr root = new NodePtr();
@@ -3052,20 +3194,20 @@ public class IsFirstSiblingPrimitiveObj : PrimitiveObj
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
-        if (node == null)
+        if (node == null || !node)
             return interp.makeFalse();
         // Check if there's a previous sibling with same GI
         GroveString myGi = new GroveString();
-        if (node.getGi(myGi) != AccessResult.accessOK)
+        if (node.getGi(ref myGi) != AccessResult.accessOK)
             return interp.makeFalse();
         NodePtr prev = new NodePtr(node);
         while (prev.assignPreviousSibling() == AccessResult.accessOK)
         {
             GroveString prevGi = new GroveString();
-            if (prev.getGi(prevGi) == AccessResult.accessOK)
+            if (prev.getGi(ref prevGi) == AccessResult.accessOK)
             {
                 if (myGi.size() == prevGi.size())
                 {
@@ -3101,20 +3243,20 @@ public class IsLastSiblingPrimitiveObj : PrimitiveObj
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
-        if (node == null)
+        if (node == null || !node)
             return interp.makeFalse();
         // Check if there's a next sibling with same GI
         GroveString myGi = new GroveString();
-        if (node.getGi(myGi) != AccessResult.accessOK)
+        if (node.getGi(ref myGi) != AccessResult.accessOK)
             return interp.makeFalse();
         NodePtr next = new NodePtr(node);
         while (next.assignNextChunkSibling() == AccessResult.accessOK)
         {
             GroveString nextGi = new GroveString();
-            if (next.getGi(nextGi) == AccessResult.accessOK)
+            if (next.getGi(ref nextGi) == AccessResult.accessOK)
             {
                 if (myGi.size() == nextGi.size())
                 {
@@ -3150,21 +3292,21 @@ public class ChildNumberPrimitiveObj : PrimitiveObj
         else
         {
             node = ctx.currentNode;
-            if (node == null)
+            if (node == null || !node)
                 return noCurrentNodeError(interp, loc);
         }
-        if (node == null)
+        if (node == null || !node)
             return interp.makeFalse();
         // Count preceding siblings with same GI
         GroveString myGi = new GroveString();
-        if (node.getGi(myGi) != AccessResult.accessOK)
+        if (node.getGi(ref myGi) != AccessResult.accessOK)
             return interp.makeFalse();
         long count = 1;
         NodePtr prev = new NodePtr(node);
         while (prev.assignPreviousSibling() == AccessResult.accessOK)
         {
             GroveString prevGi = new GroveString();
-            if (prev.getGi(prevGi) == AccessResult.accessOK)
+            if (prev.getGi(ref prevGi) == AccessResult.accessOK)
             {
                 if (myGi.size() == prevGi.size())
                 {
@@ -3781,6 +3923,43 @@ public class AssqPrimitiveObj : PrimitiveObj
             lst = pair.cdr();
         }
         return interp.makeFalse();
+    }
+}
+
+// Node-list->list primitive - converts a node list to a Scheme list iteratively
+public class NodeListToListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public NodeListToListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+
+        // Build list - collect all nodes first to avoid recursion issues
+        var items = new System.Collections.Generic.List<NodePtr>();
+
+        // Iteratively collect all nodes
+        while (true)
+        {
+            NodePtr? nd = nl.nodeListFirst(ctx, interp);
+            if (nd == null)
+                break;
+            items.Add(nd);
+            nl = nl.nodeListRest(ctx, interp);
+        }
+
+        // Build the list in proper order (reverse)
+        ELObj? result = interp.makeNil();
+        for (int i = items.Count - 1; i >= 0; i--)
+        {
+            ELObj singleton = new NodePtrNodeListObj(items[i]);
+            result = interp.makePair(singleton, result);
+        }
+
+        return result;
     }
 }
 

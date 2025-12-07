@@ -1679,7 +1679,7 @@ public class SgmlFOTBuilder : FOTBuilder
     private static bool nodeIsElement(NodePtr node)
     {
         GroveString gi = new GroveString();
-        return node.getGi(gi) == AccessResult.accessOK;
+        return node.getGi(ref gi) == AccessResult.accessOK;
     }
 
     private void flushPendingElements()
@@ -1701,7 +1701,7 @@ public class SgmlFOTBuilder : FOTBuilder
     private void outputElementName(NodePtr node)
     {
         GroveString id = new GroveString();
-        if (node.getId(id) == AccessResult.accessOK)
+        if (node.getId(ref id) == AccessResult.accessOK)
             outputElementName(node.groveIndex(), id.data()!, id.size());
         else
         {

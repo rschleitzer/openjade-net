@@ -184,7 +184,11 @@ public partial class VM : EvalContext
 
         // The inner execution loop
         while (insn != null)
+        {
+            if (interp.debugMode())
+                Console.Error.WriteLine($"VM.eval: executing {insn.GetType().Name}, sp={sp}");
             insn = insn.execute(this);
+        }
 
         ELObj? result;
         if (sp > 0)
@@ -197,6 +201,7 @@ public partial class VM : EvalContext
         }
         else
         {
+            Console.Error.WriteLine("VM.eval: stack empty after execution, returning error");
             if (interp.debugMode())
                 stackTrace();
             result = interp.makeError();

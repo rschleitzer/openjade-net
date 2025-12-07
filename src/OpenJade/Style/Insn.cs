@@ -512,10 +512,12 @@ public class TopRefInsn : Insn
     public override Insn? execute(VM vm)
     {
         ELObj? tem = var_.computeValue(true, vm.interp);
-        if (vm.interp.isError(tem))
+        if (vm.interp.isError(tem) || tem == null)
         {
-            vm.sp = 0;
-            return null;
+            // Undefined variable - return a no-op procedure to allow continuation
+            vm.needStack(1);
+            vm.sbase[vm.sp++] = new NoOpProcedureObj(var_.name().ToString());
+            return next_.pointer();
         }
         else
         {

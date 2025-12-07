@@ -115,8 +115,11 @@ public class ProcessingMode : Named
                            ref Specificity specificity)
     {
         GroveString gi = new GroveString();
-        if (nd.getGi(gi) == AccessResult.accessOK)
-            return findElementMatch(new StringC(gi.data(), gi.size()), nd, context, mgr, ref specificity);
+        if (nd.getGi(ref gi) == AccessResult.accessOK)
+        {
+            var giStr = new StringC(gi.data(), gi.size());
+            return findElementMatch(giStr, nd, context, mgr, ref specificity);
+        }
         NodePtr tem = new NodePtr();
         if (nd.getOrigin(ref tem) != AccessResult.accessOK)
             return findRootMatch(nd, context, mgr, ref specificity);

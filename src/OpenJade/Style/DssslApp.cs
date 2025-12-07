@@ -53,7 +53,7 @@ public abstract class DssslApp : GroveApp, IGroveManager
         switch (opt)
         {
             case 'G':
-                debugMode_ = true;
+                // Grove output mode (enable SGML output)
                 break;
             case '2':
                 dsssl2_ = true;
@@ -127,7 +127,41 @@ public abstract class DssslApp : GroveApp, IGroveManager
     public bool readEntity(StringC sysid, out StringC content)
     {
         content = new StringC();
-        // Simplified implementation - full implementation would read from entity manager
+
+        // Try to resolve the sysid - check sgml directory next to executable
+        string sysidStr = sysid.ToString();
+
+        // Get the directory where the executable is located
+        string? exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        string? exeDir = System.IO.Path.GetDirectoryName(exePath);
+
+        // Try paths in order:
+        // 1. sgml subdirectory next to executable
+        // 2. Current directory
+        string[] paths = new string[]
+        {
+            exeDir != null ? System.IO.Path.Combine(exeDir, "sgml", sysidStr) : "",
+            sysidStr,
+            System.IO.Path.Combine("sgml", sysidStr)
+        };
+
+        foreach (string path in paths)
+        {
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+            {
+                try
+                {
+                    string fileContent = System.IO.File.ReadAllText(path);
+                    content = new StringC(fileContent);
+                    return true;
+                }
+                catch
+                {
+                    // Continue trying other paths
+                }
+            }
+        }
+
         return false;
     }
 
@@ -140,12 +174,18 @@ public abstract class DssslApp : GroveApp, IGroveManager
     public override void processGrove()
     {
         if (!initSpecParser())
+        {
+            Console.Error.WriteLine("ERROR: initSpecParser failed");
             return;
+        }
 
         // Create FOT builder
         FOTBuilder? fotb = makeFOTBuilder(out FOTBuilder.ExtensionTableEntry[]? extensions);
         if (fotb == null)
+        {
+            Console.Error.WriteLine("ERROR: makeFOTBuilder returned null");
             return;
+        }
 
         // Create style engine adapter for GroveManager
         GroveManagerAdapter groveManagerAdapter = new GroveManagerAdapter(this);

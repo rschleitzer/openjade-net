@@ -716,7 +716,7 @@ public class HtmlFOTBuilder : FOTBuilder
         }
         giStack_.Add(new StringC());
         GroveString str = new GroveString();
-        if (node.getGi(str) == AccessResult.accessOK)
+        if (node.getGi(ref str) == AccessResult.accessOK)
             giStack_[giStack_.Count - 1].assign(str.data(), str.size());
         else if (giStack_.Count >= 2)
             giStack_[giStack_.Count - 1] = new StringC(giStack_[giStack_.Count - 2]);

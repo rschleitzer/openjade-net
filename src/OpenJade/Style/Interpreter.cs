@@ -28,10 +28,14 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // Extension table for backend-specific flow objects
     private FOTBuilder.ExtensionTableEntry[]? extensionTable_;
 
-    public Interpreter() : this(null) { }
+    // Grove manager for loading external files
+    private GroveManager? groveManager_;
 
-    public Interpreter(FOTBuilder.ExtensionTableEntry[]? extensionTable)
+    public Interpreter() : this(null, null) { }
+
+    public Interpreter(GroveManager? groveManager, FOTBuilder.ExtensionTableEntry[]? extensionTable)
     {
+        groveManager_ = groveManager;
         extensionTable_ = extensionTable;
 
         // Create the default/initial processing mode
@@ -66,9 +70,183 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("make", Identifier.SyntacticKey.make);
         installSyntacticKey("style", Identifier.SyntacticKey.style);
         installSyntacticKey("with-mode", Identifier.SyntacticKey.withMode);
+        installSyntacticKey("else", Identifier.SyntacticKey.elseKey);
+        installSyntacticKey("=>", Identifier.SyntacticKey.arrowKey);
+        installSyntacticKey("begin", Identifier.SyntacticKey.begin);
+        installSyntacticKey("set!", Identifier.SyntacticKey.set);
 
         // Install flow objects
         installFlowObjs();
+
+        // Install primitive procedures
+        installPrimitives();
+
+        // Install builtins from builtins.dsl
+        installBuiltins();
+    }
+
+    private void installPrimitive(string name, PrimitiveObj prim)
+    {
+        Identifier ident = lookup(makeStringC(name));
+        prim.setIdentifier(ident);
+        ident.setDefinition(0, new Location(), prim);
+        makePermanent(prim);
+    }
+
+    private void installFunction(string name, FunctionObj func)
+    {
+        Identifier ident = lookup(makeStringC(name));
+        ident.setDefinition(0, new Location(), func);
+        makePermanent(func);
+    }
+
+    private void installPrimitives()
+    {
+        // Core list primitives
+        installPrimitive("cons", new ConsPrimitiveObj());
+        installPrimitive("list", new ListPrimitiveObj());
+        installPrimitive("null?", new IsNullPrimitiveObj());
+        installPrimitive("list?", new IsListPrimitiveObj());
+        installPrimitive("pair?", new IsPairPrimitiveObj());
+        installPrimitive("car", new CarPrimitiveObj());
+        installPrimitive("cdr", new CdrPrimitiveObj());
+        installPrimitive("append", new AppendPrimitiveObj());
+        installPrimitive("reverse", new ReversePrimitiveObj());
+        installPrimitive("length", new LengthPrimitiveObj());
+        installPrimitive("list-ref", new ListRefPrimitiveObj());
+        installPrimitive("equal?", new IsEqualPrimitiveObj());
+        installPrimitive("eqv?", new IsEqvPrimitiveObj());
+        installPrimitive("memq", new MemqPrimitiveObj());
+        installPrimitive("assq", new AssqPrimitiveObj());
+
+        // String primitives
+        installPrimitive("string-append", new StringAppendPrimitiveObj());
+        installPrimitive("string-length", new StringLengthPrimitiveObj());
+        installPrimitive("string-ref", new StringRefPrimitiveObj());
+        installPrimitive("string->list", new StringToListPrimitiveObj());
+        installPrimitive("list->string", new ListToStringPrimitiveObj());
+        installPrimitive("symbol->string", new SymbolToStringPrimitiveObj());
+        installPrimitive("string=?", new StringEqualPrimitiveObj());
+        installPrimitive("string<?", new StringLessPrimitiveObj());
+        installPrimitive("string<=?", new StringLessEqualPrimitiveObj());
+        installPrimitive("number->string", new NumberToStringPrimitiveObj());
+
+        // Arithmetic primitives
+        installPrimitive("+", new PlusPrimitiveObj());
+        installPrimitive("-", new MinusPrimitiveObj());
+        installPrimitive("*", new MultiplyPrimitiveObj());
+        installPrimitive("/", new DividePrimitiveObj());
+        installPrimitive("=", new EqualPrimitiveObj());
+        installPrimitive("<", new LessPrimitiveObj());
+        installPrimitive(">", new GreaterPrimitiveObj());
+        installPrimitive("<=", new LessEqualPrimitiveObj());
+        installPrimitive(">=", new GreaterEqualPrimitiveObj());
+        installPrimitive("not", new NotPrimitiveObj());
+        installPrimitive("floor", new FloorPrimitiveObj());
+        installPrimitive("ceiling", new CeilingPrimitiveObj());
+        installPrimitive("round", new RoundPrimitiveObj());
+        installPrimitive("abs", new AbsPrimitiveObj());
+        installPrimitive("sqrt", new SqrtPrimitiveObj());
+        installPrimitive("odd?", new IsOddPrimitiveObj());
+        installPrimitive("even?", new IsEvenPrimitiveObj());
+        installPrimitive("zero?", new IsZeroPrimitiveObj());
+        installPrimitive("positive?", new IsPositivePrimitiveObj());
+        installPrimitive("negative?", new IsNegativePrimitiveObj());
+
+        // Sosofo primitives
+        installPrimitive("empty-sosofo", new EmptySosofoPrimitiveObj());
+        installPrimitive("sosofo-append", new SosofoAppendPrimitiveObj());
+        installPrimitive("process-children", new ProcessChildrenPrimitiveObj());
+        installPrimitive("process-children-trim", new ProcessChildrenTrimPrimitiveObj());
+        installPrimitive("literal", new LiteralPrimitiveObj());
+        installPrimitive("next-match", new NextMatchPrimitiveObj());
+        installPrimitive("merge-style", new MergeStylePrimitiveObj());
+        installPrimitive("process-node-list", new ProcessNodeListPrimitiveObj());
+
+        // Node primitives
+        installPrimitive("current-node", new CurrentNodePrimitiveObj());
+        installPrimitive("node-list-first", new NodeListFirstPrimitiveObj());
+        installPrimitive("node-list-rest", new NodeListRestPrimitiveObj());
+        installPrimitive("node-list-empty?", new IsNodeListEmptyPrimitiveObj());
+        installPrimitive("node-list", new NodeListPrimitiveObj());
+        installPrimitive("empty-node-list", new EmptyNodeListPrimitiveObj());
+        installPrimitive("children", new ChildrenPrimitiveObj());
+        installPrimitive("parent", new ParentPrimitiveObj());
+        installPrimitive("descendants", new DescendantsPrimitiveObj());
+        installPrimitive("ancestor", new AncestorPrimitiveObj());
+        installPrimitive("select-elements", new SelectElementsPrimitiveObj());
+        installPrimitive("node-list-length", new NodeListLengthPrimitiveObj());
+        installPrimitive("node-list-ref", new NodeListRefPrimitiveObj());
+        installPrimitive("node-list-reverse", new NodeListReversePrimitiveObj());
+        installPrimitive("node-list->list", new NodeListToListPrimitiveObj());
+        installPrimitive("follow", new FollowPrimitiveObj());
+        installPrimitive("preced", new PrecedPrimitiveObj());
+        installPrimitive("data", new DataPrimitiveObj());
+        installPrimitive("attributes", new AttributesPrimitiveObj());
+        installPrimitive("first-sibling?", new IsFirstSiblingPrimitiveObj());
+        installPrimitive("last-sibling?", new IsLastSiblingPrimitiveObj());
+
+        // Element access
+        installPrimitive("gi", new GiPrimitiveObj());
+        installPrimitive("attribute-string", new AttributeStringPrimitiveObj());
+        installPrimitive("inherited-attribute-string", new InheritedAttributeStringPrimitiveObj());
+        installPrimitive("id", new IdPrimitiveObj());
+        installPrimitive("element-with-id", new ElementWithIdPrimitiveObj());
+        installPrimitive("child-number", new ChildNumberPrimitiveObj());
+
+        // Type predicates
+        installPrimitive("string?", new IsStringPrimitiveObj());
+        installPrimitive("number?", new IsNumberPrimitiveObj());
+        installPrimitive("integer?", new IsIntegerPrimitiveObj());
+        installPrimitive("real?", new IsRealPrimitiveObj());
+        installPrimitive("procedure?", new IsProcedurePrimitiveObj());
+        installPrimitive("boolean?", new IsBooleanPrimitiveObj());
+        installPrimitive("symbol?", new IsSymbolPrimitiveObj());
+        installPrimitive("keyword?", new IsKeywordPrimitiveObj());
+        installPrimitive("char?", new IsCharPrimitiveObj());
+        installPrimitive("node-list?", new IsNodeListPrimitiveObj());
+        installPrimitive("sosofo?", new IsSosofoPrimitiveObj());
+        installPrimitive("style?", new IsStylePrimitiveObj());
+        installPrimitive("vector?", new IsVectorPrimitiveObj());
+        installPrimitive("quantity?", new IsQuantityPrimitiveObj());
+        installPrimitive("color?", new IsColorPrimitiveObj());
+        installPrimitive("color-space?", new IsColorSpacePrimitiveObj());
+        installPrimitive("address?", new IsAddressPrimitiveObj());
+
+        // Vector primitives
+        installPrimitive("vector", new VectorPrimitiveObj());
+        installPrimitive("vector->list", new VectorToListPrimitiveObj());
+        installPrimitive("list->vector", new ListToVectorPrimitiveObj());
+
+        // Color primitives
+        installPrimitive("color-space", new ColorSpacePrimitiveObj());
+        installPrimitive("color", new ColorPrimitiveObj());
+
+        // Address primitives
+        installPrimitive("current-node-address", new CurrentNodeAddressPrimitiveObj());
+        installPrimitive("idref-address", new IdrefAddressPrimitiveObj());
+        installPrimitive("entity-address", new EntityAddressPrimitiveObj());
+        installPrimitive("node-list-address", new NodeListAddressPrimitiveObj());
+
+        // Special function primitives (extend FunctionObj instead of PrimitiveObj)
+        installFunction("apply", new ApplyPrimitiveObj());
+        installFunction("call-with-current-continuation", new CallWithCurrentContinuationPrimitiveObj());
+    }
+
+    private void installBuiltins()
+    {
+        if (groveManager_ == null)
+            return;
+
+        // Load builtins.dsl
+        StringC sysid = makeStringC("builtins.dsl");
+        groveManager_.mapSysid(ref sysid);
+        if (groveManager_.readEntity(sysid, out StringC src))
+        {
+            InputSource inputSource = new InternalInputSource(src, InputSourceOrigin.make());
+            SchemeParser scm = new SchemeParser(this, inputSource);
+            scm.parse();
+        }
     }
 
     private void installFlowObjs()
@@ -199,7 +377,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         string key = str.ToString();
         if (identTable_.TryGetValue(key, out Identifier? ident))
             return ident;
-        ident = new Identifier(str);
+        // Create a copy of the StringC since the original may be reused
+        ident = new Identifier(new StringC(str));
         identTable_[key] = ident;
         return ident;
     }
@@ -363,6 +542,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // Message methods for InterpreterMessages
     public void message(InterpreterMessages msg)
     {
+        Console.Error.WriteLine($"DEBUG: message({msg}) from:\n{System.Environment.StackTrace}");
         message(MessageType.Severity.error, new Location(), msg.ToString());
     }
 

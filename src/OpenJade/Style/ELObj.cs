@@ -1382,6 +1382,18 @@ public class NodeListObj : ELObj
         return nodeListRest(ctx, interp);
     }
     public virtual NodeListObj nodeListNoOrder(Interpreter interp) { return this; }
+
+    // C++ implementation: upstream/openjade/style/ELObj.cxx:1004
+    // Returns true if this is a singleton (0 or 1 element) node list
+    public override bool optSingletonNodeList(IEvalContext ictx, Interpreter interp, ref NodePtr ptr)
+    {
+        EvalContext ctx = (EvalContext)ictx;
+        NodeListObj rest = nodeListRest(ctx, interp);
+        if (rest.nodeListFirst(ctx, interp) != null)
+            return false;  // More than one element
+        ptr = nodeListFirst(ctx, interp) ?? new NodePtr();
+        return true;
+    }
 }
 
 // Empty node list
@@ -1410,11 +1422,19 @@ public class NodePtrNodeListObj : NodeListObj
     {
         return new EmptyNodeListObj();
     }
+
+    // C++ implementation: upstream/openjade/style/ELObj.cxx:1087
+    public override bool optSingletonNodeList(IEvalContext ctx, Interpreter interp, ref NodePtr ptr)
+    {
+        ptr = node_ ?? new NodePtr();
+        return true;
+    }
 }
 
 // Node list from grove node list pointer
 public class NodeListPtrNodeListObj : NodeListObj
 {
+    private static bool debugNodeListPtr = false; // Set to true for debugging
     private NodeListPtr nodeList_;
     private NodePtr? current_;
     private bool started_;
@@ -1432,10 +1452,32 @@ public class NodeListPtrNodeListObj : NodeListObj
             started_ = true;
             if (nodeList_ != null)
             {
-                current_ = new NodePtr();
-                if (nodeList_.first(current_) != AccessResult.accessOK)
+                NodePtr temp = new NodePtr();
+                var result = nodeList_.first(ref temp);
+                if (debugNodeListPtr)
+                    Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: nodeList_.first() returned {result}");
+                if (result != AccessResult.accessOK)
                     current_ = null;
+                else
+                {
+                    current_ = temp;
+                    if (debugNodeListPtr)
+                    {
+                        GroveString gi = new GroveString();
+                        if (current_.getGi(ref gi) == AccessResult.accessOK)
+                        {
+                            string giStr = "";
+                            for (nuint i = 0; i < gi.size(); i++)
+                                giStr += (char)gi.data()![i];
+                            Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: first node has GI '{giStr}'");
+                        }
+                        else
+                            Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: first node (cannot get GI)");
+                    }
+                }
             }
+            else if (debugNodeListPtr)
+                Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: nodeList_ is null");
         }
         return current_;
     }
@@ -1445,7 +1487,7 @@ public class NodeListPtrNodeListObj : NodeListObj
         if (nodeList_ == null)
             return new EmptyNodeListObj();
         NodeListPtr rest = new NodeListPtr();
-        if (nodeList_.rest(rest) == AccessResult.accessOK)
+        if (nodeList_.rest(ref rest) == AccessResult.accessOK)
             return new NodeListPtrNodeListObj(rest);
         return new EmptyNodeListObj();
     }
@@ -1512,7 +1554,8 @@ public class PairNodeListObj : NodeListObj
             NodeListObj headRest = head_.nodeListRest(ctx, interp);
             return new PairNodeListObj(headRest, tail_);
         }
-        return tail_.nodeListRest(ctx, interp);
+        // When head is exhausted, the rest is the tail (not the tail's rest)
+        return tail_;
     }
 }
 
@@ -1544,6 +1587,14 @@ public class MapNodeListObj : NodeListObj
         mapped_ = mapped;
     }
 
+    // MapNodeListObj is rarely a singleton. The base class optSingletonNodeList would call
+    // nodeListRest() which has side effects. Return false to avoid mutating state.
+    public override bool optSingletonNodeList(IEvalContext ctx, Interpreter interp, ref NodePtr ptr)
+    {
+        return false;
+    }
+
+    // Matches C++ implementation exactly - see upstream/openjade/style/primitive.cxx:5506
     public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
     {
         while (true)
@@ -1562,6 +1613,7 @@ public class MapNodeListObj : NodeListObj
         return null;
     }
 
+    // Matches C++ implementation exactly - see upstream/openjade/style/primitive.cxx:5522
     public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
     {
         while (true)

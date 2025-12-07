@@ -116,9 +116,25 @@ public class ElementChunk : ParentChunk
 #pragma warning restore CS0649
     public uint elementIndex;
 
+    // ID string storage (extracted from attributes during element creation)
+    internal StringC? id_;
+
+    // Stored attribute values (for non-default values)
+    internal AttributeValue?[]? attributeValues_;
+    internal nuint nAtts_;  // Number of stored attribute values
+
     public virtual AttributeValue? attributeValue(nuint attIndex, GroveImpl grove)
     {
+        // Check if we have a stored attribute value for this index
+        if (attributeValues_ != null && attIndex < nAtts_ && attributeValues_[attIndex] != null)
+            return attributeValues_[attIndex];
+        // Fall back to default value
         return attDefList()?.def(attIndex)?.defaultValue(grove.impliedAttributeValue());
+    }
+
+    public override StringC? id()
+    {
+        return id_;
     }
 
     public virtual Boolean mustOmitEndTag()
@@ -196,6 +212,15 @@ public class ElementChunk : ParentChunk
     public ElementType? elementType()
     {
         return type;
+    }
+}
+
+// ElementChunk for included elements (from inclusion exceptions)
+public class IncludedElementChunk : ElementChunk
+{
+    public override Boolean included()
+    {
+        return true;
     }
 }
 
@@ -318,6 +343,7 @@ public class GroveImpl
         nChunksSinceLocOrigin_ = 0;
         root_ = new SgmlDocumentChunk();
         origin_ = root_;
+        impliedAttributeValue_ = new ConstPtr<AttributeValue>(new ImpliedAttributeValue());
     }
 
     // Const interface
@@ -515,7 +541,11 @@ public class GroveImpl
         }
         // Set up tail setter for the first child of this element
         tailPtrSetter_ = (c) => { chunk.firstChild = c; };
-        // hasId handling would add to idTable_ in full impl
+        // Add to ID table if element has an ID
+        if (hasId && chunk.id_ != null)
+        {
+            idTable_[chunk.id_] = chunk;
+        }
         maybePulse();
     }
 
@@ -1082,8 +1112,8 @@ public class SgmlDocumentNode : ChunkNode
         }
         if (grove().generalSubstTable() == null)
             return AccessResult.accessNull;
-        // Would create ElementsNamedNodeList
-        return AccessResult.accessNull;
+        ptr.assign(new ElementsNamedNodeList(grove()));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getEntities(ref NamedNodeListPtr ptr)
@@ -1326,8 +1356,8 @@ public class ElementNode : ChunkNode
 
     public override AccessResult getAttributes(ref NamedNodeListPtr ptr)
     {
-        // Would create ElementAttributesNamedNodeList
-        return AccessResult.accessNull;
+        ptr.assign(new ElementAttributesNamedNodeList(grove(), chunk()));
+        return AccessResult.accessOK;
     }
 
     public override AccessResult getGi(ref GroveString str)
@@ -1405,10 +1435,68 @@ public class ElementNode : ChunkNode
     public static void add(GroveImpl grove, StartElementEvent @event)
     {
         grove.setLocOrigin(@event.location().origin());
-        ElementChunk chunk = new ElementChunk();
+
+        // Create chunk and extract attribute values (similar to C++ makeAttElementChunk)
+        Boolean hasId;
+        ElementChunk chunk = makeElementChunkWithAttributes(grove, @event, out hasId);
         chunk.type = @event.elementType();
         chunk.locIndex = @event.location().index();
-        grove.push(chunk, false);
+        grove.push(chunk, hasId);
+    }
+
+    // Creates an ElementChunk and stores attribute values, returning hasId flag
+    private static ElementChunk makeElementChunkWithAttributes(GroveImpl grove, StartElementEvent @event, out Boolean hasId)
+    {
+        AttributeList atts = @event.attributes();
+        nuint nAtts = atts.size();
+
+        // Count the number of specified/current attributes (skip trailing unspecified)
+        while (nAtts > 0 && !atts.specified((uint)(nAtts - 1)) && !atts.current((uint)(nAtts - 1)))
+            nAtts--;
+
+        // Create the chunk
+        ElementChunk chunk;
+        if (@event.included())
+            chunk = new IncludedElementChunk();
+        else
+            chunk = new ElementChunk();
+
+        // Check if we have an ID
+        uint idIndex;
+        if (atts.idIndex(out idIndex) && atts.specified(idIndex) && atts.value(idIndex) != null)
+        {
+            hasId = true;
+            // Extract and store the ID string
+            chunk.id_ = atts.getId();
+        }
+        else
+        {
+            hasId = false;
+        }
+
+        // Store attribute values
+        if (nAtts > 0)
+        {
+            AttributeDefinitionList? defList = @event.elementType()?.attributeDefTemp();
+            chunk.nAtts_ = nAtts;
+            chunk.attributeValues_ = new AttributeValue?[nAtts];
+
+            for (nuint i = 0; i < nAtts; i++)
+            {
+                if (atts.specified((uint)i) || atts.current((uint)i))
+                {
+                    grove.storeAttributeValue(atts.valuePointer((uint)i));
+                    chunk.attributeValues_[i] = atts.value((uint)i);
+                }
+                else
+                {
+                    // Use default value
+                    chunk.attributeValues_[i] = defList?.def(i)?.defaultValue(grove.impliedAttributeValue());
+                }
+            }
+        }
+
+        return chunk;
     }
 
     public void reuseFor(ElementChunk chunk)
@@ -4986,6 +5074,78 @@ public abstract class BaseNamedNodeList : NamedNodeList
     }
 
     public abstract AccessResult namedNodeU(StringC str, ref NodePtr ptr);
+}
+
+// Elements named node list - for looking up elements by ID
+public class ElementsNamedNodeList : BaseNamedNodeList
+{
+    public ElementsNamedNodeList(GroveImpl grove)
+        : base(grove, grove.generalSubstTable()) { }
+
+    public override NodeListPtr nodeList()
+    {
+        // Would need to iterate all elements with IDs
+        return new NodeListPtr();
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        for (;;)
+        {
+            Boolean complete = grove_.complete();
+            var element = grove_.lookupElement(str);
+            if (element != null)
+            {
+                ptr.assign(new ElementNode(grove_, element));
+                return AccessResult.accessOK;
+            }
+            if (complete)
+                return AccessResult.accessNull;
+            if (!grove_.waitForMoreNodes())
+                return AccessResult.accessTimeout;
+        }
+    }
+
+    public override Type type() { return Type.elements; }
+}
+
+// Element attributes named node list
+public class ElementAttributesNamedNodeList : BaseNamedNodeList
+{
+    protected ElementChunk chunk_;
+
+    public ElementAttributesNamedNodeList(GroveImpl grove, ElementChunk chunk)
+        : base(grove, grove.generalSubstTable())
+    {
+        chunk_ = chunk;
+    }
+
+    public override NodeListPtr nodeList()
+    {
+        // Return a list of all attributes
+        // For now, return an empty list since we mainly use namedNode
+        return new NodeListPtr();
+    }
+
+    public override AccessResult namedNodeU(StringC str, ref NodePtr ptr)
+    {
+        var defList = chunk_.attDefList();
+        if (defList != null)
+        {
+            for (nuint i = 0; i < defList.size(); i++)
+            {
+                var def = defList.def(i);
+                if (def != null && def.name() == str)
+                {
+                    ptr.assign(new ElementAttributeAsgnNode(grove_, i, chunk_));
+                    return AccessResult.accessOK;
+                }
+            }
+        }
+        return AccessResult.accessNull;
+    }
+
+    public override Type type() { return Type.attributes; }
 }
 
 // General entities named node list

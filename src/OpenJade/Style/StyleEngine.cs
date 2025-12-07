@@ -18,7 +18,7 @@ public class StyleEngine : IDisposable
                        int unitsPerInch, bool debugMode, bool dsssl2,
                        bool strictMode, FOTBuilder.ExtensionTableEntry[]? extensionTable = null)
     {
-        interpreter_ = new Interpreter(extensionTable);
+        interpreter_ = new Interpreter(groveManager, extensionTable);
         interpreter_.setUnitsPerInch(unitsPerInch);
         interpreter_.setDebugMode(debugMode);
         interpreter_.setDsssl2(dsssl2);
@@ -80,11 +80,9 @@ public class StyleEngine : IDisposable
             DssslSpecEventHandler.Part part = parts[partIndex];
 
             // Process declarations first
-            int declCount = 0;
             for (IListIter<DssslSpecEventHandler.DeclarationElement> diter = part.diter();
                  diter.done() == 0; diter.next())
             {
-                declCount++;
                 DssslSpecEventHandler.DeclarationElement decl = diter.cur()!;
                 processDeclaration(decl, charset);
             }
@@ -419,7 +417,7 @@ public class ProcessContextImpl : ProcessContext
             {
                 NodePtr curNode = vm_.currentNode;
                 GroveString str = new GroveString();
-                if (curNode.charChunk(null, str) == AccessResult.accessOK)
+                if (curNode.charChunk(null, ref str) == AccessResult.accessOK)
                 {
                     Char[] data = str.data() ?? Array.Empty<Char>();
                     nuint len = str.size();
@@ -462,7 +460,7 @@ public class ProcessContextImpl : ProcessContext
                 else
                 {
                     GroveString gi = new GroveString();
-                    if (atStart && vm_.currentNode.getGi(gi) == AccessResult.accessOK)
+                    if (atStart && vm_.currentNode.getGi(ref gi) == AccessResult.accessOK)
                         atStart = false;
                     processNode(vm_.currentNode, mode);
                 }
@@ -491,7 +489,7 @@ public class ProcessContextImpl : ProcessContext
             do
             {
                 GroveString str = new GroveString();
-                if (tem.charChunk(null, str) == AccessResult.accessOK)
+                if (tem.charChunk(null, ref str) == AccessResult.accessOK)
                 {
                     Char[] data = str.data() ?? Array.Empty<Char>();
                     for (nuint i = 0; i < str.size(); i++)
@@ -503,7 +501,7 @@ public class ProcessContextImpl : ProcessContext
                 else
                 {
                     GroveString gi = new GroveString();
-                    if (tem.getGi(gi) == AccessResult.accessOK)
+                    if (tem.getGi(ref gi) == AccessResult.accessOK)
                         return false;
                 }
             } while (tem.assignNextChunkSibling() == AccessResult.accessOK);

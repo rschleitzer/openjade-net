@@ -304,6 +304,7 @@ public class TransformFOTBuilder : FOTBuilder
             else
             {
                 // Could not open file
+                Console.Error.WriteLine($"ERROR: could not open file '{filename}'");
                 ofp.fileByteStream = null;
                 ofp.os = null;
             }

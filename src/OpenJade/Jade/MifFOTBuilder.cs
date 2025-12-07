@@ -4120,7 +4120,7 @@ public class MifFOTBuilder : FOTBuilder
         if (node.elementIndex(ref n) == AccessResult.accessOK)
         {
             GroveString id = new GroveString();
-            node.getId(id);
+            node.getId(ref id);
             if (!mifDoc.bookComponent().pageNumXRefFormatGenerated)
             {
                 mifDoc.bookComponent().XRefFormats.Add(
@@ -4150,7 +4150,7 @@ public class MifFOTBuilder : FOTBuilder
                     if (address.node.elementIndex(ref n) == AccessResult.accessOK)
                     {
                         GroveString id = new GroveString();
-                        address.node.getId(id);
+                        address.node.getId(ref id);
                         ulong groveIndex = address.node.groveIndex();
                         linkStack.Add(new LinkInfo(
                             new MifDoc.CrossRefInfo(groveIndex, n, 0,
@@ -5360,7 +5360,7 @@ public class MifFOTBuilder : FOTBuilder
             if (nodeStack[i].node.elementIndex(ref n) == AccessResult.accessOK)
             {
                 GroveString id = new GroveString();
-                nodeStack[i].node.getId(id);
+                nodeStack[i].node.getId(ref id);
                 ulong groveIndex = nodeStack[i].node.groveIndex();
                 _ = mifDoc.os() << new MifDoc.CrossRefInfo(
                         groveIndex, n, mifDoc.os().CurTagIndent,

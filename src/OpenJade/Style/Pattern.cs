@@ -343,14 +343,14 @@ public class Pattern
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
             GroveString ndType = new GroveString();
-            nd.getGi(ndType);
+            nd.getGi(ref ndType);
             NodePtr tem = new NodePtr();
             if (nd.node!.firstSibling(ref tem) != AccessResult.accessOK)
                 return true; // Must be document element
             while (tem.node != nd.node)
             {
                 GroveString temType = new GroveString();
-                if (tem.getGi(temType) == AccessResult.accessOK)
+                if (tem.getGi(ref temType) == AccessResult.accessOK)
                 {
                     if (temType.size() == ndType.size() && sameString(temType, ndType))
                         return false;
@@ -370,14 +370,14 @@ public class Pattern
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
             GroveString ndType = new GroveString();
-            nd.getGi(ndType);
+            nd.getGi(ref ndType);
             NodePtr tem = new NodePtr();
             if (nd.node!.nextSibling(ref tem) != AccessResult.accessOK)
                 return true; // No next sibling = last
             do
             {
                 GroveString temType = new GroveString();
-                if (tem.getGi(temType) == AccessResult.accessOK)
+                if (tem.getGi(ref temType) == AccessResult.accessOK)
                 {
                     if (temType.size() == ndType.size() && sameString(temType, ndType))
                         return false;
@@ -440,7 +440,7 @@ public class Pattern
         public override bool satisfies(NodePtr nd, MatchContext context)
         {
             GroveString ndType = new GroveString();
-            nd.getGi(ndType);
+            nd.getGi(ref ndType);
             // Check for any sibling with same type
             NodePtr tem = new NodePtr();
             if (nd.node!.firstSibling(ref tem) != AccessResult.accessOK)
@@ -450,7 +450,7 @@ public class Pattern
                 if (tem.node != nd.node)
                 {
                     GroveString temType = new GroveString();
-                    if (tem.getGi(temType) == AccessResult.accessOK)
+                    if (tem.getGi(ref temType) == AccessResult.accessOK)
                     {
                         if (temType.size() == ndType.size() && sameString(temType, ndType))
                             return false;
@@ -552,7 +552,7 @@ public class Pattern
             if (gi_.size() > 0)
             {
                 GroveString ndGi = new GroveString();
-                if (nd.getGi(ndGi) != AccessResult.accessOK)
+                if (nd.getGi(ref ndGi) != AccessResult.accessOK)
                     return false;
                 if (ndGi.size() != gi_.size())
                     return false;
@@ -723,7 +723,7 @@ public class RootPattern : Pattern
             return true;
         // Check if parent is document node (not element)
         GroveString gi = new GroveString();
-        return parent.getGi(gi) != AccessResult.accessOK;
+        return parent.getGi(ref gi) != AccessResult.accessOK;
     }
 }
 

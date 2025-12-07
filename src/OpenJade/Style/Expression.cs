@@ -162,6 +162,12 @@ public class Environment
         frameVarList_ = null;
     }
 
+    public Environment(Environment other)
+    {
+        closureVars_ = other.closureVars_;
+        frameVarList_ = other.frameVarList_;
+    }
+
     public Environment(BoundVarList frameVars, BoundVarList closureVars)
     {
         closureVars_ = closureVars;
@@ -359,7 +365,8 @@ public class VariableExpression : Expression
         bool isFrame;
         int index;
         uint flags;
-        if (env.lookup(ident_, out isFrame, out index, out flags))
+        bool found = env.lookup(ident_, out isFrame, out index, out flags);
+        if (found)
         {
             bool boxed = BoundVar.flagsBoxed(flags);
             InsnPtr tem;
@@ -394,14 +401,17 @@ public class VariableExpression : Expression
         if (!ident_.defined(out part, out defLoc))
         {
             interp.setNextLocation(location());
-            // interp.message(InterpreterMessages.undefinedVariableReference, ...);
-            return new InsnPtr(new ErrorInsn());
+            // Return a no-op procedure for undefined identifiers (likely undefined external procedures)
+            return new InsnPtr(new ConstantInsn(new NoOpProcedureObj(ident_.name().ToString()), next));
         }
         ELObj? val = ident_.computeValue(false, interp);
         if (val == null)
             return new InsnPtr(new TopRefInsn(ident_, next));
         if (interp.isError(val))
-            return new InsnPtr(new ErrorInsn());
+        {
+            // Return a no-op procedure for identifiers with error values (likely failed external procedures)
+            return new InsnPtr(new ConstantInsn(new NoOpProcedureObj(ident_.name().ToString()), next));
+        }
         return new InsnPtr(new ConstantInsn(val, next));
     }
 
@@ -772,7 +782,7 @@ public class LetExpression : Expression
     public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
     {
         int nVars = vars_.Count;
-        Environment bodyEnv = new Environment();
+        Environment bodyEnv = new Environment(env);  // Copy outer environment
         BoundVarList boundVars = new BoundVarList(vars_);
         body_.markBoundVars(boundVars, false);
         bodyEnv.augmentFrame(boundVars, stackPos);
@@ -879,7 +889,7 @@ public class LetrecExpression : Expression
     {
         int nVars = vars_.Count;
         BoundVarList vars = new BoundVarList(vars_, nVars, BoundVar.assignedFlag);
-        Environment bodyEnv = new Environment();
+        Environment bodyEnv = new Environment(env);  // Copy outer environment
         for (int i = 0; i < nVars; i++)
             inits_[i].markBoundVars(vars, false);
         body_.markBoundVars(vars, false);

@@ -23,6 +23,15 @@ openjade-net/
 
 ## Core Requirements
 
+### Bug Fixing Policy
+When fixing bugs or implementing missing functionality, **ALWAYS refer to the original OpenJade/OpenSP C++ sources first** (in `upstream/openjade/` and `upstream/opensp/`). Do NOT invent your own fixes or improvements. The only exception is workarounds for genuine C++/C# or CLR incompatibilities where the original approach cannot work in .NET.
+
+**Process for fixing issues:**
+1. Find the corresponding C++ code in the upstream sources
+2. Understand how the original implementation works
+3. Port that exact logic to C#
+4. Only deviate if there's a fundamental platform incompatibility
+
 ### 0. Stub Methods
 When stubbing out methods with TODO comments, always throw `NotImplementedException` instead of returning default values:
 ```csharp

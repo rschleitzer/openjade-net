@@ -372,3 +372,25 @@ public class BoxObj : ELObj
         c.trace(value);
     }
 }
+
+// No-op procedure that accepts any arguments and returns empty sosofo
+// Used as fallback for undefined external procedures
+public class NoOpProcedureObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);  // rest arg accepts any number
+    private string name_;
+
+    public NoOpProcedureObj(string name) : base(sig)
+    {
+        name_ = name;
+    }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        // Return the first argument (identity function behavior)
+        // This is important for functions like debug that should pass through their argument
+        if (args.Length > 0)
+            return args[0];
+        return interp.makeFalse();
+    }
+}

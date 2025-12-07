@@ -93,4 +93,56 @@ public class StringC : String<Char>
     {
         return toSystemString();
     }
+
+    // Override Equals for proper value comparison (needed for Dictionary keys)
+    public override Boolean Equals(object? obj)
+    {
+        if (obj is StringC other)
+            return operatorEquals(other);
+        if (obj is string str)
+        {
+            if (size() != (nuint)str.Length)
+                return false;
+            Char[]? srcData = data();
+            if (srcData == null)
+                return str.Length == 0;
+            for (int i = 0; i < str.Length; i++)
+            {
+                if (srcData[i] != (Char)str[i])
+                    return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // Override GetHashCode for proper Dictionary key behavior
+    public override int GetHashCode()
+    {
+        Char[]? srcData = data();
+        if (srcData == null || size() == 0)
+            return 0;
+        // Simple hash combining all characters
+        int hash = 17;
+        for (nuint i = 0; i < size(); i++)
+        {
+            hash = hash * 31 + (int)srcData[i];
+        }
+        return hash;
+    }
+
+    // Implement == and != operators
+    public static Boolean operator ==(StringC? left, StringC? right)
+    {
+        if (left is null && right is null)
+            return true;
+        if (left is null || right is null)
+            return false;
+        return left.operatorEquals(right);
+    }
+
+    public static Boolean operator !=(StringC? left, StringC? right)
+    {
+        return !(left == right);
+    }
 }
