@@ -196,11 +196,13 @@ class XMLDecoder : Decoder
                 byte[] remaining = new byte[fromLen];
                 for (nuint i = 0; i < fromLen; i++)
                     remaining[i] = from[fromIndex + i];
+                // Decode into a temporary buffer, then copy to correct position
+                Char[] temp = new Char[(nuint)to.Length - toIndex];
                 nuint subUsed;
-                nuint subDecoded = subDecoder_!.decode(to, remaining, fromLen, out subUsed);
-                // Copy to output starting at toIndex
+                nuint subDecoded = subDecoder_!.decode(temp, remaining, fromLen, out subUsed);
+                // Copy decoded characters to correct position in output
                 for (nuint i = 0; i < subDecoded && toIndex + i < (nuint)to.Length; i++)
-                    to[toIndex + i] = to[i];
+                    to[toIndex + i] = temp[i];
                 fromUsed = fromIndex + subUsed;
                 return toIndex + subDecoded;
             }
@@ -268,17 +270,15 @@ class XMLDecoder : Decoder
             byte[] remaining = new byte[fromLen];
             for (nuint i = 0; i < fromLen; i++)
                 remaining[i] = from[fromIndex + i];
+            // Decode into a temporary buffer, then copy to correct position
+            Char[] temp = new Char[(nuint)to.Length - toIndex];
             nuint subUsed;
-            nuint n = subDecoder_!.decode(to, remaining, fromLen, out subUsed);
-            // Copy to output starting at toIndex
-            nuint count = 0;
+            nuint n = subDecoder_!.decode(temp, remaining, fromLen, out subUsed);
+            // Copy decoded characters to correct position in output
             for (nuint i = 0; i < n && toIndex + i < (nuint)to.Length; i++)
-            {
-                to[toIndex + i] = to[i];
-                count++;
-            }
+                to[toIndex + i] = temp[i];
             fromUsed = fromIndex + subUsed;
-            return toIndex + count;
+            return toIndex + n;
         }
 
         fromUsed = fromIndex;

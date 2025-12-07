@@ -54,6 +54,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("declare-characteristic", Identifier.SyntacticKey.declareCharacteristic);
         installSyntacticKey("declare-flow-object-class", Identifier.SyntacticKey.declareFlowObjectClass);
         installSyntacticKey("declare-default-language", Identifier.SyntacticKey.declareDefaultLanguage);
+        installSyntacticKey("define-language", Identifier.SyntacticKey.defineLanguage);
         installSyntacticKey("quote", Identifier.SyntacticKey.quote);
         installSyntacticKey("quasiquote", Identifier.SyntacticKey.quasiquote);
         installSyntacticKey("unquote", Identifier.SyntacticKey.unquote);
@@ -120,6 +121,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("assq", new AssqPrimitiveObj());
 
         // String primitives
+        installPrimitive("string", new StringFromCharsPrimitiveObj());
+        installPrimitive("substring", new SubstringPrimitiveObj());
         installPrimitive("string-append", new StringAppendPrimitiveObj());
         installPrimitive("string-length", new StringLengthPrimitiveObj());
         installPrimitive("string-ref", new StringRefPrimitiveObj());
@@ -180,6 +183,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("node-list-reverse", new NodeListReversePrimitiveObj());
         installPrimitive("node-list=?", new NodeListEqualPrimitiveObj());
         installPrimitive("node-list->list", new NodeListToListPrimitiveObj());
+        installPrimitive("node-list-map", new NodeListMapPrimitiveObj());
         installPrimitive("follow", new FollowPrimitiveObj());
         installPrimitive("preced", new PrecedPrimitiveObj());
         installPrimitive("data", new DataPrimitiveObj());
@@ -205,6 +209,13 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("symbol?", new IsSymbolPrimitiveObj());
         installPrimitive("keyword?", new IsKeywordPrimitiveObj());
         installPrimitive("char?", new IsCharPrimitiveObj());
+        installPrimitive("char-upcase", new CharUpcasePrimitiveObj());
+        installPrimitive("char-downcase", new CharDowncasePrimitiveObj());
+        installPrimitive("char->integer", new CharToIntegerPrimitiveObj());
+        installPrimitive("integer->char", new IntegerToCharPrimitiveObj());
+        installPrimitive("char<?", new IsCharLessPrimitiveObj());
+        installPrimitive("char<=?", new IsCharLessOrEqualPrimitiveObj());
+        installPrimitive("char=?", new IsCharEqualPrimitiveObj());
         installPrimitive("node-list?", new IsNodeListPrimitiveObj());
         installPrimitive("sosofo?", new IsSosofoPrimitiveObj());
         installPrimitive("style?", new IsStylePrimitiveObj());
@@ -543,7 +554,6 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // Message methods for InterpreterMessages
     public void message(InterpreterMessages msg)
     {
-        Console.Error.WriteLine($"DEBUG: message({msg}) from:\n{System.Environment.StackTrace}");
         message(MessageType.Severity.error, new Location(), msg.ToString());
     }
 

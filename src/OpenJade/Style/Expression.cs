@@ -201,7 +201,6 @@ public class Environment
                 }
             }
         }
-
         if (closureVars_ != null)
         {
             for (int i = 0; i < closureVars_.Count; i++)
@@ -401,8 +400,9 @@ public class VariableExpression : Expression
         if (!ident_.defined(out part, out defLoc))
         {
             interp.setNextLocation(location());
+            var name = ident_.name().ToString();
             // Return a no-op procedure for undefined identifiers (likely undefined external procedures)
-            return new InsnPtr(new ConstantInsn(new NoOpProcedureObj(ident_.name().ToString()), next));
+            return new InsnPtr(new ConstantInsn(new NoOpProcedureObj(name), next));
         }
         ELObj? val = ident_.computeValue(false, interp);
         if (val == null)
@@ -826,7 +826,7 @@ public class LetStarExpression : LetExpression
     public override InsnPtr compile(Interpreter interp, Environment env, int stackPos, InsnPtr next)
     {
         int nVars = vars_.Count;
-        Environment bodyEnv = new Environment();
+        Environment bodyEnv = new Environment(env);  // Copy outer environment
         BoundVarList vars = new BoundVarList();
         for (int i = 0; i < nVars; i++)
         {
@@ -847,7 +847,7 @@ public class LetStarExpression : LetExpression
     {
         if (initIndex >= inits_.Count)
             return next;
-        Environment nextEnv = new Environment();
+        Environment nextEnv = new Environment(env);  // Copy outer environment
         BoundVarList vars = new BoundVarList();
         vars.append(initVars[initIndex].ident, initVars[initIndex].flags);
         nextEnv.augmentFrame(vars, stackPos);

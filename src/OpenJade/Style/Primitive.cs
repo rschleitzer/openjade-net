@@ -1427,6 +1427,26 @@ public class SubstringPrimitiveObj : PrimitiveObj
     }
 }
 
+// String primitive (creates string from characters)
+public class StringFromCharsPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, true);  // rest arg
+    public StringFromCharsPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[] result = new Char[nArgs];
+        for (int i = 0; i < nArgs; i++)
+        {
+            Char c;
+            if (!args[i]!.charValue(out c))
+                return argError(interp, loc, InterpreterMessages.notAChar, i, args[i]);
+            result[i] = c;
+        }
+        return interp.makeString(result, (nuint)nArgs);
+    }
+}
+
 // String=? primitive
 public class IsStringEqualPrimitiveObj : PrimitiveObj
 {
@@ -4013,6 +4033,44 @@ public class NodeListToListPrimitiveObj : PrimitiveObj
         }
 
         return result;
+    }
+}
+
+// Node-list-map primitive - maps a function over a node list, returning a new node list
+// C++ implementation: upstream/openjade/style/primitive.cxx
+public class NodeListMapPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public NodeListMapPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        FunctionObj? func = args[0]?.asFunction();
+        if (func == null)
+        {
+            interp.setNextLocation(loc);
+            return interp.makeError();
+        }
+
+        // Check that function can accept 1 argument
+        if (func.nRequiredArgs() > 1)
+        {
+            interp.setNextLocation(loc);
+            return interp.makeError();
+        }
+        if (func.nRequiredArgs() + func.nOptionalArgs() + (func.restArg() ? 1 : 0) == 0)
+        {
+            interp.setNextLocation(loc);
+            return interp.makeError();
+        }
+
+        interp.makeReadOnly(func);
+
+        NodeListObj? nl = args[1]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 1, args[1]);
+
+        return new MapNodeListObj(func, nl, new MapNodeListObj.Context(ctx, loc));
     }
 }
 

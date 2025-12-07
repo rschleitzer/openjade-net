@@ -57,6 +57,7 @@ public abstract class CodingSystemKit : InputCodingSystemKit
 internal class CodingSystemKitImpl : CodingSystemKit
 {
     private IdentityCodingSystem identityCodingSystem_ = new IdentityCodingSystem();
+    private XMLCodingSystem xmlCodingSystem_;
 
     public CodingSystemKitImpl()
     {
@@ -65,6 +66,7 @@ internal class CodingSystemKitImpl : CodingSystemKit
         // Map 0-255 to Unicode (identity mapping for Latin-1)
         desc.addRange(0, 255, 0);
         systemCharset_.set(desc);
+        xmlCodingSystem_ = new XMLCodingSystem(this);
     }
 
     public override CodingSystemKit copy()
@@ -84,9 +86,10 @@ internal class CodingSystemKitImpl : CodingSystemKit
 
     public override CodingSystem? makeCodingSystem(string name, Boolean isBctf)
     {
-        // For now, return identity coding system for most encodings
         string upperName = name.ToUpperInvariant();
-        if (upperName == "IDENTITY" || upperName == "UTF-8" || upperName == "XML" ||
+        if (upperName == "XML")
+            return xmlCodingSystem_;
+        if (upperName == "IDENTITY" || upperName == "UTF-8" ||
             upperName.StartsWith("IS8859") || upperName.StartsWith("ISO-8859"))
         {
             return identityCodingSystem_;

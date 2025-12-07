@@ -299,6 +299,7 @@ public class Identifier : Named
         declareCharacteristic,
         declareFlowObjectClass,
         declareDefaultLanguage,
+        defineLanguage,
         // Expression keywords
         quote,
         quasiquote,
@@ -782,6 +783,21 @@ public class CharObj : ELObj
     {
         c = ch_;
         return true;
+    }
+
+    public override bool stringData(out Char[]? data, out nuint size)
+    {
+        // A character can be treated as a single-character string
+        data = new Char[] { ch_ };
+        size = 1;
+        return true;
+    }
+
+    public override StringObj? convertToString()
+    {
+        StringObj s = new StringObj();
+        s.append(new Char[] { ch_ }, 1);
+        return s;
     }
 }
 
@@ -1563,7 +1579,7 @@ public class PairNodeListObj : NodeListObj
 // Map node list - applies a primitive to each node
 public class MapNodeListObj : NodeListObj
 {
-    private PrimitiveObj? func_;
+    private FunctionObj? func_;
     private NodeListObj nodeList_;
     private Context context_;
     private NodeListObj? mapped_;  // Cached result of applying func to current node
@@ -1580,7 +1596,7 @@ public class MapNodeListObj : NodeListObj
         }
     }
 
-    public MapNodeListObj(PrimitiveObj? func, NodeListObj nodeList, Context context, NodeListObj? mapped = null)
+    public MapNodeListObj(FunctionObj? func, NodeListObj nodeList, Context context, NodeListObj? mapped = null)
     {
         func_ = func;
         nodeList_ = nodeList;

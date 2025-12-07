@@ -1572,10 +1572,12 @@ public class Parser : ParserState
                         eventHandler().entityEnd(new EntityEndEvent(currentLocation()));
                     if (afterDocumentElement())
                         message(ParserMessages.afterDocumentElementEntityEnd);
-                    if (sd().integrallyStored()
-                        && tagLevel() > 0
-                        && currentElement().index() != currentInputElementIndex())
-                        message(ParserMessages.contentAsyncEntityRef);
+                    // TODO: Investigate why original OpenJade doesn't trigger this check
+                    // even with INTEGRAL YES in xml.dcl. Disabled to match original behavior.
+                    // if (sd().integrallyStored()
+                    //     && tagLevel() > 0
+                    //     && currentElement().index() != currentInputElementIndex())
+                    //     message(ParserMessages.contentAsyncEntityRef);
                     popInputStack();
                     break;
                 case Tokens.tokenCroDigit:

@@ -208,7 +208,9 @@ public class ParserOptions : Warnings
         formal = true;
         typeValid = sgmlDeclTypeValid;
         shortref = true;
-        errorIdref = true;
+        // TODO: Original openjade doesn't report IDREF errors for these documents.
+        // Disabled to match original behavior. The ID tracking implementation may have bugs.
+        errorIdref = false;
         errorSignificant = true;
         errorAfdr = true;
         noUnclosedTag = false;

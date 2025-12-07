@@ -667,11 +667,14 @@ public class DssslSpecEventHandler : ArcDirector
 
         public override void data(DataEvent? ev)
         {
-            if (ev != null && parent_.gatheringBody_)
+            if (ev != null)
             {
-                ulong serial;
-                bool isRe = ev.isRe(out serial);
-                parent_.currentBody_.addChars(ev.data(), ev.dataOffset(), ev.dataLength(), ev.location());
+                if (parent_.gatheringBody_)
+                {
+                    ulong serial;
+                    bool isRe = ev.isRe(out serial);
+                    parent_.currentBody_.addChars(ev.data(), ev.dataOffset(), ev.dataLength(), ev.location());
+                }
             }
         }
     }
@@ -797,7 +800,9 @@ public class DssslSpecEventHandler : ArcDirector
         if (gatheringBody_)
         {
             if (currentPart_ != null)
+            {
                 currentPart_.append(new ImmediateBodyElement(currentBody_));
+            }
             gatheringBody_ = false;
         }
     }

@@ -492,11 +492,14 @@ public class ExternalTextEntity : ExternalEntity
                 parser.eventHandler().entityStart(new EntityStartEvent(new ConstPtr<EntityOrigin>(origin.pointer())));
             StringC effectiveSysId = externalId().effectiveSystemId();
             if (effectiveSysId.size() > 0)
-                parser.pushInput(parser.entityManager()!.open(effectiveSysId,
+            {
+                InputSource? inp = parser.entityManager()!.open(effectiveSysId,
                                                                parser.sd().docCharset(),
                                                                origin.pointer(),
                                                                0, // flags
-                                                               parser.messenger()));
+                                                               parser.messenger());
+                parser.pushInput(inp);
+            }
             else
                 parser.message(ParserMessages.nonExistentEntityRef,
                                new StringMessageArg(name()),

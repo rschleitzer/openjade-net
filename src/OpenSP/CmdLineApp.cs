@@ -487,8 +487,14 @@ public abstract class CmdLineApp : MessageReporter
     // virtual int init(int argc, AppChar **argv);
     protected virtual int init(string[] argv)
     {
-        if (argv.Length > 0)
-            setProgramName(convertInput(argv[0]));
+        // In C#, args[0] is the first argument, not the program name (unlike C++ argv[0])
+        // Get the actual program name from the process path
+        string? processPath = Environment.ProcessPath;
+        if (processPath != null)
+        {
+            string programName = Path.GetFileNameWithoutExtension(processPath);
+            setProgramName(convertInput(programName));
+        }
         return 0;
     }
 

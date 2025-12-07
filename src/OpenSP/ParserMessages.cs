@@ -312,8 +312,9 @@ public static class ParserMessages
         MessageType.Severity.error, null, 322, "document element not found");
     public static readonly MessageType0L unclosedMarkedSection = new MessageType0L(
         MessageType.Severity.error, null, 323, "missing marked section end", "marked section started here");
+    // X1+missingId++reference to non-existent ID %1
     public static readonly MessageType1 missingId = new MessageType1(
-        MessageType.Severity.error, null, 324, "referenced ID '%1' not defined");
+        MessageType.Severity.idrefError, null, 324, "reference to non-existent ID %1");
     public static readonly MessageType1 taglen = new MessageType1(
         MessageType.Severity.error, null, 325, "tag length exceeds TAGLEN (%1)");
     public static readonly MessageType1 elementNotOpen = new MessageType1(

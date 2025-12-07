@@ -1007,6 +1007,9 @@ internal class ExternalInputSource : InputSource
     private Boolean mayNotExist_;
     private RecordType recordType_;
     private Boolean zapEof_;
+    private byte[] leftOver_ = Array.Empty<byte>();  // Unconsumed bytes from decoder
+    private nuint nLeftOver_ = 0;                     // Number of leftover bytes
+    private Boolean needMoreData_ = false;            // Signal to continue fill loop
     private Boolean internalCharsetIsDocCharset_;
     private Char replacementChar_;
 
@@ -1197,11 +1200,33 @@ internal class ExternalInputSource : InputSource
             nuint nChars;
             if (decoder_ != null)
             {
-                Char[] decodeBuf = new Char[nread];
+                // Combine leftover bytes with newly read bytes
+                nuint totalBytes = nLeftOver_ + nread;
+                byte[] combinedBuf;
+                if (nLeftOver_ > 0)
+                {
+                    combinedBuf = new byte[totalBytes];
+                    Array.Copy(leftOver_, 0, combinedBuf, 0, (int)nLeftOver_);
+                    Array.Copy(rawBuf, 0, combinedBuf, (int)nLeftOver_, (int)nread);
+                }
+                else
+                {
+                    combinedBuf = rawBuf;
+                }
+
+                Char[] decodeBuf = new Char[totalBytes];
                 nuint inputUsed;
-                nChars = decoder_.decode(decodeBuf, rawBuf, nread, out inputUsed);
+                nChars = decoder_.decode(decodeBuf, combinedBuf, totalBytes, out inputUsed);
                 for (nuint i = 0; i < nChars; i++)
                     buf_[bufLim_ + i] = decodeBuf[i];
+
+                // Save any unconsumed bytes as leftovers for next read
+                nLeftOver_ = totalBytes - inputUsed;
+                if (nLeftOver_ > 0)
+                {
+                    leftOver_ = new byte[nLeftOver_];
+                    Array.Copy(combinedBuf, (int)inputUsed, leftOver_, 0, (int)nLeftOver_);
+                }
             }
             else
             {
@@ -1262,7 +1287,27 @@ internal class ExternalInputSource : InputSource
         }
 
         // Process records - convert LF/CR to RE and set up next RS
-        processRecords();
+        for (;;)
+        {
+            needMoreData_ = false;
+            processRecords();
+
+            // If processRecords signaled we need more data, continue reading
+            if (needMoreData_)
+            {
+                needMoreData_ = false;
+                // We need to read more data - the main while loop should have already done this
+                // But if endIdx() == bufLim_ after processRecords, we need to read more
+                if (endIdx() >= bufLim_)
+                {
+                    // Go back to the main while loop to read more data
+                    return fill(mgr);  // Recursive call like original C++
+                }
+                // Otherwise continue processing records
+                continue;
+            }
+            break;
+        }
 
         // Return next character if available
         if (curIdx() < endIdx())
@@ -1321,7 +1366,7 @@ internal class ExternalInputSource : InputSource
                             {
                                 // CR at end of buffer - don't know yet
                                 recordType_ = RecordType.crUnknown;
-                                advanceEnd(e);  // Don't include the CR yet
+                                advanceEnd(e + 1);  // Include the CR, convert it later if needed
                             }
                         }
                     }
@@ -1389,42 +1434,30 @@ internal class ExternalInputSource : InputSource
 
             case RecordType.crlf:
                 {
-                    // Process CRLF sequences
+                    // Process CRLF sequences - look for LF to remove
                     nuint e = endIdx();
-                    while (e < bufLim_)
+                    for (;;)
                     {
-                        nuint? found = findNextCr(e, bufLim_);
+                        nuint? found = findNextLf(e, bufLim_);
                         if (!found.HasValue)
                         {
                             advanceEnd(bufLim_);
                             break;
                         }
-                        nuint crPos = found.Value;
-                        if (crPos + 1 < bufLim_)
+                        nuint lfPos = found.Value;
+                        // Need to delete final RS if not followed by anything
+                        if (lfPos + 1 == bufLim_)
                         {
-                            if (buf_[(int)(crPos + 1)] == '\n')
-                            {
-                                buf_[(int)crPos] = RE;
-                                // Remove the LF
-                                for (nuint i = crPos + 1; i < bufLim_ - 1; i++)
-                                    buf_[(int)i] = buf_[(int)(i + 1)];
-                                bufLim_--;
-                                advanceEnd(crPos + 1);
-                                insertRS_ = true;
-                                break;
-                            }
-                            else
-                            {
-                                // CR not followed by LF - just continue
-                                e = crPos + 1;
-                            }
-                        }
-                        else
-                        {
-                            // CR at end of buffer
-                            advanceEnd(crPos);
+                            bufLim_--;
+                            bufLimOffset_--;
+                            advanceEnd(lfPos);
+                            insertRS_ = true;
+                            if (curIdx() == endIdx())
+                                needMoreData_ = true;  // Signal that we need more data
                             break;
                         }
+                        noteRSAt(lfPos);
+                        e = lfPos + 1;
                     }
                 }
                 break;
@@ -1457,5 +1490,11 @@ internal class ExternalInputSource : InputSource
             if (buf_[(int)i] == '\r' || buf_[(int)i] == '\n')
                 return i;
         return null;
+    }
+
+    // void noteRSAt(const Char *p);
+    private void noteRSAt(nuint idx)
+    {
+        info_.noteRS((Offset)(bufLimOffset_ - (bufLim_ - idx)));
     }
 }
