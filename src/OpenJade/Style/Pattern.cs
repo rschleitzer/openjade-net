@@ -399,7 +399,7 @@ public class Pattern
             NodePtr tem = new NodePtr();
             if (nd.node!.firstSibling(ref tem) != AccessResult.accessOK)
                 return true;
-            return tem.node == nd.node;
+            return tem.node!.Equals(nd.node!);
         }
     }
 

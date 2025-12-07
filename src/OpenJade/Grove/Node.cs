@@ -1558,13 +1558,13 @@ public class NodePtr
         var first = new NodePtr();
         if (parent.node!.firstChild(ref first) != AccessResult.accessOK)
             return AccessResult.accessNotInClass;
-        if (first.node == node)
+        if (first.node!.Equals(node!))
             return AccessResult.accessNotInClass; // No previous sibling
         var prev = first;
         var next = new NodePtr();
         while (prev.node!.nextChunkSibling(ref next) == AccessResult.accessOK)
         {
-            if (next.node == node)
+            if (next.node!.Equals(node!))
             {
                 assign(prev.node);
                 return AccessResult.accessOK;
