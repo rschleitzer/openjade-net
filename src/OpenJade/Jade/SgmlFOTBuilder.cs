@@ -22,8 +22,8 @@ public class SgmlFOTBuilder : FOTBuilder
     private bool suppressAnchors_;
 
     // Header/footer buffering (from C++ hfs_ and hf_)
-    private StringBuilder hfs_; // header/footer stream buffer
-    private OutputCharStream? curOs_; // current output stream (null means main, otherwise hfs_)
+    private StrOutputCharStream hfs_; // header/footer stream buffer
+    private OutputCharStream curOs_; // current output stream
     private StringC[] hf_; // array of header/footer content by flags
 
     private const char RE = '\r';
@@ -43,30 +43,33 @@ public class SgmlFOTBuilder : FOTBuilder
     private const int rightHF = 16;   // 020
     private const int nHF = 24;       // 030
 
-    public SgmlFOTBuilder(OutputCharStream os)
+    public SgmlFOTBuilder(OutputCharStream outputStream)
     {
-        os_ = os;
+        os_ = outputStream;
         ics_ = new StringBuilder();
         nodeLevel_ = 0;
         pendingElements_ = new System.Collections.Generic.List<NodePtr>();
         pendingElementLevels_ = new System.Collections.Generic.List<uint>();
         nPendingElementsNonEmpty_ = 0;
         suppressAnchors_ = false;
-        hfs_ = new StringBuilder();
-        curOs_ = null;
+        hfs_ = new StrOutputCharStream();
+        curOs_ = outputStream;  // Initially point to main output stream
         hf_ = new StringC[nHF];
         for (int i = 0; i < nHF; i++)
             hf_[i] = new StringC();
 
-        os_.put((Char)'<').put((Char)'?').write("xml version=\"1.0\"");
-        os_.put((Char)'?').put((Char)'>').put((Char)RE);
-        os_.put((Char)'<').write("fot").put((Char)'>').put((Char)RE);
+        os().put((Char)'<').put((Char)'?').write("xml version=\"1.0\"");
+        os().put((Char)'?').put((Char)'>').put((Char)RE);
+        os().put((Char)'<').write("fot").put((Char)'>').put((Char)RE);
     }
+
+    // Returns current output stream (either main os_ or header/footer buffer hfs_)
+    private OutputCharStream os() { return curOs_; }
 
     public void close()
     {
-        os_.put((Char)'<').put((Char)'/').write("fot").put((Char)'>').put((Char)RE);
-        os_.flush();
+        os().put((Char)'<').put((Char)'/').write("fot").put((Char)'>').put((Char)RE);
+        os().flush();
     }
 
     public override void characters(Char[] data, nuint size)
@@ -74,18 +77,18 @@ public class SgmlFOTBuilder : FOTBuilder
         if (size == 0)
             return;
         flushPendingElements();
-        os_.put((Char)'<').write("text").put((Char)'>');
+        os().put((Char)'<').write("text").put((Char)'>');
         writeEscapedData(data, size);
-        os_.put((Char)'<').put((Char)'/').write("text").put((Char)'>').put((Char)RE);
+        os().put((Char)'<').put((Char)'/').write("text").put((Char)'>').put((Char)RE);
     }
 
     public override void startParagraph(ParagraphNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("paragraph");
+        os().put((Char)'<').write("paragraph");
         displayNIC(nic);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endParagraph()
@@ -106,16 +109,16 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void startDisplayGroup(DisplayGroupNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("display-group");
+        os().put((Char)'<').write("display-group");
         if (nic.hasCoalesceId)
         {
-            os_.write(" coalesce-id=").put((Char)quot);
+            os().write(" coalesce-id=").put((Char)quot);
             writeEscapedData(nic.coalesceId.data()!, nic.coalesceId.size());
-            os_.put((Char)quot);
+            os().put((Char)quot);
         }
         displayNIC(nic);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endDisplayGroup()
@@ -136,16 +139,16 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void startBox(BoxNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("box");
+        os().put((Char)'<').write("box");
         if (nic.isDisplay)
         {
-            os_.write(" display=").put((Char)quot).write(trueString).put((Char)quot);
+            os().write(" display=").put((Char)quot).write(trueString).put((Char)quot);
             displayNIC(nic);
         }
         else
             inlineNIC(nic.breakBeforePriority, nic.breakAfterPriority);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endBox()
@@ -156,21 +159,21 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void startTable(TableNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("table");
+        os().put((Char)'<').write("table");
         switch (nic.widthType)
         {
             case TableNIC.WidthType.widthExplicit:
-                os_.write(" width=").put((Char)quot);
+                os().write(" width=").put((Char)quot);
                 writeLengthSpec(nic.width);
-                os_.put((Char)quot);
+                os().put((Char)quot);
                 break;
             case TableNIC.WidthType.widthMinimum:
-                os_.write(" minimum-width=").put((Char)quot).write(trueString).put((Char)quot);
+                os().write(" minimum-width=").put((Char)quot).write(trueString).put((Char)quot);
                 break;
         }
         displayNIC(nic);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endTable()
@@ -190,26 +193,26 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startTableCell(TableCellNIC nic)
     {
-        os_.put((Char)'<').write("table-cell column-number=").put((Char)quot);
+        os().put((Char)'<').write("table-cell column-number=").put((Char)quot);
         if (nic.missing)
-            os_.put((Char)'0');
+            os().put((Char)'0');
         else
         {
-            os_.write((nic.columnIndex + 1).ToString());
+            os().write((nic.columnIndex + 1).ToString());
             if (nic.nColumnsSpanned != 1)
             {
-                os_.put((Char)quot).write(" n-columns-spanned=").put((Char)quot);
-                os_.write(nic.nColumnsSpanned.ToString());
+                os().put((Char)quot).write(" n-columns-spanned=").put((Char)quot);
+                os().write(nic.nColumnsSpanned.ToString());
             }
             if (nic.nRowsSpanned != 1)
             {
-                os_.put((Char)quot).write(" n-rows-spanned=").put((Char)quot);
-                os_.write(nic.nRowsSpanned.ToString());
+                os().put((Char)quot).write(" n-rows-spanned=").put((Char)quot);
+                os().write(nic.nRowsSpanned.ToString());
             }
         }
-        os_.put((Char)quot);
+        os().put((Char)quot);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endTableCell()
@@ -219,71 +222,71 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void tableColumn(TableColumnNIC nic)
     {
-        os_.put((Char)'<').write("table-column column-number=").put((Char)quot);
-        os_.write((nic.columnIndex + 1).ToString()).put((Char)quot);
+        os().put((Char)'<').write("table-column column-number=").put((Char)quot);
+        os().write((nic.columnIndex + 1).ToString()).put((Char)quot);
         if (nic.nColumnsSpanned != 1)
         {
-            os_.write(" n-columns-spanned=").put((Char)quot);
-            os_.write(nic.nColumnsSpanned.ToString()).put((Char)quot);
+            os().write(" n-columns-spanned=").put((Char)quot);
+            os().write(nic.nColumnsSpanned.ToString()).put((Char)quot);
         }
         if (nic.hasWidth)
         {
-            os_.write(" width=").put((Char)quot);
+            os().write(" width=").put((Char)quot);
             writeTableLengthSpec(nic.width);
-            os_.put((Char)quot);
+            os().put((Char)quot);
         }
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void externalGraphic(ExternalGraphicNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("external-graphic entity-system-id=").put((Char)quot);
+        os().put((Char)'<').write("external-graphic entity-system-id=").put((Char)quot);
         writeEscapedData(nic.entitySystemId.data()!, nic.entitySystemId.size());
-        os_.put((Char)quot).write(" notation-system-id=").put((Char)quot);
+        os().put((Char)quot).write(" notation-system-id=").put((Char)quot);
         writeEscapedData(nic.notationSystemId.data()!, nic.notationSystemId.size());
-        os_.put((Char)quot);
+        os().put((Char)quot);
         if (nic.scaleType != Symbol.symbolFalse)
         {
-            os_.write(" scale=").put((Char)quot);
+            os().write(" scale=").put((Char)quot);
             writeSymbol(nic.scaleType);
-            os_.put((Char)quot);
+            os().put((Char)quot);
         }
         else
         {
-            os_.write(" scale-x=").put((Char)quot).write(nic.scale[0].ToString()).put((Char)quot);
-            os_.write(" scale-y=").put((Char)quot).write(nic.scale[1].ToString()).put((Char)quot);
+            os().write(" scale-x=").put((Char)quot).write(nic.scale[0].ToString()).put((Char)quot);
+            os().write(" scale-y=").put((Char)quot).write(nic.scale[1].ToString()).put((Char)quot);
         }
         if (nic.hasMaxWidth)
         {
-            os_.write(" max-width=").put((Char)quot);
+            os().write(" max-width=").put((Char)quot);
             writeLengthSpec(nic.maxWidth);
-            os_.put((Char)quot);
+            os().put((Char)quot);
         }
         if (nic.hasMaxHeight)
         {
-            os_.write(" max-height=").put((Char)quot);
+            os().write(" max-height=").put((Char)quot);
             writeLengthSpec(nic.maxHeight);
-            os_.put((Char)quot);
+            os().put((Char)quot);
         }
         if (nic.isDisplay)
         {
-            os_.write(" display=").put((Char)quot).write(trueString).put((Char)quot);
+            os().write(" display=").put((Char)quot).write(trueString).put((Char)quot);
             displayNIC(nic);
         }
         else
         {
             if (nic.escapementDirection != Symbol.symbolFalse)
             {
-                os_.write(" escapement-direction=").put((Char)quot);
+                os().write(" escapement-direction=").put((Char)quot);
                 writeSymbol(nic.escapementDirection);
-                os_.put((Char)quot);
+                os().put((Char)quot);
             }
             inlineNIC(nic.breakBeforePriority, nic.breakAfterPriority);
         }
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void rule(RuleNIC nic)
@@ -292,7 +295,7 @@ public class SgmlFOTBuilder : FOTBuilder
         string? s = symbolName(nic.orientation);
         if (s == null)
             return;
-        os_.put((Char)'<').write("rule orientation=").put((Char)quot).write(s).put((Char)quot);
+        os().put((Char)'<').write("rule orientation=").put((Char)quot).write(s).put((Char)quot);
         switch (nic.orientation)
         {
             case Symbol.symbolHorizontal:
@@ -305,12 +308,12 @@ public class SgmlFOTBuilder : FOTBuilder
         }
         if (nic.hasLength)
         {
-            os_.write(" length=").put((Char)quot);
+            os().write(" length=").put((Char)quot);
             writeLengthSpec(nic.length);
-            os_.put((Char)quot);
+            os().put((Char)quot);
         }
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void alignmentPoint()
@@ -321,39 +324,39 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void character(CharacterNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("character");
+        os().put((Char)'<').write("character");
         characterNIC(nic);
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void paragraphBreak(ParagraphNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("paragraph-break");
+        os().put((Char)'<').write("paragraph-break");
         displayNIC(nic);
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void startLink(Address addr)
     {
-        os_.put((Char)'<').write("link");
+        os().put((Char)'<').write("link");
         outputIcs();
         switch (addr.type)
         {
             case Address.Type.resolvedNode:
-                os_.write(" destination=").put((Char)quot);
+                os().write(" destination=").put((Char)quot);
                 outputElementName(addr.node);
-                os_.put((Char)quot);
+                os().put((Char)quot);
                 break;
             case Address.Type.idref:
-                os_.write(" destination=").put((Char)quot);
+                os().write(" destination=").put((Char)quot);
                 outputElementName(addr.node.groveIndex(), addr.@params[0].data()!, addr.@params[0].size());
-                os_.put((Char)quot);
+                os().put((Char)quot);
                 break;
         }
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endLink()
@@ -374,15 +377,15 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void startLeader(LeaderNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("leader");
+        os().put((Char)'<').write("leader");
         if (nic.hasLength)
         {
-            os_.write(" length=");
+            os().write(" length=");
             writeLengthSpec(nic.length);
         }
         inlineNIC(nic);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endLeader()
@@ -413,20 +416,20 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startScore(Char c)
     {
-        os_.put((Char)'<').write("score type=\"char\" char=").put((Char)quot);
-        os_.put(c);
-        os_.put((Char)quot);
+        os().put((Char)'<').write("score type=\"char\" char=").put((Char)quot);
+        os().put(c);
+        os().put((Char)quot);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void startScore(LengthSpec length)
     {
-        os_.put((Char)'<').write("score type=").put((Char)quot);
+        os().put((Char)'<').write("score type=").put((Char)quot);
         writeLengthSpec(length);
-        os_.put((Char)quot);
+        os().put((Char)quot);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void startScore(Symbol sym)
@@ -434,9 +437,9 @@ public class SgmlFOTBuilder : FOTBuilder
         string? s = symbolName(sym);
         if (s != null)
         {
-            os_.put((Char)'<').write("score type=").put((Char)quot).write(s).put((Char)quot);
+            os().put((Char)'<').write("score type=").put((Char)quot).write(s).put((Char)quot);
             outputIcs();
-            os_.put((Char)'>').put((Char)RE);
+            os().put((Char)'>').put((Char)RE);
         }
     }
 
@@ -487,19 +490,19 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startGrid(GridNIC nic)
     {
-        os_.put((Char)'<').write("grid");
+        os().put((Char)'<').write("grid");
         if (nic.nColumns != 0)
         {
-            os_.write(" grid-n-columns=").put((Char)quot);
-            os_.write(nic.nColumns.ToString()).put((Char)quot);
+            os().write(" grid-n-columns=").put((Char)quot);
+            os().write(nic.nColumns.ToString()).put((Char)quot);
         }
         if (nic.nRows != 0)
         {
-            os_.write(" grid-n-rows=").put((Char)quot);
-            os_.write(nic.nRows.ToString()).put((Char)quot);
+            os().write(" grid-n-rows=").put((Char)quot);
+            os().write(nic.nRows.ToString()).put((Char)quot);
         }
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endGrid()
@@ -509,19 +512,19 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startGridCell(GridCellNIC nic)
     {
-        os_.put((Char)'<').write("grid-cell");
+        os().put((Char)'<').write("grid-cell");
         if (nic.columnNumber != 0)
         {
-            os_.write(" column-number=").put((Char)quot);
-            os_.write(nic.columnNumber.ToString()).put((Char)quot);
+            os().write(" column-number=").put((Char)quot);
+            os().write(nic.columnNumber.ToString()).put((Char)quot);
         }
         if (nic.rowNumber != 0)
         {
-            os_.write(" row-number=").put((Char)quot);
-            os_.write(nic.rowNumber.ToString()).put((Char)quot);
+            os().write(" row-number=").put((Char)quot);
+            os().write(nic.rowNumber.ToString()).put((Char)quot);
         }
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endGridCell()
@@ -825,8 +828,11 @@ public class SgmlFOTBuilder : FOTBuilder
     {
         startSimpleFlowObj("simple-page-sequence");
         suppressAnchors_ = true;
-        // Redirect output to header/footer buffer
-        hfs_.Clear();
+        // TODO: Header/footer redirection disabled until SimplePageSequenceFlowObj
+        // properly processes header/footer sosofos. Currently processInner()
+        // just calls endSimplePageSequenceHeaderFooter() immediately without
+        // processing any header/footer content, so redirecting would lose body content.
+        // In C++: curOs_ = &hfs_;
     }
 
     public override void endSimplePageSequenceSerial()
@@ -841,16 +847,14 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void endSimplePageSequenceHeaderFooter(uint flags)
     {
-        // Extract content from hfs_ to hf_[flags]
-        if (flags < nHF)
-        {
-            hf_[(int)flags] = new StringC(hfs_.ToString());
-            hfs_.Clear();
-        }
+        // Extract content from hfs_ to hf_[flags] (like C++: hfs_.extractString(hf_[flags]))
+        hfs_.extractString(hf_[flags]);
     }
 
     public override void endAllSimplePageSequenceHeaderFooter()
     {
+        // TODO: Restore output when header/footer redirection is enabled
+        // curOs_ = os_;
         suppressAnchors_ = false;
         // Output all collected header/footer content as simple-page-sequence.side-hf elements
         for (int i = 0; i < nHF; i += nHF / 6)
@@ -882,20 +886,20 @@ public class SgmlFOTBuilder : FOTBuilder
                         else
                             side = "left";
                         string hf = ((i & headerHF) != 0) ? "header" : "footer";
-                        os_.put((Char)'<').write("simple-page-sequence.").write(side).put((Char)'-').write(hf);
+                        os().put((Char)'<').write("simple-page-sequence.").write(side).put((Char)'-').write(hf);
                         if (front != 0)
                         {
-                            os_.write(" front=").put((Char)quot).write(boolString(j != 0)).put((Char)quot);
+                            os().write(" front=").put((Char)quot).write(boolString(j != 0)).put((Char)quot);
                         }
                         if (first != 0)
                         {
-                            os_.write(" first=").put((Char)quot).write(boolString(k != 0)).put((Char)quot);
+                            os().write(" first=").put((Char)quot).write(boolString(k != 0)).put((Char)quot);
                         }
-                        os_.put((Char)'>').put((Char)RE);
+                        os().put((Char)'>').put((Char)RE);
                         // Write the content
                         for (nuint ci = 0; ci < str.size(); ci++)
-                            os_.put(str.data()![ci]);
-                        os_.put((Char)'<').put((Char)'/').write("simple-page-sequence.").write(side).put((Char)'-').write(hf).put((Char)'>').put((Char)RE);
+                            os().put(str.data()![ci]);
+                        os().put((Char)'<').put((Char)'/').write("simple-page-sequence.").write(side).put((Char)'-').write(hf).put((Char)'>').put((Char)RE);
                     }
                 }
             }
@@ -908,24 +912,24 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void pageNumber()
     {
         flushPendingElements();
-        os_.put((Char)'<').write("page-number");
+        os().put((Char)'<').write("page-number");
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     // Multi-mode methods
     public override void startMultiModeSerial(MultiMode? principalMode)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("multi-mode");
+        os().put((Char)'<').write("multi-mode");
         if (principalMode != null && principalMode.name.size() > 0)
         {
-            os_.write(" principal-mode=\"");
+            os().write(" principal-mode=\"");
             writeEscapedData(principalMode.name.data()!, principalMode.name.size());
-            os_.put((Char)'"');
+            os().put((Char)'"');
         }
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endMultiModeSerial()
@@ -935,11 +939,11 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startMultiModeMode(MultiMode mode)
     {
-        os_.put((Char)'<').write("mode name=\"");
+        os().put((Char)'<').write("mode name=\"");
         writeEscapedData(mode.name.data()!, mode.name.size());
-        os_.put((Char)'"');
+        os().put((Char)'"');
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endMultiModeMode()
@@ -1136,18 +1140,18 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void radicalRadical(CharacterNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("radical-char");
+        os().put((Char)'<').write("radical-char");
         characterNIC(nic);
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void radicalRadicalDefaulted()
     {
         flushPendingElements();
-        os_.put((Char)'<').write("radical-char-defaulted");
+        os().put((Char)'<').write("radical-char-defaulted");
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void startMathOperatorSerial()
@@ -1214,11 +1218,11 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void startTablePartSerial(TablePartNIC nic)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("table-part");
+        os().put((Char)'<').write("table-part");
         if (nic.isExplicit)
-            os_.write(" explicit=\"true\"");
+            os().write(" explicit=\"true\"");
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     public override void endTablePartSerial()
@@ -1269,11 +1273,11 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void currentNodePageNumber(NodePtr node)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("current-node-page-number node=\"");
+        os().put((Char)'<').write("current-node-page-number node=\"");
         outputElementName(node);
-        os_.put((Char)'"');
+        os().put((Char)'"');
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     public override void charactersFromNode(NodePtr nd, Char[] data, nuint size)
@@ -1284,9 +1288,9 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void formattingInstruction(StringC s)
     {
         flushPendingElements();
-        os_.put((Char)'<').write("formatting-instruction").put((Char)'>');
+        os().put((Char)'<').write("formatting-instruction").put((Char)'>');
         writeEscapedData(s.data()!, s.size());
-        os_.put((Char)'<').put((Char)'/').write("formatting-instruction").put((Char)'>').put((Char)RE);
+        os().put((Char)'<').put((Char)'/').write("formatting-instruction").put((Char)'>').put((Char)RE);
     }
 
     // Private helper methods
@@ -1364,22 +1368,22 @@ public class SgmlFOTBuilder : FOTBuilder
     private void startSimpleFlowObj(string name)
     {
         flushPendingElements();
-        os_.put((Char)'<').write(name);
+        os().put((Char)'<').write(name);
         outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        os().put((Char)'>').put((Char)RE);
     }
 
     private void simpleFlowObj(string name)
     {
         flushPendingElements();
-        os_.put((Char)'<').write(name);
+        os().put((Char)'<').write(name);
         outputIcs();
-        os_.write("/>").put((Char)RE);
+        os().write("/>").put((Char)RE);
     }
 
     private void endFlow(string name)
     {
-        os_.put((Char)'<').put((Char)'/').write(name).put((Char)'>').put((Char)RE);
+        os().put((Char)'<').put((Char)'/').write(name).put((Char)'>').put((Char)RE);
     }
 
     private void outputIcs()
@@ -1388,7 +1392,7 @@ public class SgmlFOTBuilder : FOTBuilder
         {
             string str = ics_.ToString();
             for (int i = 0; i < str.Length; i++)
-                os_.put((Char)str[i]);
+                os().put((Char)str[i]);
             ics_.Clear();
         }
     }
@@ -1396,36 +1400,36 @@ public class SgmlFOTBuilder : FOTBuilder
     private void displayNIC(DisplayNIC nic)
     {
         if (nic.keepWithPrevious)
-            os_.write(" keep-with-previous=\"true\"");
+            os().write(" keep-with-previous=\"true\"");
         if (nic.keepWithNext)
-            os_.write(" keep-with-next=\"true\"");
+            os().write(" keep-with-next=\"true\"");
         if (nic.mayViolateKeepBefore)
-            os_.write(" may-violate-keep-before=\"true\"");
+            os().write(" may-violate-keep-before=\"true\"");
         if (nic.mayViolateKeepAfter)
-            os_.write(" may-violate-keep-after=\"true\"");
+            os().write(" may-violate-keep-after=\"true\"");
         if (nic.positionPreference != Symbol.symbolFalse)
         {
-            os_.write(" position-preference=\"");
+            os().write(" position-preference=\"");
             writeSymbol(nic.positionPreference);
-            os_.put((Char)'"');
+            os().put((Char)'"');
         }
         if (nic.keep != Symbol.symbolFalse)
         {
-            os_.write(" keep=\"");
+            os().write(" keep=\"");
             writeSymbol(nic.keep);
-            os_.put((Char)'"');
+            os().put((Char)'"');
         }
         if (nic.breakBefore != Symbol.symbolFalse)
         {
-            os_.write(" break-before=\"");
+            os().write(" break-before=\"");
             writeSymbol(nic.breakBefore);
-            os_.put((Char)'"');
+            os().put((Char)'"');
         }
         if (nic.breakAfter != Symbol.symbolFalse)
         {
-            os_.write(" break-after=\"");
+            os().write(" break-after=\"");
             writeSymbol(nic.breakAfter);
-            os_.put((Char)'"');
+            os().put((Char)'"');
         }
         displaySpaceNIC("space-before", nic.spaceBefore);
         displaySpaceNIC("space-after", nic.spaceAfter);
@@ -1435,29 +1439,29 @@ public class SgmlFOTBuilder : FOTBuilder
     {
         if (ds.nominal || ds.min || ds.max)
         {
-            os_.put((Char)' ').write(name).put((Char)'=').put((Char)'"');
+            os().put((Char)' ').write(name).put((Char)'=').put((Char)'"');
             writeLengthSpec(ds.nominal);
             if (ds.min.length != ds.nominal.length ||
                 ds.min.displaySizeFactor != ds.nominal.displaySizeFactor ||
                 ds.max.length != ds.nominal.length ||
                 ds.max.displaySizeFactor != ds.nominal.displaySizeFactor)
             {
-                os_.put((Char)',');
+                os().put((Char)',');
                 writeLengthSpec(ds.min);
-                os_.put((Char)',');
+                os().put((Char)',');
                 writeLengthSpec(ds.max);
             }
-            os_.put((Char)'"');
+            os().put((Char)'"');
         }
         if (ds.force)
-            os_.put((Char)' ').write(name).write("-priority=\"force\"");
+            os().put((Char)' ').write(name).write("-priority=\"force\"");
         else if (ds.priority != 0)
         {
-            os_.put((Char)' ').write(name).write("-priority=\"");
-            os_.write(ds.priority.ToString()).put((Char)'"');
+            os().put((Char)' ').write(name).write("-priority=\"");
+            os().write(ds.priority.ToString()).put((Char)'"');
         }
         if (!ds.conditional)
-            os_.put((Char)' ').write(name).write("-conditional=\"false\"");
+            os().put((Char)' ').write(name).write("-conditional=\"false\"");
     }
 
     private void inlineNIC(InlineNIC nic)
@@ -1469,13 +1473,13 @@ public class SgmlFOTBuilder : FOTBuilder
     {
         if (breakBeforePriority != 0)
         {
-            os_.write(" break-before-priority=\"");
-            os_.write(breakBeforePriority.ToString()).put((Char)'"');
+            os().write(" break-before-priority=\"");
+            os().write(breakBeforePriority.ToString()).put((Char)'"');
         }
         if (breakAfterPriority != 0)
         {
-            os_.write(" break-after-priority=\"");
-            os_.write(breakAfterPriority.ToString()).put((Char)'"');
+            os().write(" break-after-priority=\"");
+            os().write(breakAfterPriority.ToString()).put((Char)'"');
         }
     }
 
@@ -1484,47 +1488,47 @@ public class SgmlFOTBuilder : FOTBuilder
         if (nic.specifiedC != 0)
         {
             if ((nic.specifiedC & (1 << CharacterNIC.cChar)) != 0)
-                os_.write(" char=\"&#").write(nic.ch.ToString()).write(";\"");
+                os().write(" char=\"&#").write(nic.ch.ToString()).write(";\"");
             if ((nic.specifiedC & (1 << CharacterNIC.cGlyphId)) != 0)
             {
-                os_.write(" glyph-id=\"");
+                os().write(" glyph-id=\"");
                 if (nic.glyphId.publicId != null)
                 {
-                    os_.write(nic.glyphId.publicId);
+                    os().write(nic.glyphId.publicId);
                     if (nic.glyphId.suffix != 0)
-                        os_.write("::").write(nic.glyphId.suffix.ToString());
+                        os().write("::").write(nic.glyphId.suffix.ToString());
                 }
                 else
-                    os_.write(falseString);
-                os_.put((Char)'"');
+                    os().write(falseString);
+                os().put((Char)'"');
             }
             if ((nic.specifiedC & (1 << CharacterNIC.cIsDropAfterLineBreak)) != 0)
-                os_.write(" drop-after-line-break=\"").write(boolString(nic.isDropAfterLineBreak)).put((Char)'"');
+                os().write(" drop-after-line-break=\"").write(boolString(nic.isDropAfterLineBreak)).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cIsDropUnlessBeforeLineBreak)) != 0)
-                os_.write(" drop-unless-before-line-break=\"").write(boolString(nic.isDropUnlessBeforeLineBreak)).put((Char)'"');
+                os().write(" drop-unless-before-line-break=\"").write(boolString(nic.isDropUnlessBeforeLineBreak)).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cIsPunct)) != 0)
-                os_.write(" punct=\"").write(boolString(nic.isPunct)).put((Char)'"');
+                os().write(" punct=\"").write(boolString(nic.isPunct)).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cIsInputWhitespace)) != 0)
-                os_.write(" input-whitespace=\"").write(boolString(nic.isInputWhitespace)).put((Char)'"');
+                os().write(" input-whitespace=\"").write(boolString(nic.isInputWhitespace)).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cIsInputTab)) != 0)
-                os_.write(" input-tab=\"").write(boolString(nic.isInputTab)).put((Char)'"');
+                os().write(" input-tab=\"").write(boolString(nic.isInputTab)).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cIsRecordEnd)) != 0)
-                os_.write(" record-end=\"").write(boolString(nic.isRecordEnd)).put((Char)'"');
+                os().write(" record-end=\"").write(boolString(nic.isRecordEnd)).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cIsSpace)) != 0)
-                os_.write(" space=\"").write(boolString(nic.isSpace)).put((Char)'"');
+                os().write(" space=\"").write(boolString(nic.isSpace)).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cMathClass)) != 0)
             {
-                os_.write(" math-class=\"");
+                os().write(" math-class=\"");
                 writeSymbol(nic.mathClass);
-                os_.put((Char)'"');
+                os().put((Char)'"');
             }
             if ((nic.specifiedC & (1 << CharacterNIC.cBreakBeforePriority)) != 0)
-                os_.write(" break-before-priority=\"").write(nic.breakBeforePriority.ToString()).put((Char)'"');
+                os().write(" break-before-priority=\"").write(nic.breakBeforePriority.ToString()).put((Char)'"');
             if ((nic.specifiedC & (1 << CharacterNIC.cBreakAfterPriority)) != 0)
-                os_.write(" break-after-priority=\"").write(nic.breakAfterPriority.ToString()).put((Char)'"');
+                os().write(" break-after-priority=\"").write(nic.breakAfterPriority.ToString()).put((Char)'"');
         }
         if (nic.stretchFactor != 1.0)
-            os_.write(" stretch-factor=\"").write(nic.stretchFactor.ToString()).put((Char)'"');
+            os().write(" stretch-factor=\"").write(nic.stretchFactor.ToString()).put((Char)'"');
     }
 
     private void writeEscapedData(Char[] data, nuint size)
@@ -1535,22 +1539,22 @@ public class SgmlFOTBuilder : FOTBuilder
             switch (c)
             {
                 case '&':
-                    os_.write("&amp;");
+                    os().write("&amp;");
                     break;
                 case '<':
-                    os_.write("&lt;");
+                    os().write("&lt;");
                     break;
                 case '>':
-                    os_.write("&gt;");
+                    os().write("&gt;");
                     break;
                 case '"':
-                    os_.write("&quot;");
+                    os().write("&quot;");
                     break;
                 default:
                     if (c < 0x80)
-                        os_.put(c);
+                        os().put(c);
                     else
-                        os_.write("&#").write(c.ToString()).put((Char)';');
+                        os().write("&#").write(c.ToString()).put((Char)';');
                     break;
             }
         }
@@ -1564,9 +1568,9 @@ public class SgmlFOTBuilder : FOTBuilder
             {
                 writeUnits(ls.length);
                 if (ls.displaySizeFactor >= 0.0)
-                    os_.put((Char)'+');
+                    os().put((Char)'+');
             }
-            os_.write((ls.displaySizeFactor * 100.0).ToString("F2")).put((Char)'%');
+            os().write((ls.displaySizeFactor * 100.0).ToString("F2")).put((Char)'%');
         }
         else
             writeUnits(ls.length);
@@ -1583,18 +1587,18 @@ public class SgmlFOTBuilder : FOTBuilder
         if (ls.displaySizeFactor != 0.0)
         {
             if (needSign && ls.displaySizeFactor >= 0.0)
-                os_.put((Char)'+');
-            os_.write((ls.displaySizeFactor * 100.0).ToString("F2")).put((Char)'%');
+                os().put((Char)'+');
+            os().write((ls.displaySizeFactor * 100.0).ToString("F2")).put((Char)'%');
             needSign = true;
         }
         if (ls.tableUnitFactor != 0.0)
         {
             if (needSign && ls.tableUnitFactor >= 0.0)
-                os_.put((Char)'+');
-            os_.write(ls.tableUnitFactor.ToString("F2")).put((Char)'*');
+                os().put((Char)'+');
+            os().write(ls.tableUnitFactor.ToString("F2")).put((Char)'*');
         }
         if (!needSign && ls.tableUnitFactor == 0.0)
-            os_.put((Char)'0').write("pt");
+            os().put((Char)'0').write("pt");
     }
 
     private void writeUnits(long units)
@@ -1603,20 +1607,20 @@ public class SgmlFOTBuilder : FOTBuilder
         long whole = units / 1000;
         long frac = Math.Abs(units % 1000);
         if (frac == 0)
-            os_.write(whole.ToString()).write("pt");
+            os().write(whole.ToString()).write("pt");
         else
-            os_.write(whole.ToString()).put((Char)'.').write(frac.ToString("D3").TrimEnd('0')).write("pt");
+            os().write(whole.ToString()).put((Char)'.').write(frac.ToString("D3").TrimEnd('0')).write("pt");
     }
 
     private void writeSymbol(Symbol sym)
     {
         string? s = symbolName(sym);
         if (s != null)
-            os_.write(s);
+            os().write(s);
         else if (sym == Symbol.symbolFalse)
-            os_.write(falseString);
+            os().write(falseString);
         else if (sym == Symbol.symbolTrue)
-            os_.write(trueString);
+            os().write(trueString);
     }
 
     private void lengthC(string name, long units)
@@ -1815,9 +1819,9 @@ public class SgmlFOTBuilder : FOTBuilder
         for (int i = 0; i < pendingElements_.Count; i++)
         {
             NodePtr node = pendingElements_[i];
-            os_.put((Char)'<').write("a name=\"");
+            os().put((Char)'<').write("a name=\"");
             outputElementName(node);
-            os_.write("\"/>").put((Char)RE);
+            os().write("\"/>").put((Char)RE);
         }
         nPendingElementsNonEmpty_ = 0;
         pendingElements_.Clear();
@@ -1833,17 +1837,17 @@ public class SgmlFOTBuilder : FOTBuilder
         {
             uint groveIdx = node.groveIndex();
             if (groveIdx != 0)
-                os_.write(groveIdx.ToString()).put((Char)'.');
+                os().write(groveIdx.ToString()).put((Char)'.');
             ulong elemIdx = 0;
             if (node.elementIndex(ref elemIdx) == AccessResult.accessOK)
-                os_.write(elemIdx.ToString());
+                os().write(elemIdx.ToString());
         }
     }
 
     private void outputElementName(uint groveIndex, Char[] idData, nuint idSize)
     {
         if (groveIndex != 0)
-            os_.write(groveIndex.ToString()).put((Char)'.');
+            os().write(groveIndex.ToString()).put((Char)'.');
         writeEscapedData(idData, idSize);
     }
 }
