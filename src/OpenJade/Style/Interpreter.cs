@@ -921,8 +921,16 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             invalidCharacteristicValue(ident, loc);
             return false;
         }
-        // Map symbol name to FOTBuilder.Symbol
-        string name = sym.name().ToString().ToLower().Replace("-", "");
+        // Get the symbol name from the StringObj
+        StringObj? nameObj = sym.name();
+        if (nameObj == null)
+        {
+            invalidCharacteristicValue(ident, loc);
+            return false;
+        }
+        // Convert StringObj to string - use data() and size() to get actual content
+        StringC nameC = new StringC(nameObj.data(), nameObj.size());
+        string name = nameC.ToString().ToLower().Replace("-", "");
         if (Enum.TryParse<FOTBuilder.Symbol>("symbol" + name, true, out result))
             return true;
         invalidCharacteristicValue(ident, loc);
