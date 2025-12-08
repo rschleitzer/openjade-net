@@ -88,9 +88,11 @@ public class StyleEngine : IDisposable
             }
 
             // Process body elements
+            int bodyCount = 0;
             for (IListIter<DssslSpecEventHandler.BodyElement> iter = part.iter();
                  iter.done() == 0; iter.next())
             {
+                bodyCount++;
                 DssslSpecEventHandler.BodyElement body = iter.cur()!;
                 body.makeInputSource(specHandler, out InputSource? inputSource);
                 if (inputSource != null)

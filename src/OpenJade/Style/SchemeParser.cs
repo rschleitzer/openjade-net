@@ -114,16 +114,36 @@ public class SchemeParser : Messenger
 
     public void parse()
     {
-        // Main parsing entry point
+        // Main parsing entry point - matches original openjade recovery behavior
+        bool recovering = false;
         for (;;)
         {
             Token tok;
-            if (!getToken(TokenAllow.OpenParen | TokenAllow.EndOfEntity, out tok))
-                break;
+            // When recovering, accept all tokens to skip past bad forms
+            TokenAllow allowed = recovering
+                ? (TokenAllow)~0
+                : TokenAllow.OpenParen | TokenAllow.EndOfEntity;
+            if (!getToken(allowed, out tok))
+            {
+                recovering = true;
+                continue;
+            }
             if (tok == Token.EndOfEntity)
                 break;
-            if (!parseTopLevel())
-                break;
+            if (tok != Token.OpenParen)
+            {
+                // In recovering mode, skip non-openParen tokens
+                recovering = true;
+                continue;
+            }
+            // Try to parse the top-level form (which will get the identifier)
+            bool success = parseTopLevel();
+            if (!success)
+            {
+                // Parsing failed - skip the rest of this form
+                skipForm();
+            }
+            recovering = !success;
         }
     }
 
@@ -1331,14 +1351,13 @@ public class SchemeParser : Messenger
         {
             case Token.Number:
                 {
-                    long val = 0;
-                    for (nuint i = 0; i < currentToken_.size(); i++)
+                    ELObj? val = interp_.convertNumber(currentToken_);
+                    if (val == null)
                     {
-                        Char c = currentToken_[i];
-                        if (c >= '0' && c <= '9')
-                            val = val * 10 + (c - '0');
+                        message(InterpreterMessages.invalidNumber);
+                        return false;
                     }
-                    expr = new ConstantExpression(interp_.makeInteger(val), loc);
+                    expr = new ConstantExpression(val, loc);
                     return true;
                 }
             case Token.String:
@@ -1638,9 +1657,7 @@ public class SchemeParser : Messenger
     {
         Token tok;
         if (!getToken(TokenAllow.Identifier | TokenAllow.OpenParen, out tok))
-        {
             return false;
-        }
 
         if (tok == Token.Identifier)
         {
@@ -1649,13 +1666,9 @@ public class SchemeParser : Messenger
             Expression? expr;
             Identifier.SyntacticKey key;
             if (!parseExpression(TokenAllow.Expr, out expr, out key, out tok))
-            {
                 return false;
-            }
             if (!expectCloseParen())
-            {
                 return false;
-            }
 
             // Register definition
             ident.setExpression(expr, 0, in_?.currentLocation() ?? new Location());
@@ -2336,6 +2349,36 @@ public class SchemeParser : Messenger
                 hasDigit = true;
                 c = getChar();
             }
+        }
+
+        // Handle exponent (e.g., 1e10, 1.5e-3)
+        if (c == 'e' || c == 'E')
+        {
+            Xchar next = getChar();
+            if (next >= 0 && (isDigit((Char)next) || next == '+' || next == '-'))
+            {
+                currentToken_.operatorPlusAssign((Char)c);
+                currentToken_.operatorPlusAssign((Char)next);
+                c = getChar();
+                while (c >= 0 && isDigit((Char)c))
+                {
+                    currentToken_.operatorPlusAssign((Char)c);
+                    c = getChar();
+                }
+            }
+            else
+            {
+                if (next >= 0)
+                    ungetChar(next);
+            }
+        }
+
+        // Include unit suffix (e.g., pi, pt, cm, in, mm, pc)
+        // Units are letters following the number
+        while (c >= 0 && isLetter((Char)c))
+        {
+            currentToken_.operatorPlusAssign((Char)c);
+            c = getChar();
         }
 
         if (c >= 0)

@@ -94,7 +94,7 @@ public class CondFailInsn : ErrorInsn
     public override Insn? execute(VM vm)
     {
         vm.interp.setNextLocation(loc_);
-        // vm.interp.message(InterpreterMessages.condFail);
+        Console.Error.WriteLine($"ERROR: no matching cond clause at index {loc_.index()}");
         return base.execute(vm);
     }
 }

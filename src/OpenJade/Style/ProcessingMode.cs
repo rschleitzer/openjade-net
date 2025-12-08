@@ -84,7 +84,6 @@ public class ProcessingMode : Named
     public void addRule(bool orRule, Pattern pattern, Expression expr, uint part, Location loc, Interpreter interp,
                         RuleType ruleType = RuleType.constructionRule)
     {
-
         // Determine if pattern matches root
         bool matchesRoot = pattern is RootPattern;
 

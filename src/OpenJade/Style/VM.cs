@@ -185,9 +185,9 @@ public partial class VM : EvalContext
         // The inner execution loop
         while (insn != null)
         {
-            if (interp.debugMode())
-                Console.Error.WriteLine($"VM.eval: executing {insn.GetType().Name}, sp={sp}");
             insn = insn.execute(this);
+            if (sp < 0)
+                break;
         }
 
         ELObj? result;

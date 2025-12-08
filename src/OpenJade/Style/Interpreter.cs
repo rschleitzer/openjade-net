@@ -402,6 +402,136 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         return new RealObj(n);
     }
 
+    // Convert a number token string (may include unit suffix) to an ELObj
+    public ELObj? convertNumber(StringC str, int radix = 10)
+    {
+        if (str.size() == 0)
+            return null;
+
+        nuint i = 0;
+        // Handle radix prefix (#d, #x, #o, #b)
+        if (str[0] == '#')
+        {
+            if (str.size() < 2)
+                return null;
+            switch (str[1])
+            {
+                case 'd': radix = 10; break;
+                case 'x': radix = 16; break;
+                case 'o': radix = 8; break;
+                case 'b': radix = 2; break;
+                default: return null;
+            }
+            i = 2;
+        }
+        if (i >= str.size())
+            return null;
+
+        bool negative = false;
+        if (str[i] == '-')
+        {
+            negative = true;
+            i++;
+        }
+        else if (str[i] == '+')
+        {
+            i++;
+        }
+
+        bool hadDecimalPoint = false;
+        bool hadDigit = false;
+        long n = 0;
+        int exp = 0;
+
+        // Parse digits
+        for (; i < str.size(); i++)
+        {
+            Char c = str[i];
+            int weight = getDigitWeight(c, radix);
+            if (weight >= 0)
+            {
+                hadDigit = true;
+                if (negative)
+                    n = n * radix - weight;
+                else
+                    n = n * radix + weight;
+                if (hadDecimalPoint)
+                    exp--;
+            }
+            else if (c == '.' && radix == 10)
+            {
+                if (hadDecimalPoint)
+                    return null;
+                hadDecimalPoint = true;
+            }
+            else
+                break;
+        }
+
+        if (!hadDigit || (radix != 10 && i < str.size()))
+            return null;
+
+        // Handle exponent
+        if (i + 1 < str.size() && (str[i] == 'e' || str[i] == 'E'))
+        {
+            Char next = str[i + 1];
+            if (next >= '0' && next <= '9' || next == '+' || next == '-')
+            {
+                hadDecimalPoint = true;
+                i++;
+                int e = 0;
+                bool negExp = false;
+                if (str[i] == '-') { negExp = true; i++; }
+                else if (str[i] == '+') { i++; }
+                for (; i < str.size() && str[i] >= '0' && str[i] <= '9'; i++)
+                    e = e * 10 + (int)(str[i] - '0');
+                exp += negExp ? -e : e;
+            }
+        }
+
+        // Handle unit suffix
+        if (i < str.size())
+        {
+            StringC unitName = new StringC();
+            for (; i < str.size(); i++)
+            {
+                Char c = str[i];
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+                    unitName.operatorPlusAssign(c);
+                else
+                    return null;  // Invalid character in unit
+            }
+            long unitValue = lookupUnit(unitName);
+            if (unitValue == 0)
+                return null;  // Unknown unit
+            // Calculate length in internal units
+            double factor = Math.Pow(10, exp);
+            long lengthUnits = (long)(n * factor * unitValue);
+            return new LengthObj(lengthUnits);
+        }
+
+        if (hadDecimalPoint)
+        {
+            double val = n * Math.Pow(10, exp);
+            return makeReal(val);
+        }
+        return makeInteger(n);
+    }
+
+    private int getDigitWeight(Char c, int radix)
+    {
+        int weight;
+        if (c >= '0' && c <= '9')
+            weight = (int)(c - '0');
+        else if (c >= 'a' && c <= 'f')
+            weight = (int)(c - 'a') + 10;
+        else if (c >= 'A' && c <= 'F')
+            weight = (int)(c - 'A') + 10;
+        else
+            return -1;
+        return weight < radix ? weight : -1;
+    }
+
     public CharObj makeChar(Char c)
     {
         return new CharObj(c);
@@ -510,7 +640,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     }
 
     // Debug mode
-    private bool debugMode_ = false;
+    private bool debugMode_ = true;  // TEMP: enable for debugging
     public bool debugMode() { return debugMode_; }
     public void setDebugMode(bool debug) { debugMode_ = debug; }
 
@@ -932,10 +1062,12 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     }
 
     // Unit conversion support
+    // Values are in internal units where 72000 units = 1 inch (1000 units/point)
     private Dictionary<string, long> unitTable_ = new()
     {
         { "pt", 1000 },          // 1000 units per point (based on 72000 units/inch = 72 points/inch * 1000)
         { "pc", 12000 },         // 12 points = 1 pica
+        { "pi", 12000 },         // pica (alternate name)
         { "in", 72000 },         // 72 points = 1 inch, so 72000 units/inch
         { "cm", 28346 },         // 72000 / 2.54 ≈ 28346 units/cm
         { "mm", 2835 },          // 72000 / 25.4 ≈ 2835 units/mm
@@ -1331,6 +1463,7 @@ public enum InterpreterMessages
     unterminatedString,
     invalidCharName,
     invalidCharNumber,
+    invalidNumber,
     invalidUnquoteSplicing,
     badQuasiquote,
     // Table messages
