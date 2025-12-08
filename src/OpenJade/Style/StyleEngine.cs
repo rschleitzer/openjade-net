@@ -277,6 +277,14 @@ public class ProcessContextImpl : ProcessContext
         if (mode == null)
             return;
 
+        // Check if this is a text/data node - if so, output characters directly
+        GroveString str = new GroveString();
+        if (node.charChunk(vm_.interp, ref str) == AccessResult.accessOK)
+        {
+            currentFOTBuilder().charactersFromNode(node, str.data()!, chunk ? str.size() : 1);
+            return;
+        }
+
         // Save current context
         using var cns = new CurrentNodeSetter(node, mode, vm_);
         var saveSpecificity = matchSpecificity_;
