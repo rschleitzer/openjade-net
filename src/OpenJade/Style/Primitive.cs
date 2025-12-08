@@ -127,7 +127,7 @@ public class CdrPrimitiveObj : PrimitiveObj
     }
 }
 
-// Length primitive
+// Length primitive - works on lists and strings
 public class LengthPrimitiveObj : PrimitiveObj
 {
     private static readonly Signature sig = new Signature(1, 0, false);
@@ -135,6 +135,15 @@ public class LengthPrimitiveObj : PrimitiveObj
 
     public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
     {
+        // Check if it's a string first
+        StringObj? str = args[0] as StringObj;
+        if (str != null)
+        {
+            // Return the string length (number of characters)
+            return interp.makeInteger((long)str.size());
+        }
+
+        // Otherwise, treat as a list
         long len = 0;
         ELObj? list = args[0];
         while (list != null && !list.isNil())
