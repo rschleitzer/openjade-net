@@ -272,7 +272,11 @@ public class String<T> where T : struct
         {
             foreach (char c in s)
             {
-                operatorPlusAssign((T)(object)c);
+                // Convert char to the element type T (typically uint for StringC)
+                if (typeof(T) == typeof(uint))
+                    operatorPlusAssign((T)(object)(uint)c);
+                else
+                    operatorPlusAssign((T)(object)c);
             }
         }
         return this;

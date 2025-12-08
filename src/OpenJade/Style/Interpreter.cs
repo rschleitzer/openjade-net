@@ -151,6 +151,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("string<?", new StringLessPrimitiveObj());
         installPrimitive("string<=?", new StringLessEqualPrimitiveObj());
         installPrimitive("number->string", new NumberToStringPrimitiveObj());
+        installPrimitive("string->number", new StringToNumberPrimitiveObj());
+        installPrimitive("format-number", new FormatNumberPrimitiveObj());
+        installPrimitive("format-number-list", new FormatNumberListPrimitiveObj());
 
         // Arithmetic primitives
         installPrimitive("+", new PlusPrimitiveObj());

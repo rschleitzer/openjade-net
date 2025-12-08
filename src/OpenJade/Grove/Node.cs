@@ -1246,6 +1246,14 @@ public abstract class Node
                         value.set(tem);
                     break;
                 }
+            case ComponentName.Id.idDocumentElement:
+                {
+                    NodePtr tem = new NodePtr();
+                    ret = getDocumentElement(ref tem);
+                    if (ret == AccessResult.accessOK)
+                        value.set(tem);
+                    break;
+                }
             default:
                 ret = AccessResult.accessNotInClass;
                 break;

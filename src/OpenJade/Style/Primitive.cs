@@ -2434,6 +2434,77 @@ public class FormatNumberPrimitiveObj : PrimitiveObj
         result.append(sb.ToString());
         return result;
     }
+
+    // Made public so FormatNumberListPrimitiveObj can use it
+    public static void formatNumberPublic(long n, Char[] s, nuint len, StringC result)
+    {
+        formatNumber(n, s, len, result);
+    }
+}
+
+// Format-number-list primitive
+public class FormatNumberListPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(3, 0, false);
+    public FormatNumberListPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        ELObj? numbers = args[0];
+        ELObj? formats = args[1];
+        ELObj? seps = args[2];
+        StringObj result = new StringObj();
+        bool first = true;
+
+        while (numbers != null && !numbers.isNil())
+        {
+            Char[]? s = null;
+            nuint len = 0;
+
+            // Add separator (except before first number)
+            if (!first)
+            {
+                if (!seps!.stringData(out s, out len))
+                {
+                    PairObj? tem = seps.asPair();
+                    if (tem == null)
+                        return argError(interp, loc, InterpreterMessages.notAList, 2, args[2]);
+                    if (!tem.car()!.stringData(out s, out len))
+                        return argError(interp, loc, InterpreterMessages.notAString, 2, tem.car());
+                    seps = tem.cdr();
+                }
+                if (s != null)
+                    result.append(s, len);
+            }
+            first = false;
+
+            // Get the number
+            PairObj? numPair = numbers.asPair();
+            if (numPair == null)
+                return argError(interp, loc, InterpreterMessages.notAList, 0, args[0]);
+            long k;
+            if (!numPair.car()!.exactIntegerValue(out k))
+                return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, numPair.car());
+            numbers = numPair.cdr();
+
+            // Get the format
+            if (!formats!.stringData(out s, out len))
+            {
+                PairObj? fmtPair = formats.asPair();
+                if (fmtPair == null)
+                    return argError(interp, loc, InterpreterMessages.notAList, 1, args[1]);
+                if (!fmtPair.car()!.stringData(out s, out len))
+                    return argError(interp, loc, InterpreterMessages.notAString, 1, fmtPair.car());
+                formats = fmtPair.cdr();
+            }
+
+            // Format the number
+            StringC formatted = new StringC();
+            FormatNumberPrimitiveObj.formatNumberPublic(k, s!, len, formatted);
+            result.append(formatted.data()!, formatted.size());
+        }
+        return result;
+    }
 }
 
 // Display-size primitive
