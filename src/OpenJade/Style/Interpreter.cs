@@ -227,6 +227,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("id", new IdPrimitiveObj());
         installPrimitive("element-with-id", new ElementWithIdPrimitiveObj());
         installPrimitive("child-number", new ChildNumberPrimitiveObj());
+        installPrimitive("ancestor-child-number", new AncestorChildNumberPrimitiveObj());
+        installPrimitive("hierarchical-number-recursive", new HierarchicalNumberRecursivePrimitiveObj());
         installPrimitive("element-number", new ElementNumberPrimitiveObj());
         installPrimitive("all-element-number", new AllElementNumberPrimitiveObj());
         installPrimitive("external-procedure", new ExternalProcedurePrimitiveObj());

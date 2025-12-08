@@ -4465,3 +4465,176 @@ public class ReadEntityPrimitiveObj : PrimitiveObj
     }
 }
 
+// Helper function to count child number (0-based, elements with same GI before node)
+internal static class PrimitiveHelper
+{
+    public static bool childNumber(NodePtr node, out ulong result)
+    {
+        result = 0;
+        GroveString nodeGi = new GroveString();
+        if (node.getGi(ref nodeGi) != AccessResult.accessOK)
+            return false;
+
+        NodePtr parent = new NodePtr();
+        if (node.getParent(ref parent) != AccessResult.accessOK)
+        {
+            // Must be document element
+            result = 0;
+            return true;
+        }
+
+        // Count preceding siblings with same GI
+        NodePtr sibling = new NodePtr();
+        if (parent.firstChild(ref sibling) != AccessResult.accessOK)
+            return false;
+
+        ulong count = 0;
+        while (sibling)
+        {
+            if (sibling.node!.Equals(node.node!))
+            {
+                result = count;
+                return true;
+            }
+            GroveString siblingGi = new GroveString();
+            if (sibling.getGi(ref siblingGi) == AccessResult.accessOK)
+            {
+                if (giEqual(nodeGi, siblingGi))
+                    count++;
+            }
+            if (sibling.assignNextSibling() != AccessResult.accessOK)
+                break;
+        }
+        result = count;
+        return true;
+    }
+
+    public static bool giEqual(GroveString a, GroveString b)
+    {
+        if (a.size() != b.size())
+            return false;
+        for (nuint i = 0; i < a.size(); i++)
+        {
+            if (a.data()![i] != b.data()![i])
+                return false;
+        }
+        return true;
+    }
+}
+
+// HierarchicalNumberRecursive primitive
+public class HierarchicalNumberRecursivePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public HierarchicalNumberRecursivePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+
+        // Get the GI string to match
+        StringC? giStr = args[0]?.convertToString();
+        if (giStr == null)
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+
+        // Build result list (in reverse order, then we'll return as-is which gives correct order)
+        ELObj result = interp.makeNil();
+
+        NodePtr current = new NodePtr(node.node!);
+        NodePtr parent = new NodePtr();
+        while (current.getParent(ref parent) == AccessResult.accessOK)
+        {
+            current = parent;
+            GroveString nodeGi = new GroveString();
+            if (current.getGi(ref nodeGi) == AccessResult.accessOK)
+            {
+                // Compare GI
+                if (giStr.size() == nodeGi.size())
+                {
+                    bool match = true;
+                    for (nuint i = 0; i < giStr.size() && match; i++)
+                    {
+                        if (giStr[i] != nodeGi.data()![i])
+                            match = false;
+                    }
+                    if (match)
+                    {
+                        ulong num = 0;
+                        PrimitiveHelper.childNumber(current, out num);
+                        // Prepend to result list
+                        result = new PairObj(interp.makeInteger((long)(num + 1)), result);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+}
+
+// AncestorChildNumber primitive
+public class AncestorChildNumberPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public AncestorChildNumberPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+
+        // Get the GI string to match
+        StringC? giStr = args[0]?.convertToString();
+        if (giStr == null)
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+
+        NodePtr current = new NodePtr(node.node!);
+        NodePtr parent = new NodePtr();
+        while (current.getParent(ref parent) == AccessResult.accessOK)
+        {
+            current = parent;
+            GroveString nodeGi = new GroveString();
+            if (current.getGi(ref nodeGi) == AccessResult.accessOK)
+            {
+                // Compare GI
+                if (giStr.size() == nodeGi.size())
+                {
+                    bool match = true;
+                    for (nuint i = 0; i < giStr.size() && match; i++)
+                    {
+                        if (giStr[i] != nodeGi.data()![i])
+                            match = false;
+                    }
+                    if (match)
+                    {
+                        ulong num = 0;
+                        PrimitiveHelper.childNumber(current, out num);
+                        return interp.makeInteger((long)(num + 1));
+                    }
+                }
+            }
+        }
+        return interp.makeFalse();
+    }
+}
+
