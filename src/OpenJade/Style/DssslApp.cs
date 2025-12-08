@@ -27,7 +27,7 @@ public abstract class DssslApp : GroveApp, IGroveManager
     private bool strictMode_;
 
     public DssslApp(int unitsPerInch)
-        : base(null)
+        : base("unicode")
     {
         unitsPerInch_ = unitsPerInch;
         defaultOutputBasename_ = new StringC();
