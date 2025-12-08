@@ -92,6 +92,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         // Install node property name mappings
         installNodeProperties();
 
+        // Install standard inherited characteristics
+        installInheritedCs();
+
         // Install primitive procedures
         installPrimitives();
 
@@ -344,6 +347,52 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             if (sdqlName != null && sdqlName != rcsName)
                 nodePropertyTable_[sdqlName] = id;
         }
+    }
+
+    private void installInheritedCs()
+    {
+        // Install standard DSSSL inherited characteristics
+        // Names WITHOUT trailing colon - parseMake strips the colon from keywords
+        // Default font-size: 10pt = 10*1000 units (1000 units per point)
+        installInheritedC("font-size", new FontSizeC(null, nInheritedC_++, (unitsPerInch_ * 10) / 72));
+        installInheritedC("font-family-name", new FontFamilyNameC(null, nInheritedC_++, makeStringC("iso-serif")));
+        installInheritedC("font-weight", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setFontWeight(sym), FOTBuilder.Symbol.symbolMedium));
+        installInheritedC("font-posture", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setFontPosture(sym), FOTBuilder.Symbol.symbolUpright));
+        // Line spacing: 12pt default
+        installInheritedC("line-spacing", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setLineSpacing(ls), (unitsPerInch_ * 12) / 72));
+        // Margins
+        installInheritedC("left-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setLeftMargin(size), 0));
+        installInheritedC("right-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setRightMargin(size), 0));
+        installInheritedC("top-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setTopMargin(size), 0));
+        installInheritedC("bottom-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setBottomMargin(size), 0));
+        // Indents
+        installInheritedC("start-indent", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setStartIndent(ls), 0));
+        installInheritedC("end-indent", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setEndIndent(ls), 0));
+        installInheritedC("first-line-start-indent", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setFirstLineStartIndent(ls), 0));
+        installInheritedC("last-line-end-indent", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setLastLineEndIndent(ls), 0));
+        // Quadding
+        installInheritedC("quadding", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setQuadding(sym), FOTBuilder.Symbol.symbolStart));
+    }
+
+    private void installInheritedC(string name, InheritedC ic)
+    {
+        StringC sname = makeStringC(name);
+        Identifier ident = lookup(sname);
+        ic.setIdentifier(ident);
+        ident.setInheritedC(new ConstPtr<InheritedC>(ic));
+        installInheritedCProc(ident);
     }
 
     public bool lookupNodeProperty(StringC str, out ComponentName.Id id)
@@ -1435,8 +1484,17 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
 
     public void installExtensionInheritedC(Identifier ident, StringC pubid, Location loc)
     {
-        // For now, create an IgnoredC for all characteristics
-        // TODO: Add proper extension table lookup for characteristic setters when available
+        // If the identifier already has a proper InheritedC (from installInheritedCs),
+        // don't overwrite it with an IgnoredC
+        var existing = ident.inheritedC();
+        if (existing != null && !existing.isNull() && !(existing.pointer() is IgnoredC))
+        {
+            // Already has a proper characteristic class, just ensure the proc is installed
+            installInheritedCProc(ident);
+            return;
+        }
+
+        // For extension characteristics not in our built-in set, create an IgnoredC
         var ic = new ConstPtr<InheritedC>(new IgnoredC(ident, nInheritedC_++, makeFalse(), this));
 
         // Register the inherited characteristic on the identifier
