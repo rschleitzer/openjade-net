@@ -190,7 +190,11 @@ public class SchemeParser : Messenger
                         break;
                 }
             }
-            message(InterpreterMessages.unknownTopLevelForm);
+            // Extension forms like make-afii, gen, glyph-subst-table are OpenJade extensions
+            // that we don't support - skip them silently
+            string formName = currentToken_.ToString();
+            if (formName != "make-afii" && formName != "gen" && formName != "glyph-subst-table")
+                message(InterpreterMessages.unknownTopLevelForm);
             return skipForm();
         }
         message(InterpreterMessages.badTopLevelForm);
@@ -582,7 +586,9 @@ public class SchemeParser : Messenger
         Location loc = in_?.currentLocation() ?? new Location();
         Token tok;
 
-        // Collect cond clauses
+        // Collect all cond clauses first, then build the nested if structure
+        var clauses = new System.Collections.Generic.List<(Expression test, Expression result, bool isElse)>();
+
         for (;;)
         {
             if (!getToken(TokenAllow.OpenParen | TokenAllow.CloseParen, out tok))
@@ -625,31 +631,38 @@ public class SchemeParser : Messenger
             else
                 consequent = new SequenceExpression(results, loc);
 
+            clauses.Add((test!, consequent!, isElse));
+
             if (isElse)
             {
-                // else clause - this is the final alternate
-                if (expr == null)
-                    expr = consequent;
-                else
-                    expr = new IfExpression(expr, expr, consequent, loc);
-                // Skip to close paren
+                // Skip to close paren after else clause
                 if (!expectCloseParen())
                     return false;
-                return true;
-            }
-            else
-            {
-                // Regular clause
-                if (expr == null)
-                    expr = new IfExpression(test!, consequent!, new CondFailExpression(loc), loc);
-                else
-                    expr = new IfExpression(test!, consequent!, expr, loc);
+                break;
             }
         }
 
-        // No else clause - add cond fail
+        // Build nested if expressions from last to first
+        // (cond (t1 r1) (t2 r2) (else r3)) => (if t1 r1 (if t2 r2 r3))
+        Expression? alternate = new CondFailExpression(loc);  // Default if no else clause
+
+        for (int i = clauses.Count - 1; i >= 0; i--)
+        {
+            var (test, result, isElse) = clauses[i];
+            if (isElse)
+            {
+                alternate = result;
+            }
+            else
+            {
+                expr = new IfExpression(test, result, alternate, loc);
+                alternate = expr;
+            }
+        }
+
         if (expr == null)
-            expr = new CondFailExpression(loc);
+            expr = alternate;  // Handle empty cond or only else clause
+
         return true;
     }
 

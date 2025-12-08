@@ -847,6 +847,29 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             result = l.value();
             return true;
         }
+        // Also accept integers (representing internal units)
+        long n;
+        if (obj.exactIntegerValue(out n))
+        {
+            result = n;
+            return true;
+        }
+        // Accept LengthSpec objects too (use their length value)
+        LengthSpecObj? ls = obj.asLengthSpec();
+        if (ls != null)
+        {
+            result = ls.lengthSpecFOT().length;
+            return true;
+        }
+        // Accept QuantityObj with dimension 1 (lengths)
+        long lval;
+        double dval;
+        int dim;
+        if (obj.quantityValue(out lval, out dval, out dim) != ELObj.QuantityType.noQuantity && dim == 1)
+        {
+            result = (long)dval;
+            return true;
+        }
         invalidCharacteristicValue(ident, loc);
         return false;
     }
@@ -891,6 +914,22 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         if (ls != null)
         {
             result = ls.lengthSpecFOT();
+            return true;
+        }
+        // Also accept integers as lengths (with 0 implicit dimension)
+        long intVal;
+        if (obj.exactIntegerValue(out intVal))
+        {
+            result = new FOTBuilder.LengthSpec(intVal);
+            return true;
+        }
+        // Accept QuantityObj with dimension 1 (lengths)
+        long lval;
+        double dval;
+        int dim;
+        if (obj.quantityValue(out lval, out dval, out dim) != ELObj.QuantityType.noQuantity && dim == 1)
+        {
+            result = new FOTBuilder.LengthSpec((long)dval);
             return true;
         }
         invalidCharacteristicValue(ident, loc);
