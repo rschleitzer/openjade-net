@@ -31,6 +31,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // Extension table for backend-specific flow objects
     private FOTBuilder.ExtensionTableEntry[]? extensionTable_;
 
+    // External procedure table (public ID -> FunctionObj)
+    private Dictionary<string, FunctionObj> externalProcTable_ = new();
+
     // Counter for inherited characteristic indices
     private uint nInheritedC_ = 0;
 
@@ -226,6 +229,10 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("child-number", new ChildNumberPrimitiveObj());
         installPrimitive("element-number", new ElementNumberPrimitiveObj());
         installPrimitive("all-element-number", new AllElementNumberPrimitiveObj());
+        installPrimitive("external-procedure", new ExternalProcedurePrimitiveObj());
+
+        // Register external procedures by public ID
+        installExternalPrimitive("all-element-number", new AllElementNumberPrimitiveObj());
 
         // Type predicates
         installPrimitive("string?", new IsStringPrimitiveObj());
@@ -865,6 +872,28 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         ident = new Identifier(new StringC(str));
         identTable_[key] = ident;
         return ident;
+    }
+
+    public FunctionObj? lookupExternalProc(StringC pubid)
+    {
+        string key = pubid.ToString();
+        if (externalProcTable_.TryGetValue(key, out FunctionObj? func))
+            return func;
+        return null;
+    }
+
+    // Install a standard external procedure (ISO/IEC 10179:1996//Procedure::name)
+    public void installExternalPrimitive(string name, PrimitiveObj value)
+    {
+        string pubid = "ISO/IEC 10179:1996//Procedure::" + name;
+        externalProcTable_[pubid] = value;
+    }
+
+    // Install an extension external procedure with custom prefix
+    public void installXPrimitive(string prefix, string name, PrimitiveObj value)
+    {
+        string pubid = prefix + name;
+        externalProcTable_[pubid] = value;
     }
 
     public KeywordObj makeKeyword(StringC str)

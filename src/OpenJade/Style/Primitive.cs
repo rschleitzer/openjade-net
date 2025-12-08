@@ -4390,3 +4390,21 @@ public class NodePropertyPrimitiveObj : PrimitiveObj
     }
 }
 
+// ExternalProcedure primitive - looks up an external procedure by public ID
+public class ExternalProcedurePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ExternalProcedurePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        StringC? pubid = args[0]?.convertToString();
+        if (pubid == null)
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        FunctionObj? func = interp.lookupExternalProc(pubid);
+        if (func != null)
+            return func;
+        return interp.makeFalse();
+    }
+}
+
