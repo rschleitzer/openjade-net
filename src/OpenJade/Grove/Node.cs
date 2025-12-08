@@ -1229,6 +1229,23 @@ public abstract class Node
                         value.set(tem);
                     break;
                 }
+            // Additional intrinsic properties
+            case ComponentName.Id.idTreeRoot:
+                {
+                    NodePtr tem = new NodePtr();
+                    ret = getTreeRoot(ref tem);
+                    if (ret == AccessResult.accessOK)
+                        value.set(tem);
+                    break;
+                }
+            case ComponentName.Id.idGroveRoot:
+                {
+                    NodePtr tem = new NodePtr();
+                    ret = getGroveRoot(ref tem);
+                    if (ret == AccessResult.accessOK)
+                        value.set(tem);
+                    break;
+                }
             default:
                 ret = AccessResult.accessNotInClass;
                 break;

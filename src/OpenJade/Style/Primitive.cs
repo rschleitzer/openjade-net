@@ -4155,3 +4155,70 @@ public class NodeListMapPrimitiveObj : PrimitiveObj
     }
 }
 
+// NodeProperty primitive - accesses grove node properties
+// See upstream/openjade/style/primitive.cxx:4182
+public class NodePropertyPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, true);  // 2 required, rest for keywords
+    public NodePropertyPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        // First arg is property name (string or symbol)
+        StringObj? str = args[0]?.convertToString();
+        if (str == null)
+            return argError(interp, loc, InterpreterMessages.notAStringOrSymbol, 0, args[0]);
+        Char[]? s = null;
+        nuint n = 0;
+        str.stringData(out s, out n);
+        StringC propName = new StringC(s!, n);
+
+        // Second arg is node
+        NodePtr? node = null;
+        if (!args[1]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+            return argError(interp, loc, InterpreterMessages.notASingletonNode, 1, args[1]);
+
+        // Parse keyword arguments: default:, null:
+        ELObj? defaultValue = null;
+        ELObj? nullValue = null;
+        for (int i = 2; i < nArgs; i += 2)
+        {
+            if (i + 1 >= nArgs) break;
+            KeywordObj? key = args[i]?.asKeyword();
+            if (key != null)
+            {
+                string keyName = key.identifier()?.name().ToString() ?? "";
+                if (keyName == "default")
+                    defaultValue = args[i + 1];
+                else if (keyName == "null")
+                    nullValue = args[i + 1];
+            }
+        }
+
+        // Look up the property name
+        ComponentName.Id id;
+        if (!interp.lookupNodeProperty(propName, out id) || id == ComponentName.Id.noId)
+        {
+            if (defaultValue != null)
+                return defaultValue;
+            interp.setNextLocation(loc);
+            interp.message(InterpreterMessages.noNodePropertyValue, propName.ToString() ?? "");
+            return interp.makeError();
+        }
+
+        // Get the property value from the node
+        ELObjPropertyValue value = new ELObjPropertyValue(interp, false);
+        Grove.SdataMapper mapper = new Grove.SdataMapper();
+        AccessResult ret = node.node!.property(id, mapper, value);
+        if (ret == AccessResult.accessOK && value.obj != null)
+            return value.obj;
+        if (ret == AccessResult.accessNull && nullValue != null)
+            return nullValue;
+        if (defaultValue != null)
+            return defaultValue;
+        interp.setNextLocation(loc);
+        interp.message(InterpreterMessages.noNodePropertyValue, propName.ToString() ?? "");
+        return interp.makeError();
+    }
+}
+

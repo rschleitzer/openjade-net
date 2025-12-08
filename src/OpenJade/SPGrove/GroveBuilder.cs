@@ -899,8 +899,15 @@ public class ChunkNode : BaseNode
 
     public override AccessResult getTreeRoot(ref NodePtr nd)
     {
-        nd.assign(new SgmlDocumentNode(grove(), grove().root()!));
-        return AccessResult.accessOK;
+        // Match C++ implementation: return document element, not document node
+        // See upstream/openjade/spgrove/GroveBuilder.cxx:4991
+        if (chunk_.origin != null
+            && (Chunk?)chunk_.origin != grove().root()
+            // With invalid documents we might have elements in the epilog
+            && grove().root()!.epilog == null
+            && grove().root()!.documentElement != null)
+            return grove().root()!.documentElement!.setNodePtrFirst(ref nd, this);
+        return base.getTreeRoot(ref nd);
     }
 
     public override AccessResult getOrigin(ref NodePtr ptr)
