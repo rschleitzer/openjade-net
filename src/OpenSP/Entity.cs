@@ -381,6 +381,23 @@ public class InternalCdataEntity : InternalDataEntity
             parser.eventHandler().data(new CdataEntityEvent(this, new ConstPtr<Origin>(origin.pointer())));
         }
     }
+
+    // void litReference(Text &, ParserState &, const Ptr<EntityOrigin> &, Boolean) const;
+    public override void litReference(Text text, ParserState parser, Ptr<EntityOrigin> origin, Boolean squeezeSpaces)
+    {
+        checkRef(parser);
+        checkEntlvl(parser);
+        if (squeezeSpaces)
+        {
+            Location loc = new Location(origin.pointer(), 0);
+            text.addEntityStart(loc);
+            text.addCharsTokenize(text_.@string(), loc, parser.syntax().space());
+            loc.operatorPlusAssign((Index)text_.size());
+            text.addEntityEnd(loc);
+        }
+        else
+            text.addCdata(@string(), new ConstPtr<Origin>(origin.pointer()));
+    }
 }
 
 // Predefined Entity (extends InternalCdataEntity)

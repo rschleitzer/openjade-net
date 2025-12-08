@@ -1735,6 +1735,7 @@ public class GroveString
 
     public nuint size() { return size_; }
     public GroveChar[]? data() { return data_; }
+    public nuint offset() { return offset_; }
 
     public void assign(GroveChar[] data, nuint size)
     {
@@ -1772,6 +1773,16 @@ public class GroveString
     {
         for (nuint i = 0; i < size_; i++)
             yield return this[i];
+    }
+
+    public override string ToString()
+    {
+        if (data_ == null || size_ == 0)
+            return "";
+        var sb = new System.Text.StringBuilder((int)size_);
+        for (nuint i = 0; i < size_; i++)
+            sb.Append((char)this[i]);
+        return sb.ToString();
     }
 }
 

@@ -316,6 +316,10 @@ public class Identifier : Named
         lambda,
         begin,
         set,
+        thereExists,
+        forAll,
+        selectEach,
+        unionForEach,
         make,
         style,
         withMode,
@@ -875,6 +879,12 @@ public class StringObj : ELObj
         str_.append(data, size);
     }
 
+    // Append string data with offset
+    public void append(Char[] data, nuint offset, nuint size)
+    {
+        str_.append(data, offset, size);
+    }
+
     // Allow implicit conversion to StringC
     public static implicit operator StringC(StringObj obj) => obj.str_;
 }
@@ -1392,9 +1402,10 @@ public class NodeListObj : ELObj
     public override NodeListObj? asNodeList() { return this; }
     public virtual NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp) { return null; }
     public virtual NodeListObj nodeListRest(EvalContext ctx, Interpreter interp) { return new EmptyNodeListObj(); }
+    // C++ implementation: upstream/openjade/style/ELObj.cxx:998
     public virtual NodeListObj nodeListChunkRest(EvalContext ctx, Interpreter interp, ref bool chunk)
     {
-        chunk = true;
+        chunk = false;  // C++ sets chunk = 0
         return nodeListRest(ctx, interp);
     }
     public virtual NodeListObj nodeListNoOrder(Interpreter interp) { return this; }
@@ -1501,10 +1512,19 @@ public class NodeListPtrNodeListObj : NodeListObj
     public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
     {
         if (nodeList_ == null)
+        {
+            if (debugNodeListPtr)
+                Console.Error.WriteLine("NodeListPtrNodeListObj.nodeListRest: nodeList_ is null, returning empty");
             return new EmptyNodeListObj();
+        }
         NodeListPtr rest = new NodeListPtr();
-        if (nodeList_.rest(ref rest) == AccessResult.accessOK)
+        var result = nodeList_.rest(ref rest);
+        if (debugNodeListPtr)
+            Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListRest: nodeList_.rest() returned {result}");
+        if (result == AccessResult.accessOK)
             return new NodeListPtrNodeListObj(rest);
+        if (debugNodeListPtr)
+            Console.Error.WriteLine("NodeListPtrNodeListObj.nodeListRest: returning empty");
         return new EmptyNodeListObj();
     }
 }

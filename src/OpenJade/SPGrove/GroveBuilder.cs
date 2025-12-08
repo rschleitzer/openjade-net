@@ -484,36 +484,12 @@ public class GroveImpl
         maybePulse();
     }
 
+    // C++ implementation: upstream/openjade/spgrove/GroveBuilder.cxx:1922
     public void appendSibling(DataChunk chunk)
     {
         // Since we might extend this DataChunk, it's
         // not safe to set completeLimit_ to after this chunk yet.
-        if (pendingData_ != null)
-        {
-            // Must set completeLimit_ before setting tailPtr_
-            completeLimit_ = pendingData_.after();
-            if (tailPtrSetter_ != null)
-            {
-                tailPtrSetter_(pendingData_);
-                // Set up for next sibling of pendingData_
-                tailPtrSetter_ = (c) => { pendingData_.setNextChunk(c); };
-            }
-        }
-        // Now link the new chunk
-        chunk.origin = origin_;
-        if (tailPtrSetter_ != null)
-        {
-            tailPtrSetter_(chunk);
-            tailPtrSetter_ = null;
-        }
-        pendingData_ = chunk;
-        maybePulse();
-    }
-
-    public DataChunk? pendingData() { return pendingData_; }
-
-    public void push(ElementChunk chunk, Boolean hasId)
-    {
+        // This means we can't yet set tailPtr_.
         if (pendingData_ != null)
         {
             // Must set completeLimit_ before setting tailPtr_
@@ -523,6 +499,35 @@ public class GroveImpl
                 tailPtrSetter_(pendingData_);
                 tailPtrSetter_ = null;
             }
+            // C# fix: Explicitly link consecutive data chunks since we don't have
+            // contiguous memory like C++. The new chunk becomes the sibling of pendingData_.
+            pendingData_.setNextChunk(chunk);
+        }
+        // NOTE: Unlike the C++ version, we DON'T link the first data chunk immediately.
+        // It stays in pendingData_ until the next chunk is added (in push or another appendSibling).
+        // This matches the C++ behavior where tailPtr_ is only used when there's already pendingData_.
+        chunk.origin = origin_;
+        pendingData_ = chunk;
+        maybePulse();
+    }
+
+    public DataChunk? pendingData() { return pendingData_; }
+
+    // C++ implementation: upstream/openjade/spgrove/GroveBuilder.cxx:1941
+    public void push(ElementChunk chunk, Boolean hasId)
+    {
+        DataChunk? savedPendingData = null;
+        if (pendingData_ != null)
+        {
+            // Must set completeLimit_ before setting tailPtr_
+            completeLimit_ = pendingData_.after();
+            if (tailPtrSetter_ != null)
+            {
+                tailPtrSetter_(pendingData_);
+                tailPtrSetter_ = null;
+            }
+            // C# fix: Save pendingData_ so we can link the new element as its sibling
+            savedPendingData = pendingData_;
             pendingData_ = null;
         }
         chunk.elementIndex = (uint)nElements_++;
@@ -538,6 +543,12 @@ public class GroveImpl
         {
             tailPtrSetter_(chunk);
             tailPtrSetter_ = null;
+        }
+        else if (savedPendingData != null)
+        {
+            // C# fix: Link the new element as the sibling of the pending data
+            // In C++, this is automatic because of contiguous memory allocation
+            savedPendingData.setNextChunk(chunk);
         }
         // Set up tail setter for the first child of this element
         tailPtrSetter_ = (c) => { chunk.firstChild = c; };
@@ -1730,7 +1741,7 @@ public class DataNode : ChunkNode
             chunk.locIndex = @event.location().index();
             Char[] data = new Char[dataLen];
             if (@event.data() != null)
-                Array.Copy(@event.data()!, 0, data, 0, (int)dataLen);
+                Array.Copy(@event.data()!, (int)@event.dataOffset(), data, 0, (int)dataLen);
             chunk.setData(data);
             grove.appendSibling(chunk);
         }
@@ -1794,7 +1805,7 @@ public class PiNode : ChunkNode
         if (dataLen > 0 && @event.data() != null)
         {
             Char[] data = new Char[dataLen];
-            Array.Copy(@event.data()!, 0, data, 0, (int)dataLen);
+            Array.Copy(@event.data()!, (int)@event.dataOffset(), data, 0, (int)dataLen);
             chunk.setData(data);
         }
         grove.appendSibling(chunk);

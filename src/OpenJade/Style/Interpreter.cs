@@ -75,6 +75,10 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("=>", Identifier.SyntacticKey.arrowKey);
         installSyntacticKey("begin", Identifier.SyntacticKey.begin);
         installSyntacticKey("set!", Identifier.SyntacticKey.set);
+        installSyntacticKey("there-exists?", Identifier.SyntacticKey.thereExists);
+        installSyntacticKey("for-all?", Identifier.SyntacticKey.forAll);
+        installSyntacticKey("select-each", Identifier.SyntacticKey.selectEach);
+        installSyntacticKey("union-for-each", Identifier.SyntacticKey.unionForEach);
 
         // Install flow objects
         installFlowObjs();
@@ -118,6 +122,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("equal?", new IsEqualPrimitiveObj());
         installPrimitive("eqv?", new IsEqvPrimitiveObj());
         installPrimitive("memq", new MemqPrimitiveObj());
+        installPrimitive("member", new MemberPrimitiveObj());
+        installPrimitive("memv", new MemvPrimitiveObj());
         installPrimitive("assq", new AssqPrimitiveObj());
 
         // String primitives
@@ -190,6 +196,10 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("attributes", new AttributesPrimitiveObj());
         installPrimitive("first-sibling?", new IsFirstSiblingPrimitiveObj());
         installPrimitive("last-sibling?", new IsLastSiblingPrimitiveObj());
+
+        // Note: node-list-some?, node-list-every?, node-list-filter, node-list-union-map
+        // are defined in builtins.dsl (not as primitives), used by the special query syntax:
+        // there-exists?, for-all?, select-each, union-for-each
 
         // Element access
         installPrimitive("gi", new GiPrimitiveObj());
@@ -549,6 +559,19 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     public StringObj makeString(Char[] data, nuint size)
     {
         return new StringObj(data, size);
+    }
+
+    // Make string from char array with offset
+    public StringObj makeString(Char[]? data, nuint offset, nuint size)
+    {
+        if (data == null || size == 0)
+            return new StringObj(Array.Empty<Char>(), 0);
+        if (offset == 0)
+            return new StringObj(data, size);
+        // Copy the slice to a new array
+        Char[] slice = new Char[size];
+        Array.Copy(data, (int)offset, slice, 0, (int)size);
+        return new StringObj(slice, size);
     }
 
     // Message methods for InterpreterMessages
@@ -929,6 +952,28 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             return true;
         if (sdataEntityTextTable_.TryGetValue(textStr, out c))
             return true;
+
+        c = 0;
+        return false;
+    }
+
+    // Override base class method to use GroveString parameters
+    public override bool sdataMap(GroveString name, GroveString text, out uint c)
+    {
+        // Convert GroveString to string for lookup
+        string nameStr = name.ToString();
+        string textStr = text.ToString();
+
+        if (sdataEntityNameTable_.TryGetValue(nameStr, out Char mapped))
+        {
+            c = mapped;
+            return true;
+        }
+        if (sdataEntityTextTable_.TryGetValue(textStr, out mapped))
+        {
+            c = mapped;
+            return true;
+        }
 
         c = 0;
         return false;

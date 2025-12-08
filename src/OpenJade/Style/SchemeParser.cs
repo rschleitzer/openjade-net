@@ -367,6 +367,14 @@ public class SchemeParser : Messenger
                         return parseBegin(out expr);
                     case Identifier.SyntacticKey.set:
                         return parseSet(out expr);
+                    case Identifier.SyntacticKey.thereExists:
+                        return parseSpecialQuery(out expr, "node-list-some?");
+                    case Identifier.SyntacticKey.forAll:
+                        return parseSpecialQuery(out expr, "node-list-every?");
+                    case Identifier.SyntacticKey.selectEach:
+                        return parseSpecialQuery(out expr, "node-list-filter");
+                    case Identifier.SyntacticKey.unionForEach:
+                        return parseSpecialQuery(out expr, "node-list-union-map");
                     case Identifier.SyntacticKey.make:
                         return parseMake(out expr);
                     case Identifier.SyntacticKey.style:
@@ -1092,6 +1100,48 @@ public class SchemeParser : Messenger
             return false;
 
         expr = new AssignmentExpression(var, value!, loc);
+        return true;
+    }
+
+    // Parse special query syntax: (there-exists? var node-list body)
+    // This transforms to: (node-list-some? (lambda (var) body) node-list)
+    private bool parseSpecialQuery(out Expression? expr, string queryFuncName)
+    {
+        expr = null;
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        // Parse variable name
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        Identifier var = lookup(currentToken_);
+
+        // Look up the query function
+        Identifier queryFunc = interp_.lookup(interp_.makeStringC(queryFuncName));
+        Expression opExpr = new VariableExpression(queryFunc, loc);
+
+        // Parse node list expression
+        Identifier.SyntacticKey key;
+        Expression? nodeListExpr;
+        if (!parseExpression(TokenAllow.Expr, out nodeListExpr, out key, out tok))
+            return false;
+
+        // Parse body expression
+        Expression? bodyExpr;
+        if (!parseExpression(TokenAllow.Expr, out bodyExpr, out key, out tok))
+            return false;
+
+        if (!expectCloseParen())
+            return false;
+
+        // Create lambda: (lambda (var) body)
+        var formals = new System.Collections.Generic.List<Identifier?> { var };
+        var defaults = new System.Collections.Generic.List<Expression?>();
+        Expression lambdaExpr = new LambdaExpression(formals, defaults, 0, false, 0, bodyExpr!, loc);
+
+        // Create call: (query-func lambda node-list)
+        var args = new System.Collections.Generic.List<Expression> { lambdaExpr, nodeListExpr! };
+        expr = new CallExpression(opExpr, args, loc);
         return true;
     }
 

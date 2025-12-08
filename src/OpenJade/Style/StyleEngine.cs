@@ -417,7 +417,7 @@ public class ProcessContextImpl : ProcessContext
             {
                 NodePtr curNode = vm_.currentNode;
                 GroveString str = new GroveString();
-                if (curNode.charChunk(null, ref str) == AccessResult.accessOK)
+                if (curNode.charChunk(vm_.interp, ref str) == AccessResult.accessOK)
                 {
                     Char[] data = str.data() ?? Array.Empty<Char>();
                     nuint len = str.size();
@@ -489,7 +489,7 @@ public class ProcessContextImpl : ProcessContext
             do
             {
                 GroveString str = new GroveString();
-                if (tem.charChunk(null, ref str) == AccessResult.accessOK)
+                if (tem.charChunk(vm_.interp, ref str) == AccessResult.accessOK)
                 {
                     Char[] data = str.data() ?? Array.Empty<Char>();
                     for (nuint i = 0; i < str.size(); i++)

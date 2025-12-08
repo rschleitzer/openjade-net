@@ -150,7 +150,7 @@ public class Pattern
     }
 
     // Match context for pattern matching
-    public class MatchContext : SdataMapper
+    public class MatchContext : Grove.SdataMapper
     {
         protected System.Collections.Generic.List<StringC> classAttributeNames_ = new System.Collections.Generic.List<StringC>();
         protected System.Collections.Generic.List<StringC> idAttributeNames_ = new System.Collections.Generic.List<StringC>();
@@ -678,10 +678,6 @@ public class Pattern
     }
 }
 
-// SdataMapper interface for pattern matching
-public abstract class SdataMapper
-{
-}
 
 // ElementPattern - matches element by GI
 public class ElementPattern : Pattern
