@@ -31,6 +31,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // Extension table for backend-specific flow objects
     private FOTBuilder.ExtensionTableEntry[]? extensionTable_;
 
+    // Counter for inherited characteristic indices
+    private uint nInheritedC_ = 0;
+
     // Grove manager for loading external files
     private GroveManager? groveManager_;
 
@@ -1429,6 +1432,39 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         makePermanent(tem);
         ident.setFlowObj(tem);
     }
+
+    public void installExtensionInheritedC(Identifier ident, StringC pubid, Location loc)
+    {
+        // For now, create an IgnoredC for all characteristics
+        // TODO: Add proper extension table lookup for characteristic setters when available
+        var ic = new ConstPtr<InheritedC>(new IgnoredC(ident, nInheritedC_++, makeFalse(), this));
+
+        // Register the inherited characteristic on the identifier
+        ident.setInheritedC(ic);
+
+        // Install the inherited-<name> procedure
+        installInheritedCProc(ident);
+    }
+
+    private void installInheritedCProc(Identifier ident)
+    {
+        // Create the "inherited-<name>" procedure for accessing this characteristic
+        var ic = ident.inheritedC();
+        if (ic == null || ic.isNull())
+            return;
+
+        StringC procName = new StringC();
+        procName.assign("inherited-");
+        procName.operatorPlusAssign(ident.name());
+
+        Identifier procIdent = lookup(procName);
+        if (procIdent.expression() == null)
+        {
+            procIdent.setExpression(new ConstantExpression(new InheritedCPrimitiveObj(ic), loc: new Location()), 0, new Location());
+        }
+    }
+
+    public uint currentPartIndex() { return 0; }  // Part index for multi-part stylesheets
 }
 
 // Interpreter error messages

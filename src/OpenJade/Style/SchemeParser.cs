@@ -2076,15 +2076,48 @@ public class SchemeParser : Messenger
     private bool doDeclareInitialValue()
     {
         // (declare-initial-value name expression)
-        // Skip - requires full characteristic system implementation
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        Identifier ident = lookup(currentToken_);
+        Expression? expr;
+        Identifier.SyntacticKey key;
+        if (!parseExpression(TokenAllow.Expr, out expr, out key, out tok))
+            return false;
+        if (!expectCloseParen())
+            return false;
+        if (expr != null)
+            interp_.installInitialValue(ident, expr);
+        return true;
     }
 
     private bool doDeclareCharacteristic()
     {
         // (declare-characteristic name public-id expression)
-        // Skip - requires full characteristic system implementation
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+        Identifier ident = lookup(currentToken_);
+        // Get the public-id (string or #f in DSSSL2)
+        if (!getToken(TokenAllow.String | TokenAllow.False, out tok))
+            return false;
+        StringC pubid = new StringC();
+        if (tok == Token.String)
+            pubid.assign(currentToken_);
+        // Parse the initial value expression
+        Expression? expr;
+        Identifier.SyntacticKey key;
+        if (!parseExpression(TokenAllow.Expr, out expr, out key, out tok))
+            return false;
+        if (!expectCloseParen())
+            return false;
+        // Install the characteristic and its initial value
+        interp_.installExtensionInheritedC(ident, pubid, loc);
+        if (expr != null)
+            interp_.installInitialValue(ident, expr);
+        return true;
     }
 
     private bool doDeclareDefaultLanguage()

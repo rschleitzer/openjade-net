@@ -390,6 +390,33 @@ public class GenericMaybeIntegerInheritedC : GenericIntegerInheritedC
     }
 }
 
+// Generic string inherited characteristic with FOTBuilder setter
+public class GenericStringInheritedC : StringInheritedC
+{
+    public delegate void Setter(FOTBuilder fotb, StringC str);
+    private Setter setter_;
+
+    public GenericStringInheritedC(Identifier? ident, uint index, Setter setter, StringC str)
+        : base(ident, index, str)
+    {
+        setter_ = setter;
+    }
+
+    public override void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
+                             ref ELObj? cacheValue, System.Collections.Generic.List<nuint> dependencies)
+    {
+        setter_(fotb, str_);
+    }
+
+    public override ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp)
+    {
+        StringC s;
+        if (interp.convertStringC(obj, identifier(), loc, out s))
+            return new ConstPtr<InheritedC>(new GenericStringInheritedC(identifier(), index(), setter_, s));
+        return null;
+    }
+}
+
 // Generic symbol inherited characteristic with FOTBuilder setter
 public class GenericSymbolInheritedC : SymbolInheritedC
 {
