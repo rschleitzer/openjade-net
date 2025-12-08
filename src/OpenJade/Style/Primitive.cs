@@ -3506,6 +3506,94 @@ public class ChildNumberPrimitiveObj : PrimitiveObj
     }
 }
 
+// ElementNumber primitive - counts elements with same GI before current node in document order
+public class ElementNumberPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public ElementNumberPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 0, args[0]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+        // Get the GI of the node
+        GroveString gi = new GroveString();
+        if (node.getGi(ref gi) != AccessResult.accessOK)
+            return interp.makeFalse();
+        // Get the document element to start traversal
+        NodePtr start = new NodePtr();
+        if (node.getGroveRoot(ref start) != AccessResult.accessOK)
+            return interp.makeFalse();
+        if (start.getDocumentElement(ref start) != AccessResult.accessOK)
+            return interp.makeFalse();
+        // Traverse document in order, counting elements with same GI
+        ulong count = 0;
+        while (start)
+        {
+            GroveString temGi = new GroveString();
+            if (start.getGi(ref temGi) == AccessResult.accessOK)
+            {
+                if (temGi.size() == gi.size())
+                {
+                    bool same = true;
+                    for (nuint i = 0; i < gi.size() && same; i++)
+                    {
+                        if (temGi.data()![i] != gi.data()![i])
+                            same = false;
+                    }
+                    if (same)
+                        count++;
+                }
+            }
+            // Check if we've reached the target node
+            if (start.node!.Equals(node.node!))
+                break;
+            // Advance to next element in document order
+            if (start.assignNextChunkAfter() != AccessResult.accessOK)
+                break;
+        }
+        return interp.makeInteger((long)count);
+    }
+}
+
+// AllElementNumber primitive - returns the index of the element in document order
+public class AllElementNumberPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public AllElementNumberPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 0, args[0]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+        // Use elementIndex to get the 0-based index and return 1-based
+        ulong index = 0;
+        if (node.elementIndex(ref index) == AccessResult.accessOK)
+            return interp.makeInteger((long)(index + 1));
+        return interp.makeFalse();
+    }
+}
+
 // IsColor? primitive
 public class IsColorPrimitiveObj : PrimitiveObj
 {
