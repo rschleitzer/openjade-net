@@ -4408,3 +4408,42 @@ public class ExternalProcedurePrimitiveObj : PrimitiveObj
     }
 }
 
+// IfFirstPage primitive - returns sosofo that conditionally processes based on first page
+public class IfFirstPagePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public IfFirstPagePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        SosofoObj?[] sosofo = new SosofoObj?[2];
+        for (int i = 0; i < 2; i++)
+        {
+            sosofo[i] = args[i]?.asSosofo();
+            if (sosofo[i] == null)
+                return argError(interp, loc, InterpreterMessages.notASosofo, i, args[i]);
+        }
+        return new PageTypeSosofoObj((uint)FOTBuilder.HF.firstHF, sosofo[0]!, sosofo[1]!);
+    }
+}
+
+// IfFrontPage primitive - returns sosofo that conditionally processes based on front page
+public class IfFrontPagePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public IfFrontPagePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        SosofoObj?[] sosofo = new SosofoObj?[2];
+        for (int i = 0; i < 2; i++)
+        {
+            sosofo[i] = args[i]?.asSosofo();
+            if (sosofo[i] == null)
+                return argError(interp, loc, InterpreterMessages.notASosofo, i, args[i]);
+        }
+        return new PageTypeSosofoObj((uint)FOTBuilder.HF.frontHF, sosofo[0]!, sosofo[1]!);
+    }
+}
+
+

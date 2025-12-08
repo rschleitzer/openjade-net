@@ -231,8 +231,15 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("all-element-number", new AllElementNumberPrimitiveObj());
         installPrimitive("external-procedure", new ExternalProcedurePrimitiveObj());
 
-        // Register external procedures by public ID
+        // Register external procedures by public ID (ISO/IEC 10179:1996//Procedure::)
         installExternalPrimitive("all-element-number", new AllElementNumberPrimitiveObj());
+
+        // Register James Clark extension procedures (UNREGISTERED::James Clark//Procedure::)
+        const string jcPrefix = "UNREGISTERED::James Clark//Procedure::";
+        installXPrimitive(jcPrefix, "if-first-page", new IfFirstPagePrimitiveObj());
+        installXPrimitive(jcPrefix, "if-front-page", new IfFrontPagePrimitiveObj());
+        installXPrimitive(jcPrefix, "debug", new DebugPrimitiveObj());
+        installXPrimitive(jcPrefix, "all-element-number", new AllElementNumberPrimitiveObj());
 
         // Type predicates
         installPrimitive("string?", new IsStringPrimitiveObj());
