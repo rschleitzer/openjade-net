@@ -21,10 +21,27 @@ public class SgmlFOTBuilder : FOTBuilder
     private uint nPendingElementsNonEmpty_;
     private bool suppressAnchors_;
 
+    // Header/footer buffering (from C++ hfs_ and hf_)
+    private StringBuilder hfs_; // header/footer stream buffer
+    private OutputCharStream? curOs_; // current output stream (null means main, otherwise hfs_)
+    private StringC[] hf_; // array of header/footer content by flags
+
     private const char RE = '\r';
     private const char quot = '"';
     private const string trueString = "true";
     private const string falseString = "false";
+
+    // Header/footer flag constants from C++ FOTBuilder.h
+    private const int firstHF = 1;    // 01
+    private const int otherHF = 0;
+    private const int frontHF = 2;    // 02
+    private const int backHF = 0;
+    private const int headerHF = 4;   // 04
+    private const int footerHF = 0;
+    private const int leftHF = 0;
+    private const int centerHF = 8;   // 010
+    private const int rightHF = 16;   // 020
+    private const int nHF = 24;       // 030
 
     public SgmlFOTBuilder(OutputCharStream os)
     {
@@ -35,6 +52,11 @@ public class SgmlFOTBuilder : FOTBuilder
         pendingElementLevels_ = new System.Collections.Generic.List<uint>();
         nPendingElementsNonEmpty_ = 0;
         suppressAnchors_ = false;
+        hfs_ = new StringBuilder();
+        curOs_ = null;
+        hf_ = new StringC[nHF];
+        for (int i = 0; i < nHF; i++)
+            hf_[i] = new StringC();
 
         os_.put((Char)'<').put((Char)'?').write("xml version=\"1.0\"");
         os_.put((Char)'?').put((Char)'>').put((Char)RE);
@@ -801,10 +823,10 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startSimplePageSequenceSerial()
     {
-        flushPendingElements();
-        os_.put((Char)'<').write("simple-page-sequence");
-        outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        startSimpleFlowObj("simple-page-sequence");
+        suppressAnchors_ = true;
+        // Redirect output to header/footer buffer
+        hfs_.Clear();
     }
 
     public override void endSimplePageSequenceSerial()
@@ -814,40 +836,73 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startSimplePageSequenceHeaderFooter(uint flags)
     {
-        flushPendingElements();
-        string name = flags switch
-        {
-            0 => "header-left",
-            1 => "header-center",
-            2 => "header-right",
-            3 => "footer-left",
-            4 => "footer-center",
-            5 => "footer-right",
-            _ => "header"
-        };
-        os_.put((Char)'<').write(name);
-        outputIcs();
-        os_.put((Char)'>').put((Char)RE);
+        // In C++: does nothing
     }
 
     public override void endSimplePageSequenceHeaderFooter(uint flags)
     {
-        string name = flags switch
+        // Extract content from hfs_ to hf_[flags]
+        if (flags < nHF)
         {
-            0 => "header-left",
-            1 => "header-center",
-            2 => "header-right",
-            3 => "footer-left",
-            4 => "footer-center",
-            5 => "footer-right",
-            _ => "header"
-        };
-        endFlow(name);
+            hf_[(int)flags] = new StringC(hfs_.ToString());
+            hfs_.Clear();
+        }
     }
 
     public override void endAllSimplePageSequenceHeaderFooter()
     {
-        // Nothing to do
+        suppressAnchors_ = false;
+        // Output all collected header/footer content as simple-page-sequence.side-hf elements
+        for (int i = 0; i < nHF; i += nHF / 6)
+        {
+            int front;
+            if (!hf_[i + (firstHF | frontHF)].Equals(hf_[i + (firstHF | backHF)])
+                || !hf_[i + (otherHF | frontHF)].Equals(hf_[i + (otherHF | backHF)]))
+                front = frontHF;
+            else
+                front = 0;
+            int first;
+            if (!hf_[i + (firstHF | frontHF)].Equals(hf_[i + (otherHF | frontHF)])
+                || !hf_[i + (firstHF | backHF)].Equals(hf_[i + (otherHF | backHF)]))
+                first = firstHF;
+            else
+                first = 0;
+            for (int j = 0; j <= front; j += (frontHF != 0 ? frontHF : int.MaxValue))
+            {
+                for (int k = 0; k <= first; k += (firstHF != 0 ? firstHF : int.MaxValue))
+                {
+                    StringC str = hf_[i + j + k];
+                    if (str.size() != 0)
+                    {
+                        string side;
+                        if ((i & centerHF) != 0)
+                            side = "center";
+                        else if ((i & rightHF) != 0)
+                            side = "right";
+                        else
+                            side = "left";
+                        string hf = ((i & headerHF) != 0) ? "header" : "footer";
+                        os_.put((Char)'<').write("simple-page-sequence.").write(side).put((Char)'-').write(hf);
+                        if (front != 0)
+                        {
+                            os_.write(" front=").put((Char)quot).write(boolString(j != 0)).put((Char)quot);
+                        }
+                        if (first != 0)
+                        {
+                            os_.write(" first=").put((Char)quot).write(boolString(k != 0)).put((Char)quot);
+                        }
+                        os_.put((Char)'>').put((Char)RE);
+                        // Write the content
+                        for (nuint ci = 0; ci < str.size(); ci++)
+                            os_.put(str.data()![ci]);
+                        os_.put((Char)'<').put((Char)'/').write("simple-page-sequence.").write(side).put((Char)'-').write(hf).put((Char)'>').put((Char)RE);
+                    }
+                }
+            }
+        }
+        // Clear hf_ array for next use
+        for (int i = 0; i < nHF; i++)
+            hf_[i] = new StringC();
     }
 
     public override void pageNumber()
