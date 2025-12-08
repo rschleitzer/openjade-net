@@ -105,6 +105,17 @@ internal class CodingSystemKitImpl : CodingSystemKit
                                                               Boolean isBctf,
                                                               out string? staticName)
     {
+        string nameStr = name.ToString().ToUpperInvariant();
+        if (nameStr == "UTF-8" || nameStr == "UTF8")
+        {
+            staticName = "UTF-8";
+            return utf8CodingSystem_;
+        }
+        if (nameStr == "XML")
+        {
+            staticName = "XML";
+            return xmlCodingSystem_;
+        }
         staticName = "IDENTITY";
         return identityCodingSystem_;
     }

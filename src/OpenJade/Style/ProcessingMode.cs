@@ -81,10 +81,9 @@ public class ProcessingMode : Named
     }
 
     // Simplified addRule for single pattern (called by SchemeParser)
-    public void addRule(bool orRule, Pattern pattern, Expression expr, uint part, Location loc, Interpreter interp)
+    public void addRule(bool orRule, Pattern pattern, Expression expr, uint part, Location loc, Interpreter interp,
+                        RuleType ruleType = RuleType.constructionRule)
     {
-        // For now, treat as styleRule type
-        RuleType ruleType = RuleType.styleRule;
 
         // Determine if pattern matches root
         bool matchesRoot = pattern is RootPattern;

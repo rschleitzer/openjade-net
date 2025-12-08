@@ -813,12 +813,15 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // Processing mode table
     private Dictionary<string, ProcessingMode> processingModeTable_ = new();
 
-    public ProcessingMode? lookupProcessingMode(StringC name)
+    public ProcessingMode lookupProcessingMode(StringC name)
     {
         string key = name.ToString();
         if (processingModeTable_.TryGetValue(key, out ProcessingMode? mode))
             return mode;
-        return null;
+        // Create the mode with initialProcessingMode_ as fallback (like C++)
+        mode = new ProcessingMode(name, initialProcessingMode_);
+        processingModeTable_[key] = mode;
+        return mode;
     }
 
     public ProcessingMode getProcessingMode(StringC name)
