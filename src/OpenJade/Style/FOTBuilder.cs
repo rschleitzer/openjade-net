@@ -855,6 +855,7 @@ public class FOTBuilder
     public virtual void setCountry(Letter2 country) { }
     public virtual void setEscapementSpaceBefore(InlineSpace space) { }
     public virtual void setEscapementSpaceAfter(InlineSpace space) { }
+    public virtual void setInlineSpaceSpace(OptInlineSpace space) { }
     public virtual void setGlyphSubstTableX(System.Collections.Generic.List<ConstPtr<GlyphSubstTable>> tables) { }
 
     // Spacing setters

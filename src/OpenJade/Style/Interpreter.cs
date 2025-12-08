@@ -387,6 +387,245 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         // Quadding
         installInheritedC("quadding", new GenericSymbolInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setQuadding(sym), FOTBuilder.Symbol.symbolStart));
+        installInheritedC("display-alignment", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setDisplayAlignment(sym), FOTBuilder.Symbol.symbolStart));
+        installInheritedC("field-align", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setFieldAlign(sym), FOTBuilder.Symbol.symbolStart));
+        installInheritedC("lines", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLines(sym), FOTBuilder.Symbol.symbolWrap));
+        installInheritedC("field-width", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setFieldWidth(ls), 0));
+        // Page dimensions
+        installInheritedC("page-width", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setPageWidth(size), unitsPerInch_ * 17 / 2)); // 8.5 inches
+        installInheritedC("page-height", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setPageHeight(size), unitsPerInch_ * 11));   // 11 inches
+        installInheritedC("header-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setHeaderMargin(size), 0));
+        installInheritedC("footer-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setFooterMargin(size), 0));
+        // Color - default black
+        installInheritedC("color", new ColorC(null, nInheritedC_++, new DeviceRGBColorObj(new double[] { 0, 0, 0 }), this));
+        // Background color - default #f (no background)
+        installInheritedC("background-color", new BackgroundColorC(null, nInheritedC_++, null, this));
+        // Border
+        installInheritedC("border-present?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setBorderPresent(b), true));
+        borderTrueStyle_ = makeBorderStyle(true, nInheritedC_ - 1);
+        borderFalseStyle_ = makeBorderStyle(false, nInheritedC_ - 1);
+        installInheritedC("line-thickness", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setLineThickness(size), unitsPerInch_ / 72));
+        // Cell margins
+        installInheritedC("cell-before-row-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setCellBeforeRowMargin(size), 0));
+        installInheritedC("cell-after-row-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setCellAfterRowMargin(size), 0));
+        installInheritedC("cell-before-column-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setCellBeforeColumnMargin(size), 0));
+        installInheritedC("cell-after-column-margin", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setCellAfterColumnMargin(size), 0));
+        // Length specs
+        installInheritedC("line-sep", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setLineSep(size), unitsPerInch_ / 72));
+        installInheritedC("box-size-before", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setBoxSizeBefore(size), 8 * unitsPerInch_ / 72));
+        installInheritedC("box-size-after", new GenericLengthInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long size) => fotb.setBoxSizeAfter(size), 4 * unitsPerInch_ / 72));
+        installInheritedC("position-point-shift", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setPositionPointShift(ls), 0));
+        installInheritedC("start-margin", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setStartMargin(ls), 0));
+        installInheritedC("end-margin", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setEndMargin(ls), 0));
+        installInheritedC("sideline-sep", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setSidelineSep(ls), 4 * unitsPerInch_ / 72));
+        installInheritedC("asis-wrap-indent", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setAsisWrapIndent(ls), 0));
+        installInheritedC("line-number-sep", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setLineNumberSep(ls), 0));
+        installInheritedC("last-line-justify-limit", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setLastLineJustifyLimit(ls), 0));
+        installInheritedC("justify-glyph-space-max-add", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setJustifyGlyphSpaceMaxAdd(ls), 0));
+        installInheritedC("justify-glyph-space-max-remove", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setJustifyGlyphSpaceMaxRemove(ls), 0));
+        installInheritedC("table-corner-radius", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setTableCornerRadius(ls), 3 * unitsPerInch_ / 72));
+        installInheritedC("box-corner-radius", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setBoxCornerRadius(ls), 3 * unitsPerInch_ / 72));
+        installInheritedC("marginalia-sep", new GenericLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.LengthSpec ls) => fotb.setMarginaliaSep(ls), 0));
+        // Boolean characteristics
+        installInheritedC("inhibit-line-breaks?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setInhibitLineBreaks(b), false));
+        installInheritedC("hyphenate?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setHyphenate(b), false));
+        installInheritedC("kern?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setKern(b), false));
+        installInheritedC("ligature?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setLigature(b), false));
+        installInheritedC("score-spaces?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setScoreSpaces(b), false));
+        installInheritedC("float-out-sidelines?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setFloatOutSidelines(b), false));
+        installInheritedC("float-out-marginalia?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setFloatOutMarginalia(b), false));
+        installInheritedC("float-out-line-numbers?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setFloatOutLineNumbers(b), false));
+        installInheritedC("cell-background?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setCellBackground(b), false));
+        installInheritedC("span-weak?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setSpanWeak(b), false));
+        installInheritedC("ignore-record-end?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setIgnoreRecordEnd(b), false));
+        installInheritedC("numbered-lines?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setNumberedLines(b), true));
+        installInheritedC("hanging-punct?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setHangingPunct(b), false));
+        installInheritedC("box-open-end?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setBoxOpenEnd(b), false));
+        installInheritedC("truncate-leader?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setTruncateLeader(b), false));
+        installInheritedC("align-leader?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setAlignLeader(b), true));
+        installInheritedC("table-part-omit-middle-header?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setTablePartOmitMiddleHeader(b), false));
+        installInheritedC("table-part-omit-middle-footer?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setTablePartOmitMiddleFooter(b), false));
+        installInheritedC("border-omit-at-break?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setBorderOmitAtBreak(b), false));
+        installInheritedC("principal-mode-simultaneous?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setPrincipalModeSimultaneous(b), false));
+        installInheritedC("marginalia-keep-with-previous?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setMarginaliaKeepWithPrevious(b), false));
+        installInheritedC("grid-equidistant-rows?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setGridEquidistantRows(b), false));
+        installInheritedC("grid-equidistant-columns?", new GenericBoolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, bool b) => fotb.setGridEquidistantColumns(b), false));
+        // Symbol characteristics
+        installInheritedC("line-join", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLineJoin(sym), FOTBuilder.Symbol.symbolMiter));
+        installInheritedC("line-cap", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLineCap(sym), FOTBuilder.Symbol.symbolButt));
+        installInheritedC("line-number-side", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLineNumberSide(sym), FOTBuilder.Symbol.symbolStart));
+        installInheritedC("kern-mode", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setKernMode(sym), FOTBuilder.Symbol.symbolNormal));
+        installInheritedC("input-whitespace-treatment", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setInputWhitespaceTreatment(sym), FOTBuilder.Symbol.symbolPreserve));
+        installInheritedC("filling-direction", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setFillingDirection(sym), FOTBuilder.Symbol.symbolTopToBottom));
+        installInheritedC("writing-mode", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setWritingMode(sym), FOTBuilder.Symbol.symbolLeftToRight));
+        installInheritedC("last-line-quadding", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLastLineQuadding(sym), FOTBuilder.Symbol.symbolRelative));
+        installInheritedC("math-display-mode", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setMathDisplayMode(sym), FOTBuilder.Symbol.symbolDisplay));
+        installInheritedC("script-pre-align", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setScriptPreAlign(sym), FOTBuilder.Symbol.symbolIndependent));
+        installInheritedC("script-post-align", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setScriptPostAlign(sym), FOTBuilder.Symbol.symbolIndependent));
+        installInheritedC("script-mid-sup-align", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setScriptMidSupAlign(sym), FOTBuilder.Symbol.symbolCenter));
+        installInheritedC("script-mid-sub-align", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setScriptMidSubAlign(sym), FOTBuilder.Symbol.symbolCenter));
+        installInheritedC("numerator-align", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setNumeratorAlign(sym), FOTBuilder.Symbol.symbolCenter));
+        installInheritedC("denominator-align", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setDenominatorAlign(sym), FOTBuilder.Symbol.symbolCenter));
+        installInheritedC("grid-position-cell-type", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setGridPositionCellType(sym), FOTBuilder.Symbol.symbolRowMajor));
+        installInheritedC("grid-column-alignment", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setGridColumnAlignment(sym), FOTBuilder.Symbol.symbolCenter));
+        installInheritedC("grid-row-alignment", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setGridRowAlignment(sym), FOTBuilder.Symbol.symbolCenter));
+        installInheritedC("box-type", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setBoxType(sym), FOTBuilder.Symbol.symbolBorder));
+        installInheritedC("glyph-alignment-mode", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setGlyphAlignmentMode(sym), FOTBuilder.Symbol.symbolFont));
+        installInheritedC("box-border-alignment", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setBoxBorderAlignment(sym), FOTBuilder.Symbol.symbolOutside));
+        installInheritedC("cell-row-alignment", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setCellRowAlignment(sym), FOTBuilder.Symbol.symbolStart));
+        installInheritedC("border-alignment", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setBorderAlignment(sym), FOTBuilder.Symbol.symbolCenter));
+        installInheritedC("sideline-side", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setSidelineSide(sym), FOTBuilder.Symbol.symbolStart));
+        installInheritedC("hyphenation-keep", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setHyphenationKeep(sym), FOTBuilder.Symbol.symbolFalse));
+        installInheritedC("font-structure", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setFontStructure(sym), FOTBuilder.Symbol.symbolSolid));
+        installInheritedC("font-proportionate-width", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setFontProportionateWidth(sym), FOTBuilder.Symbol.symbolMedium));
+        installInheritedC("cell-crossed", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setCellCrossed(sym), FOTBuilder.Symbol.symbolFalse));
+        installInheritedC("marginalia-side", new GenericSymbolInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setMarginaliaSide(sym), FOTBuilder.Symbol.symbolStart));
+        // Integer characteristics
+        installInheritedC("layer", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setLayer(n), 0));
+        installInheritedC("background-layer", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setBackgroundLayer(n), -1));
+        installInheritedC("border-priority", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setBorderPriority(n), 0));
+        installInheritedC("line-repeat", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setLineRepeat(n), 1));
+        installInheritedC("span", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setSpan(n), 1));
+        installInheritedC("min-leader-repeat", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setMinLeaderRepeat(n), 1));
+        installInheritedC("hyphenation-remain-char-count", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setHyphenationRemainCharCount(n), 2));
+        installInheritedC("hyphenation-push-char-count", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setHyphenationPushCharCount(n), 2));
+        installInheritedC("widow-count", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setWidowCount(n), 2));
+        installInheritedC("orphan-count", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setOrphanCount(n), 2));
+        // #f or strictly positive integer
+        installInheritedC("expand-tabs?", new GenericMaybeIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setExpandTabs(n), 8));
+        installInheritedC("hyphenation-ladder-count", new GenericMaybeIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setHyphenationLadderCount(n), 0));
+        // Public ID characteristics
+        installInheritedC("background-tile", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setBackgroundTile(pubid), null));
+        installInheritedC("line-breaking-method", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setLineBreakingMethod(pubid), null));
+        installInheritedC("line-composition-method", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setLineCompositionMethod(pubid), null));
+        installInheritedC("implicit-bidi-method", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setImplicitBidiMethod(pubid), null));
+        installInheritedC("glyph-subst-method", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setGlyphSubstMethod(pubid), null));
+        installInheritedC("glyph-reorder-method", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setGlyphReorderMethod(pubid), null));
+        installInheritedC("hyphenation-method", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setHyphenationMethod(pubid), null));
+        installInheritedC("table-auto-width-method", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setTableAutoWidthMethod(pubid), null));
+        installInheritedC("font-name", new GenericPublicIdInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, string? pubid) => fotb.setFontName(pubid), null));
+        // Language and country (2 letter symbol or #f)
+        installInheritedC("language", new GenericLetter2InheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, ushort code) => fotb.setLanguage(new FOTBuilder.Letter2(code)), 0));
+        installInheritedC("country", new GenericLetter2InheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, ushort code) => fotb.setCountry(new FOTBuilder.Letter2(code)), 0));
+        // Optional length specs
+        installInheritedC("min-pre-line-spacing", new GenericOptLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.OptLengthSpec ols) => fotb.setMinPreLineSpacing(ols)));
+        installInheritedC("min-post-line-spacing", new GenericOptLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.OptLengthSpec ols) => fotb.setMinPostLineSpacing(ols)));
+        installInheritedC("min-leading", new GenericOptLengthSpecInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.OptLengthSpec ols) => fotb.setMinLeading(ols)));
+        // Inline spaces
+        installInheritedC("escapement-space-before", new GenericInlineSpaceInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.InlineSpace sp) => fotb.setEscapementSpaceBefore(sp)));
+        installInheritedC("escapement-space-after", new GenericInlineSpaceInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.InlineSpace sp) => fotb.setEscapementSpaceAfter(sp)));
+        // Optional inline space
+        installInheritedC("inline-space-space", new GenericOptInlineSpaceInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, FOTBuilder.OptInlineSpace sp) => fotb.setInlineSpaceSpace(sp)));
     }
 
     private void installInheritedC(string name, InheritedC ic)
@@ -1332,6 +1571,18 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     public void setBorderFalseStyle(StyleObj? style)
     {
         borderFalseStyle_ = style;
+    }
+
+    private StyleObj? makeBorderStyle(bool b, uint index)
+    {
+        var forceSpecs = new System.Collections.Generic.List<ConstPtr<InheritedC>>();
+        var specs = new System.Collections.Generic.List<ConstPtr<InheritedC>>();
+        specs.Add(new ConstPtr<InheritedC>(
+            new GenericBoolInheritedC(lookup(makeStringC("border-present?")),
+                index, (FOTBuilder fotb, bool val) => fotb.setBorderPresent(val), b)));
+        var style = new VarStyleObj(new ConstPtr<StyleSpec>(new StyleSpec(forceSpecs, specs)), null, null, new NodePtr());
+        makePermanent(style);
+        return style;
     }
 
     // Port names for multi-port flow objects
