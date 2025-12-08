@@ -57,14 +57,15 @@ public abstract class CodingSystemKit : InputCodingSystemKit
 internal class CodingSystemKitImpl : CodingSystemKit
 {
     private IdentityCodingSystem identityCodingSystem_ = new IdentityCodingSystem();
+    private UTF8CodingSystem utf8CodingSystem_ = new UTF8CodingSystem();
     private XMLCodingSystem xmlCodingSystem_;
 
     public CodingSystemKitImpl()
     {
-        // Initialize system charset with basic ASCII/Latin-1 mappings
+        // Initialize system charset with Unicode BMP (matches C++ iso10646_ucs2)
         UnivCharsetDesc desc = new UnivCharsetDesc();
-        // Map 0-255 to Unicode (identity mapping for Latin-1)
-        desc.addRange(0, 255, 0);
+        // Map 0-65535 to Unicode (full BMP range)
+        desc.addRange(0, 65535, 0);
         systemCharset_.set(desc);
         xmlCodingSystem_ = new XMLCodingSystem(this);
     }
@@ -89,7 +90,9 @@ internal class CodingSystemKitImpl : CodingSystemKit
         string upperName = name.ToUpperInvariant();
         if (upperName == "XML")
             return xmlCodingSystem_;
-        if (upperName == "IDENTITY" || upperName == "UTF-8" ||
+        if (upperName == "UTF-8")
+            return utf8CodingSystem_;
+        if (upperName == "IDENTITY" ||
             upperName.StartsWith("IS8859") || upperName.StartsWith("ISO-8859"))
         {
             return identityCodingSystem_;
