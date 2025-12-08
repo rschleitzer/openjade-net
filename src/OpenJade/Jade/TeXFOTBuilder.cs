@@ -1169,8 +1169,11 @@ public class TeXFOTBuilder : FOTBuilder
     }
 
     // Simple page sequence
-    public override void startSimplePageSequence(FOTBuilder? headerFooter)
+    public override void startSimplePageSequence(FOTBuilder?[] headerFooter)
     {
+        // Fill array with this builder for default behavior
+        for (int i = 0; i < nHF; i++)
+            headerFooter[i] = this;
         output("\\begin{FOTSimplePageSequence}\n");
         pushFormat();
     }

@@ -187,6 +187,11 @@ public abstract class ProcessContext
     // Port management
     public abstract void pushPorts(bool hasPrincipalPort, System.Collections.Generic.List<SymbolObj> labels, System.Collections.Generic.List<FOTBuilder?> fotbs);
     public abstract void popPorts();
+    public abstract void pushPrincipalPort(FOTBuilder? principalPort);
+    public abstract void popPrincipalPort();
+
+    // Page type for simple page sequences
+    public abstract void setPageType(uint n);
 
     // Character output
     public virtual void characters(Char[] data, nuint start, nuint len)
@@ -604,12 +609,12 @@ public class ProcessContextImpl : ProcessContext
             connectableStack_.RemoveAt(0);
     }
 
-    public void pushPrincipalPort(FOTBuilder? principalPort)
+    public override void pushPrincipalPort(FOTBuilder? principalPort)
     {
         connectionStack_.Insert(0, new Connection(principalPort));
     }
 
-    public void popPrincipalPort()
+    public override void popPrincipalPort()
     {
         if (connectionStack_.Count > 0)
             connectionStack_.RemoveAt(0);
@@ -836,7 +841,7 @@ public class ProcessContextImpl : ProcessContext
         havePageType_ = false;
     }
 
-    public void setPageType(uint n)
+    public override void setPageType(uint n)
     {
         havePageType_ = true;
         pageType_ = n;

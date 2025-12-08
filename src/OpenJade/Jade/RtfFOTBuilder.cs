@@ -498,8 +498,11 @@ public class RtfFOTBuilder : FOTBuilder
         endDisplay();
     }
 
-    public override void startSimplePageSequence(FOTBuilder? headerFooter)
+    public override void startSimplePageSequence(FOTBuilder?[] headerFooter)
     {
+        // Fill array with this builder for default behavior
+        for (int i = 0; i < nHF; i++)
+            headerFooter[i] = this;
         // Output section break if not first
         if (hadSection_)
             os("\\sect\n");

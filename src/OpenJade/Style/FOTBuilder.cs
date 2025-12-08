@@ -647,7 +647,14 @@ public class FOTBuilder
     public virtual void endGridCell() { end(); }
 
     // Simple page
-    public virtual void startSimplePageSequence(FOTBuilder? headerFooter) { start(); }
+    public const int nHF = 24;  // 4 page types × 6 header/footer parts
+    public virtual void startSimplePageSequence(FOTBuilder?[] headerFooter)
+    {
+        // Default: all header/footer content goes to this builder
+        for (int i = 0; i < nHF; i++)
+            headerFooter[i] = this;
+        start();
+    }
     public virtual void endSimplePageSequenceHeaderFooter() { }
     public virtual void endSimplePageSequence() { end(); }
 

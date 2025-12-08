@@ -38,10 +38,9 @@ public class SgmlFOTBuilder : FOTBuilder
     private const int backHF = 0;
     private const int headerHF = 4;   // 04
     private const int footerHF = 0;
-    private const int leftHF = 0;
-    private const int centerHF = 8;   // 010
-    private const int rightHF = 16;   // 020
-    private const int nHF = 24;       // 030
+    private const int leftHF_ = 0;     // Local constants for HF output
+    private const int centerHF_ = 8;   // 010
+    private const int rightHF_ = 16;   // 020
 
     public SgmlFOTBuilder(OutputCharStream outputStream)
     {
@@ -814,8 +813,11 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void setEscapementSpaceAfter(InlineSpace @is) { inlineSpaceC("escapement-space-after", @is); }
 
     // Page sequence methods
-    public override void startSimplePageSequence(FOTBuilder? headerFooter)
+    public override void startSimplePageSequence(FOTBuilder?[] headerFooter)
     {
+        // Fill array with this builder for default behavior
+        for (int i = 0; i < nHF; i++)
+            headerFooter[i] = this;
         startSimplePageSequenceSerial();
     }
 
@@ -879,9 +881,9 @@ public class SgmlFOTBuilder : FOTBuilder
                     if (str.size() != 0)
                     {
                         string side;
-                        if ((i & centerHF) != 0)
+                        if ((i & centerHF_) != 0)
                             side = "center";
-                        else if ((i & rightHF) != 0)
+                        else if ((i & rightHF_) != 0)
                             side = "right";
                         else
                             side = "left";

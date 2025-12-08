@@ -508,7 +508,35 @@ public class SimplePageSequenceFlowObj : CompoundFlowObj
     public override void processInner(ProcessContext context)
     {
         FOTBuilder fotb = context.currentFOTBuilder();
-        fotb.startSimplePageSequence(null);
+        FOTBuilder?[] hf_fotb = new FOTBuilder?[FOTBuilder.nHF];
+        fotb.startSimplePageSequence(hf_fotb);
+
+        // Map part index (0-5) to HF flags for hf_fotb slot calculation
+        int[] partToHF = {
+            (int)FOTBuilder.HF.leftHF,                                    // 0 = leftFooter
+            (int)FOTBuilder.HF.leftHF | (int)FOTBuilder.HF.headerHF,     // 1 = leftHeader
+            (int)FOTBuilder.HF.centerHF,                                  // 2 = centerFooter
+            (int)FOTBuilder.HF.centerHF | (int)FOTBuilder.HF.headerHF,   // 3 = centerHeader
+            (int)FOTBuilder.HF.rightHF,                                   // 4 = rightFooter
+            (int)FOTBuilder.HF.rightHF | (int)FOTBuilder.HF.headerHF     // 5 = rightHeader
+        };
+
+        // Process header/footer sosofos for each page type
+        for (int i = 0; i < (1 << nPageTypeBits); i++)  // 4 page types
+        {
+            context.setPageType((uint)i);
+            for (int j = 0; j < nHeaderFooterParts; j++)  // 6 parts
+            {
+                if (headerFooter_[j] != null)
+                {
+                    int hfSlot = i | partToHF[j];
+                    context.pushPrincipalPort(hf_fotb[hfSlot]);
+                    headerFooter_[j]!.process(context);
+                    context.popPrincipalPort();
+                }
+            }
+        }
+
         fotb.endSimplePageSequenceHeaderFooter();
         base.processInner(context);
         fotb.endSimplePageSequence();
@@ -552,28 +580,36 @@ public class SimplePageSequenceFlowObj : CompoundFlowObj
             interp.invalidCharacteristicValue(ident, loc);
             return;
         }
+        // Part indices (0-5) matching processInner's partToHF mapping
+        const int partLeftFooter = 0;
+        const int partLeftHeader = 1;
+        const int partCenterFooter = 2;
+        const int partCenterHeader = 3;
+        const int partRightFooter = 4;
+        const int partRightHeader = 5;
+
         Identifier.SyntacticKey key;
         if (ident != null && ident.syntacticKey(out key))
         {
             switch (key)
             {
                 case Identifier.SyntacticKey.keyLeftHeader:
-                    headerFooter_[((int)FOTBuilder.HF.leftHF | (int)FOTBuilder.HF.headerHF) >> nPageTypeBits] = sosofo;
+                    headerFooter_[partLeftHeader] = sosofo;
                     return;
                 case Identifier.SyntacticKey.keyCenterHeader:
-                    headerFooter_[((int)FOTBuilder.HF.centerHF | (int)FOTBuilder.HF.headerHF) >> nPageTypeBits] = sosofo;
+                    headerFooter_[partCenterHeader] = sosofo;
                     return;
                 case Identifier.SyntacticKey.keyRightHeader:
-                    headerFooter_[((int)FOTBuilder.HF.rightHF | (int)FOTBuilder.HF.headerHF) >> nPageTypeBits] = sosofo;
+                    headerFooter_[partRightHeader] = sosofo;
                     return;
                 case Identifier.SyntacticKey.keyLeftFooter:
-                    headerFooter_[((int)FOTBuilder.HF.leftHF | (int)FOTBuilder.HF.footerHF) >> nPageTypeBits] = sosofo;
+                    headerFooter_[partLeftFooter] = sosofo;
                     return;
                 case Identifier.SyntacticKey.keyCenterFooter:
-                    headerFooter_[((int)FOTBuilder.HF.centerHF | (int)FOTBuilder.HF.footerHF) >> nPageTypeBits] = sosofo;
+                    headerFooter_[partCenterFooter] = sosofo;
                     return;
                 case Identifier.SyntacticKey.keyRightFooter:
-                    headerFooter_[((int)FOTBuilder.HF.rightHF | (int)FOTBuilder.HF.footerHF) >> nPageTypeBits] = sosofo;
+                    headerFooter_[partRightFooter] = sosofo;
                     return;
                 default:
                     break;
