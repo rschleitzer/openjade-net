@@ -191,7 +191,9 @@ public partial class VM : EvalContext
         }
 
         ELObj? result;
-        if (sp > 0)
+        // In C++, sp is a pointer and error is signaled by sp=NULL (0).
+        // In C#, sp is an index, so we use -1 as the error sentinel.
+        if (sp >= 0)
         {
             sp--;
             System.Diagnostics.Debug.Assert(sp == 0);
@@ -201,7 +203,7 @@ public partial class VM : EvalContext
         }
         else
         {
-            Console.Error.WriteLine("VM.eval: stack empty after execution, returning error");
+            // sp == -1 signals an error occurred during execution
             if (interp.debugMode())
                 stackTrace();
             result = interp.makeError();

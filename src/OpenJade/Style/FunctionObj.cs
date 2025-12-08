@@ -73,7 +73,7 @@ public abstract class PrimitiveObj : FunctionObj
         vm.sp = argp + 1;
         if (vm.interp.isError(vm.sbase[argp]))
         {
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         else
@@ -89,7 +89,7 @@ public abstract class PrimitiveObj : FunctionObj
         ELObj? result = primitiveCall(vm.nActualArgs, args, vm, vm.interp, loc);
         if (vm.interp.isError(result))
         {
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         else
@@ -173,7 +173,7 @@ public class ApplyPrimitiveObj : FunctionObj
             {
                 vm.interp.setNextLocation(loc);
                 // vm.interp.message(InterpreterMessages.notAList, ...);
-                vm.sp = 0;
+                vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
                 return false;
             }
             vm.needStack(1);
@@ -201,7 +201,7 @@ public class CallWithCurrentContinuationPrimitiveObj : FunctionObj
         {
             vm.interp.setNextLocation(loc);
             // vm.interp.message(InterpreterMessages.notAProcedure, ...);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         vm.sbase[vm.sp - 1] = new ContinuationObj();
@@ -217,7 +217,7 @@ public class CallWithCurrentContinuationPrimitiveObj : FunctionObj
         {
             vm.interp.setNextLocation(loc);
             // vm.interp.message(InterpreterMessages.notAProcedure, ...);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         vm.sbase[vm.sp - 1] = new ContinuationObj();
@@ -313,7 +313,7 @@ public class ContinuationObj : FunctionObj
         {
             vm.interp.setNextLocation(loc);
             // vm.interp.message(InterpreterMessages.continuationDead);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         ELObj? result = vm.sbase[vm.sp - 1];

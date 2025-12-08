@@ -1624,12 +1624,8 @@ public class MapNodeListObj : NodeListObj
         mapped_ = mapped;
     }
 
-    // MapNodeListObj is rarely a singleton. The base class optSingletonNodeList would call
-    // nodeListRest() which has side effects. Return false to avoid mutating state.
-    public override bool optSingletonNodeList(IEvalContext ctx, Interpreter interp, ref NodePtr ptr)
-    {
-        return false;
-    }
+    // C++ MapNodeListObj does NOT override optSingletonNodeList - uses base class implementation
+    // See upstream/openjade/style/primitive.cxx - no optSingletonNodeList override exists
 
     // Matches C++ implementation exactly - see upstream/openjade/style/primitive.cxx:5506
     public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)

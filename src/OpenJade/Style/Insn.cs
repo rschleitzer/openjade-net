@@ -76,7 +76,7 @@ public class ErrorInsn : Insn
 {
     public override Insn? execute(VM vm)
     {
-        vm.sp = 0;
+        vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
         return null;
     }
 }
@@ -155,7 +155,7 @@ public class ResolveQuantitiesInsn : Insn
         System.Diagnostics.Debug.Assert(tem != null);
         if (vm.interp.isError(tem))
         {
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         vm.sbase[vm.sp - 1] = tem;
@@ -305,7 +305,7 @@ public class AppendInsn : Insn
             {
                 vm.interp.setNextLocation(loc_);
                 // vm.interp.message(InterpreterMessages.spliceNotList);
-                vm.sp = 0;
+                vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
                 return null;
             }
             source = pair.cdr();
@@ -318,7 +318,7 @@ public class AppendInsn : Insn
                 {
                     vm.interp.setNextLocation(loc_);
                     // vm.interp.message(InterpreterMessages.spliceNotList);
-                    vm.sp = 0;
+                    vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
                     return null;
                 }
                 PairObj newTail = vm.interp.makePair(pair.car(), null);
@@ -353,7 +353,7 @@ public class ApplyBaseInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.callNonFunction, ...);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         int nReq = func.nRequiredArgs();
@@ -361,7 +361,7 @@ public class ApplyBaseInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.missingArg);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         if (nArgs_ - nReq > func.nOptionalArgs())
@@ -623,7 +623,7 @@ public class PrimitiveCallInsn : Insn
         vm.sp = argp + 1;
         if (vm.interp.isError(vm.sbase[argp]))
         {
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         else
@@ -962,7 +962,7 @@ public class CheckInitInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.uninitializedVariableReference, ...);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         return next_.pointer();
@@ -994,7 +994,7 @@ public class StackSetBoxInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.readOnly);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         ELObj? tem = box.value;
@@ -1050,7 +1050,7 @@ public class ClosureSetBoxInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.readOnly);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         ELObj? tem = box.value;

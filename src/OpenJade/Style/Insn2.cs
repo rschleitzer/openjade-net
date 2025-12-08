@@ -24,7 +24,7 @@ public class CheckSosofoInsn : Insn
     {
         if (vm.sbase[vm.sp - 1]?.asSosofo() == null)
         {
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.sosofoContext);
             return null;
@@ -49,7 +49,7 @@ public class CheckStyleInsn : Insn
     {
         if (vm.sbase[vm.sp - 1]?.asStyle() == null)
         {
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.styleContext);
             return null;
@@ -257,7 +257,7 @@ public class SetDefaultContentInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.noCurrentProcessingMode);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         vm.needStack(1);
@@ -286,7 +286,7 @@ public class MakeDefaultContentInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.noCurrentProcessingMode);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         vm.needStack(1);
@@ -417,7 +417,7 @@ public class LabelSosofoInsn : Insn
         {
             vm.interp.setNextLocation(loc_);
             // vm.interp.message(InterpreterMessages.labelNotASymbol);
-            vm.sp = 0;
+            vm.sp = -1;  // -1 signals error (C++ uses NULL pointer)
             return null;
         }
         System.Diagnostics.Debug.Assert(vm.sbase[vm.sp - 2]!.asSosofo() != null);
