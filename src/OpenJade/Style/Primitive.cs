@@ -2704,7 +2704,8 @@ public class SiblingNodeListObj : NodeListObj
     }
 }
 
-// Data primitive - returns character data of a node
+// Data primitive - returns character data of a node list
+// C++ implementation: upstream/openjade/style/primitive.cxx:4093
 public class DataPrimitiveObj : PrimitiveObj
 {
     private static readonly Signature sig = new Signature(1, 0, false);
@@ -2712,19 +2713,45 @@ public class DataPrimitiveObj : PrimitiveObj
 
     public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
     {
-        NodePtr? node = null;
-        if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
-            return argError(interp, loc, InterpreterMessages.notAnOptSingletonNode, 0, args[0]);
-        if (node == null || !node)
-            return interp.makeString(Array.Empty<Char>(), 0);
-        return nodeData(node, interp);
+        // C++ uses asNodeList and iterates over all nodes, NOT optSingletonNodeList
+        NodeListObj? nl = args[0]?.asNodeList();
+        if (nl == null)
+            return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
+
+        StringObj result = new StringObj();
+        for (;;)
+        {
+            NodePtr? nd = nl.nodeListFirst(ctx, interp);
+            if (nd == null || !nd)
+                break;
+            bool chunk = false;
+            nl = nl.nodeListChunkRest(ctx, interp, ref chunk);
+            nodeData(nd, interp, chunk, result);
+        }
+        return result;
     }
 
-    private static ELObj nodeData(NodePtr node, Interpreter interp)
+    private static void nodeData(NodePtr node, Interpreter interp, bool chunk, StringObj result)
     {
-        StringObj result = new StringObj();
-        collectData(node, interp, result);
-        return result;
+        GroveString tem = new GroveString();
+        if (node.charChunk(interp, ref tem) == AccessResult.accessOK)
+        {
+            if (chunk)
+            {
+                // Use the entire chunk
+                if (tem.data() != null)
+                    result.append(tem.data()!, tem.offset(), tem.size());
+            }
+            else
+            {
+                // Collect data recursively
+                collectData(node, interp, result);
+            }
+        }
+        else
+        {
+            collectData(node, interp, result);
+        }
     }
 
     private static void collectData(NodePtr node, Grove.SdataMapper mapper, StringObj result)
@@ -3021,41 +3048,17 @@ public class SelectElementsNodeListObj : NodeListObj
         gis_ = gis;
     }
 
-    private static bool debugSelectElements = false; // Set to true for debugging
-
     // C++ implementation: upstream/openjade/style/primitive.cxx:5625
     // Note: The C++ version modifies nodeList_ as a side effect to advance past non-matching nodes
     public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
     {
-        if (debugSelectElements)
-        {
-            Console.Error.WriteLine($"SelectElementsNodeListObj.nodeListFirst: looking for GIs:");
-            foreach (var gi in gis_)
-                Console.Error.WriteLine($"  - GI: '{gi}'");
-        }
         for (;;)
         {
             NodePtr? node = nodeList_.nodeListFirst(ctx, interp);
             if (node == null || !node)
-            {
-                if (debugSelectElements)
-                    Console.Error.WriteLine($"SelectElementsNodeListObj: no more nodes, returning null");
                 return null;
-            }
-            if (debugSelectElements)
-            {
-                GroveString nodeGi = new GroveString();
-                if (node.getGi(ref nodeGi) == AccessResult.accessOK)
-                    Console.Error.WriteLine($"SelectElementsNodeListObj: examining node with GI '{nodeGi}'");
-                else
-                    Console.Error.WriteLine($"SelectElementsNodeListObj: examining node (cannot get GI)");
-            }
             if (matchesGi(node))
-            {
-                if (debugSelectElements)
-                    Console.Error.WriteLine($"SelectElementsNodeListObj: found match!");
                 return node;
-            }
             // Advance nodeList_ to skip non-matching node (side effect like C++ version)
             bool chunk = false;
             nodeList_ = nodeList_.nodeListChunkRest(ctx, interp, ref chunk);
@@ -3111,6 +3114,7 @@ public class SelectElementsNodeListObj : NodeListObj
         }
         return false;
     }
+
 }
 
 // NodeListLength primitive
