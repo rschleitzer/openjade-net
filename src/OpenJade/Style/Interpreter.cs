@@ -240,6 +240,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installXPrimitive(jcPrefix, "if-front-page", new IfFrontPagePrimitiveObj());
         installXPrimitive(jcPrefix, "debug", new DebugPrimitiveObj());
         installXPrimitive(jcPrefix, "all-element-number", new AllElementNumberPrimitiveObj());
+        installXPrimitive(jcPrefix, "read-entity", new ReadEntityPrimitiveObj());
 
         // Type predicates
         installPrimitive("string?", new IsStringPrimitiveObj());
@@ -975,6 +976,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     private bool debugMode_ = true;  // TEMP: enable for debugging
     public bool debugMode() { return debugMode_; }
     public void setDebugMode(bool debug) { debugMode_ = debug; }
+
+    // Grove manager accessor
+    public GroveManager? groveManager() { return groveManager_; }
 
     // Named character table for standard characters
     private struct CharPart

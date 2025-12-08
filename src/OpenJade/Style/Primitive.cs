@@ -4446,4 +4446,22 @@ public class IfFrontPagePrimitiveObj : PrimitiveObj
     }
 }
 
+// ReadEntity primitive - reads an entity by system ID and returns its contents as a string
+public class ReadEntityPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public ReadEntityPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        StringC? sysid = args[0]?.convertToString();
+        if (sysid == null)
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+
+        StringC contents = new StringC();
+        if (interp.groveManager() != null && interp.groveManager()!.readEntity(sysid, out contents))
+            return new StringObj(contents);
+        return interp.makeError();
+    }
+}
 
