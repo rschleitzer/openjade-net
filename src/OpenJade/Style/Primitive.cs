@@ -1169,6 +1169,58 @@ public class GiPrimitiveObj : PrimitiveObj
     }
 }
 
+// General-name-normalize primitive - normalizes a general name (element/attribute name)
+// according to the SGML declaration (e.g., case folding)
+public class GeneralNameNormalizePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public GeneralNameNormalizePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        // Get the string to normalize
+        Char[]? s;
+        nuint n;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+
+        // Get the node for context (to get grove root and elements list)
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+
+        // Copy the string to a mutable array
+        Char[] result = new Char[n];
+        for (nuint i = 0; i < n; i++)
+            result[i] = s![i];
+
+        // Get grove root and elements named node list for normalization
+        NodePtr root = new NodePtr();
+        if (node.node!.getGroveRoot(ref root) == AccessResult.accessOK)
+        {
+            NamedNodeListPtr elements = new NamedNodeListPtr();
+            if (root.node!.getElements(ref elements) == AccessResult.accessOK && elements.list != null)
+            {
+                // Normalize using the elements list's normalize method
+                nuint newSize = elements.list.normalize(result, n);
+                return interp.makeString(result, 0, newSize);
+            }
+        }
+
+        // If we can't get the grove/elements, just return the original string
+        return interp.makeString(result, 0, n);
+    }
+}
+
 // Id primitive (get element ID)
 public class IdPrimitiveObj : PrimitiveObj
 {

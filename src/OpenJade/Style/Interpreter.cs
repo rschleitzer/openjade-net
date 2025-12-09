@@ -80,6 +80,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("make", Identifier.SyntacticKey.make);
         installSyntacticKey("style", Identifier.SyntacticKey.style);
         installSyntacticKey("with-mode", Identifier.SyntacticKey.withMode);
+        installSyntacticKey("use", Identifier.SyntacticKey.keyUse);
         installSyntacticKey("else", Identifier.SyntacticKey.elseKey);
         installSyntacticKey("=>", Identifier.SyntacticKey.arrowKey);
         installSyntacticKey("begin", Identifier.SyntacticKey.begin);
@@ -222,6 +223,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
 
         // Element access
         installPrimitive("gi", new GiPrimitiveObj());
+        installPrimitive("general-name-normalize", new GeneralNameNormalizePrimitiveObj());
         installPrimitive("attribute-string", new AttributeStringPrimitiveObj());
         installPrimitive("inherited-attribute-string", new InheritedAttributeStringPrimitiveObj());
         installPrimitive("id", new IdPrimitiveObj());
@@ -1281,17 +1283,34 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     public bool convertLetter2C(ELObj obj, Identifier? ident, Location loc, out ushort result)
     {
         result = 0;
-        if (obj == makeFalse())
-            return true;
-        SymbolObj? sym = obj.asSymbol();
-        if (sym != null)
+        // Use convertToString to handle both StringObj and SymbolObj
+        StringObj? strObj = obj.convertToString();
+        if (strObj != null)
         {
-            StringC name = sym.name();
-            if (name.size() == 2)
+            Char[]? data;
+            nuint size;
+            if (strObj.stringData(out data, out size) && data != null)
             {
-                result = (ushort)((name[0] << 8) | name[1]);
-                return true;
+                // Valid 2-letter uppercase code (e.g., "EN", "DE")
+                if (size == 2
+                    && data[0] >= 'A' && data[0] <= 'Z'
+                    && data[1] >= 'A' && data[1] <= 'Z')
+                {
+                    result = (ushort)((data[0] << 8) | data[1]);
+                    return true;
+                }
+                // Empty string means no language specified
+                if (size == 0)
+                {
+                    result = 0;
+                    return true;
+                }
             }
+        }
+        else if (obj == makeFalse())
+        {
+            result = 0;
+            return true;
         }
         invalidCharacteristicValue(ident, loc);
         return false;
