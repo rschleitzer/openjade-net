@@ -294,74 +294,13 @@ public class SchemeParser : Messenger
                 }
             case Token.Number:
                 {
-                    // Parse number with optional unit suffix
-                    long val = 0;
-                    bool negative = false;
-                    bool seenDecimal = false;
-                    int decimalPlaces = 0;
-                    nuint i = 0;
-
-                    // Check for sign
-                    if (i < currentToken_.size() && (currentToken_[i] == '-' || currentToken_[i] == '+'))
+                    ELObj? val = interp_.convertNumber(currentToken_);
+                    if (val == null)
                     {
-                        negative = currentToken_[i] == '-';
-                        i++;
+                        message(InterpreterMessages.invalidNumber);
+                        return false;
                     }
-
-                    // Parse integer/decimal part
-                    for (; i < currentToken_.size(); i++)
-                    {
-                        Char c = currentToken_[i];
-                        if (c >= '0' && c <= '9')
-                        {
-                            val = val * 10 + (c - '0');
-                            if (seenDecimal)
-                                decimalPlaces++;
-                        }
-                        else if (c == '.')
-                        {
-                            seenDecimal = true;
-                        }
-                        else
-                        {
-                            // Not a digit - must be start of unit suffix
-                            break;
-                        }
-                    }
-
-                    if (negative)
-                        val = -val;
-
-                    // Check for unit suffix
-                    if (i < currentToken_.size())
-                    {
-                        StringC unitName = new StringC();
-                        for (; i < currentToken_.size(); i++)
-                            unitName.operatorPlusAssign(currentToken_[i]);
-
-                        long unitValue = interp_.lookupUnit(unitName);
-                        if (unitValue != 0)
-                        {
-                            // Scale by decimal places if any
-                            while (decimalPlaces > 0)
-                            {
-                                unitValue /= 10;
-                                decimalPlaces--;
-                            }
-                            long lengthVal = val * unitValue;
-                            expr = new ConstantExpression(new LengthObj(lengthVal), in_?.currentLocation() ?? new Location());
-                            return true;
-                        }
-                        // Unknown unit - fall through to integer
-                    }
-
-                    // No unit or unknown unit - return as integer (scaled by decimal places)
-                    while (decimalPlaces > 0)
-                    {
-                        val /= 10;
-                        decimalPlaces--;
-                    }
-                    expr = new ConstantExpression(interp_.makeInteger(val), in_?.currentLocation() ?? new Location());
+                    expr = new ConstantExpression(val, in_?.currentLocation() ?? new Location());
                     return true;
                 }
             case Token.String:
