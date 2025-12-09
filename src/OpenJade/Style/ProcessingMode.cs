@@ -423,8 +423,8 @@ public class ProcessingMode : Named
                     StringC gi;
                     if (rule.pattern.mustHaveGi(out gi))
                     {
-                        // Rule requires specific GI
-                        string key = gi.ToString();
+                        // Rule requires specific GI - use lowercase for case-insensitive matching
+                        string key = gi.ToString().ToLowerInvariant();
                         if (!elementTable.TryGetValue(key, out ElementRules? er))
                         {
                             er = new ElementRules(gi);
