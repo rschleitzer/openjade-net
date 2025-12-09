@@ -224,6 +224,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         // Element access
         installPrimitive("gi", new GiPrimitiveObj());
         installPrimitive("general-name-normalize", new GeneralNameNormalizePrimitiveObj());
+        installPrimitive("have-ancestor?", new HaveAncestorPrimitiveObj());
         installPrimitive("attribute-string", new AttributeStringPrimitiveObj());
         installPrimitive("inherited-attribute-string", new InheritedAttributeStringPrimitiveObj());
         installPrimitive("id", new IdPrimitiveObj());

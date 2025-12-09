@@ -1065,7 +1065,6 @@ public class EmptyNodeListPrimitiveObj : PrimitiveObj
 public class ChildrenPrimitiveObj : PrimitiveObj
 {
     private static readonly Signature sig = new Signature(1, 0, false);
-    private static bool debugChildren = false; // Set to true for debugging
     public ChildrenPrimitiveObj() : base(sig) { }
 
     public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
@@ -1073,42 +1072,17 @@ public class ChildrenPrimitiveObj : PrimitiveObj
         NodePtr? node = null;
         if (!args[0]!.optSingletonNodeList(ctx, interp, ref node))
         {
-            if (debugChildren)
-                Console.Error.WriteLine("ChildrenPrimitiveObj: optSingletonNodeList returned false, using MapNodeListObj");
             NodeListObj? nl = args[0]?.asNodeList();
             if (nl != null)
                 return new MapNodeListObj(this, nl, new MapNodeListObj.Context(ctx, loc));
             return argError(interp, loc, InterpreterMessages.notANodeList, 0, args[0]);
         }
         if (node == null || !node)
-        {
-            if (debugChildren)
-                Console.Error.WriteLine("ChildrenPrimitiveObj: node is null/empty, returning args[0]");
             return args[0];
-        }
-        if (debugChildren)
-        {
-            GroveString gi = new GroveString();
-            if (node.getGi(ref gi) == AccessResult.accessOK)
-            {
-                string giStr = "";
-                for (nuint i = 0; i < gi.size(); i++)
-                    giStr += (char)gi.data()![i];
-                Console.Error.WriteLine($"ChildrenPrimitiveObj: getting children of node with GI '{giStr}'");
-            }
-            else
-                Console.Error.WriteLine($"ChildrenPrimitiveObj: getting children of node (cannot get GI)");
-        }
         NodeListPtr nlp = new NodeListPtr();
         var result = node.children(ref nlp);
         if (result != AccessResult.accessOK)
-        {
-            if (debugChildren)
-                Console.Error.WriteLine($"ChildrenPrimitiveObj: children() returned {result}, returning empty list");
             return interp.makeEmptyNodeList();
-        }
-        if (debugChildren)
-            Console.Error.WriteLine($"ChildrenPrimitiveObj: children() succeeded");
         return new NodeListPtrNodeListObj(nlp!);
     }
 }
@@ -1218,6 +1192,142 @@ public class GeneralNameNormalizePrimitiveObj : PrimitiveObj
 
         // If we can't get the grove/elements, just return the original string
         return interp.makeString(result, 0, n);
+    }
+}
+
+// have-ancestor? primitive - checks if node has an ancestor with given GI
+public class HaveAncestorPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 1, false);
+    public HaveAncestorPrimitiveObj() : base(sig) { }
+
+    // Helper: convert ELObj to normalized general name
+    private bool convertGeneralName(ELObj? obj, NodePtr node, out Char[] result, out nuint size)
+    {
+        result = Array.Empty<Char>();
+        size = 0;
+
+        Char[]? s;
+        nuint n;
+        if (obj == null || !obj.stringData(out s, out n))
+            return false;
+
+        // Copy to result array
+        result = new Char[n];
+        for (nuint i = 0; i < n; i++)
+            result[i] = s![i];
+
+        // Normalize using grove elements
+        NodePtr root = new NodePtr();
+        if (node.node!.getGroveRoot(ref root) == AccessResult.accessOK)
+        {
+            NamedNodeListPtr elements = new NamedNodeListPtr();
+            if (root.node!.getElements(ref elements) == AccessResult.accessOK && elements.list != null)
+            {
+                size = elements.list.normalize(result, n);
+                return true;
+            }
+        }
+
+        size = n;
+        return true;
+    }
+
+    // Helper: recursive ancestor matching for list of GIs
+    private bool matchAncestors(ELObj? obj, NodePtr node, out ELObj? unmatched)
+    {
+        unmatched = obj;
+
+        NodePtr parent = new NodePtr();
+        if (node.getParent(ref parent) != AccessResult.accessOK)
+        {
+            // No more ancestors, unmatched stays as is
+            return true;
+        }
+
+        // Recurse first (to check from root down)
+        if (!matchAncestors(obj, parent, out unmatched))
+            return false;
+
+        if (unmatched != null && !unmatched.isNil())
+        {
+            PairObj? pair = unmatched.asPair();
+            if (pair == null)
+                return false;
+
+            Char[] gi;
+            nuint giSize;
+            if (!convertGeneralName(pair.car(), node, out gi, out giSize))
+                return false;
+
+            GroveString tem = new GroveString();
+            if (parent.getGi(ref tem) == AccessResult.accessOK)
+            {
+                // Compare GIs
+                bool match = (giSize == tem.size());
+                if (match)
+                {
+                    for (nuint i = 0; i < giSize && match; i++)
+                        match = (gi[i] == tem.data()![tem.offset() + i]);
+                }
+                if (match)
+                    unmatched = pair.cdr();
+            }
+        }
+
+        return true;
+    }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 1)
+        {
+            if (!args[1]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 1, args[1]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+
+        // First try as a single GI string
+        Char[] gi;
+        nuint giSize;
+        if (convertGeneralName(args[0], node, out gi, out giSize))
+        {
+            // Check ancestors one by one
+            NodePtr parent = new NodePtr(node);
+            while (parent.getParent(ref parent) == AccessResult.accessOK)
+            {
+                GroveString tem = new GroveString();
+                if (parent.getGi(ref tem) == AccessResult.accessOK)
+                {
+                    // Compare GIs
+                    if (giSize == tem.size())
+                    {
+                        bool match = true;
+                        for (nuint i = 0; i < giSize && match; i++)
+                            match = (gi[i] == tem.data()![tem.offset() + i]);
+                        if (match)
+                            return interp.makeTrue();
+                    }
+                }
+            }
+            return interp.makeFalse();
+        }
+
+        // If not a string, try as a list of GIs
+        ELObj? unmatched;
+        if (!matchAncestors(args[0], node, out unmatched))
+            return argError(interp, loc, InterpreterMessages.notAList, 0, args[0]);
+
+        if (unmatched != null && unmatched.isNil())
+            return interp.makeTrue();
+        else
+            return interp.makeFalse();
     }
 }
 
