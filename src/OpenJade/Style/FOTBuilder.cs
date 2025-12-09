@@ -343,18 +343,45 @@ public class FOTBuilder
         public bool keepWithNext = false;
         public bool mayViolateKeepBefore = false;
         public bool mayViolateKeepAfter = false;
+
+        public virtual void CopyFrom(DisplayNIC other)
+        {
+            spaceBefore = other.spaceBefore;
+            spaceAfter = other.spaceAfter;
+            positionPreference = other.positionPreference;
+            keep = other.keep;
+            breakBefore = other.breakBefore;
+            breakAfter = other.breakAfter;
+            keepWithPrevious = other.keepWithPrevious;
+            keepWithNext = other.keepWithNext;
+            mayViolateKeepBefore = other.mayViolateKeepBefore;
+            mayViolateKeepAfter = other.mayViolateKeepAfter;
+        }
     }
 
     public class InlineNIC
     {
         public long breakBeforePriority = 0;
         public long breakAfterPriority = 0;
+
+        public virtual void CopyFrom(InlineNIC other)
+        {
+            breakBeforePriority = other.breakBeforePriority;
+            breakAfterPriority = other.breakAfterPriority;
+        }
     }
 
     public class DisplayGroupNIC : DisplayNIC
     {
         public bool hasCoalesceId = false;
         public StringC coalesceId = new StringC();
+
+        public void CopyFrom(DisplayGroupNIC other)
+        {
+            base.CopyFrom(other);
+            hasCoalesceId = other.hasCoalesceId;
+            coalesceId = new StringC(other.coalesceId);
+        }
     }
 
     public class ExternalGraphicNIC : DisplayNIC
@@ -373,6 +400,26 @@ public class FOTBuilder
         public LengthSpec positionPointY = new LengthSpec();
         public long breakBeforePriority = 0;
         public long breakAfterPriority = 0;
+
+        public void CopyFrom(ExternalGraphicNIC other)
+        {
+            base.CopyFrom(other);
+            isDisplay = other.isDisplay;
+            scaleType = other.scaleType;
+            scale[0] = other.scale[0];
+            scale[1] = other.scale[1];
+            entitySystemId = new StringC(other.entitySystemId);
+            notationSystemId = new StringC(other.notationSystemId);
+            hasMaxWidth = other.hasMaxWidth;
+            maxWidth = other.maxWidth;
+            hasMaxHeight = other.hasMaxHeight;
+            maxHeight = other.maxHeight;
+            escapementDirection = other.escapementDirection;
+            positionPointX = other.positionPointX;
+            positionPointY = other.positionPointY;
+            breakBeforePriority = other.breakBeforePriority;
+            breakAfterPriority = other.breakAfterPriority;
+        }
     }
 
     public class BoxNIC : DisplayNIC
@@ -380,6 +427,14 @@ public class FOTBuilder
         public bool isDisplay = true;
         public long breakBeforePriority = 0;
         public long breakAfterPriority = 0;
+
+        public void CopyFrom(BoxNIC other)
+        {
+            base.CopyFrom(other);
+            isDisplay = other.isDisplay;
+            breakBeforePriority = other.breakBeforePriority;
+            breakAfterPriority = other.breakAfterPriority;
+        }
     }
 
     public class RuleNIC : DisplayNIC
@@ -389,15 +444,38 @@ public class FOTBuilder
         public LengthSpec length = new LengthSpec();
         public long breakBeforePriority = 0;
         public long breakAfterPriority = 0;
+
+        public void CopyFrom(RuleNIC other)
+        {
+            base.CopyFrom(other);
+            orientation = other.orientation;
+            hasLength = other.hasLength;
+            length = other.length;
+            breakBeforePriority = other.breakBeforePriority;
+            breakAfterPriority = other.breakAfterPriority;
+        }
     }
 
     public class LeaderNIC : InlineNIC
     {
         public bool hasLength = false;
         public LengthSpec length = new LengthSpec();
+
+        public void CopyFrom(LeaderNIC other)
+        {
+            base.CopyFrom(other);
+            hasLength = other.hasLength;
+            length = other.length;
+        }
     }
 
-    public class ParagraphNIC : DisplayNIC { }
+    public class ParagraphNIC : DisplayNIC
+    {
+        public void CopyFrom(ParagraphNIC other)
+        {
+            base.CopyFrom(other);
+        }
+    }
 
     public class CharacterNIC
     {
@@ -433,9 +511,36 @@ public class FOTBuilder
         public bool isRecordEnd = false;
         public bool isSpace = false;
         public double stretchFactor = 1.0;
+
+        public void CopyFrom(CharacterNIC other)
+        {
+            valid = other.valid;
+            specifiedC = other.specifiedC;
+            ch = other.ch;
+            glyphId = other.glyphId;
+            breakBeforePriority = other.breakBeforePriority;
+            breakAfterPriority = other.breakAfterPriority;
+            mathClass = other.mathClass;
+            mathFontPosture = other.mathFontPosture;
+            script = other.script;
+            isDropAfterLineBreak = other.isDropAfterLineBreak;
+            isDropUnlessBeforeLineBreak = other.isDropUnlessBeforeLineBreak;
+            isPunct = other.isPunct;
+            isInputWhitespace = other.isInputWhitespace;
+            isInputTab = other.isInputTab;
+            isRecordEnd = other.isRecordEnd;
+            isSpace = other.isSpace;
+            stretchFactor = other.stretchFactor;
+        }
     }
 
-    public class LineFieldNIC : InlineNIC { }
+    public class LineFieldNIC : InlineNIC
+    {
+        public void CopyFrom(LineFieldNIC other)
+        {
+            base.CopyFrom(other);
+        }
+    }
 
     public class TableNIC : DisplayNIC
     {
@@ -443,11 +548,24 @@ public class FOTBuilder
 
         public WidthType widthType = WidthType.widthFull;
         public LengthSpec width = new LengthSpec();
+
+        public void CopyFrom(TableNIC other)
+        {
+            base.CopyFrom(other);
+            widthType = other.widthType;
+            width = other.width;
+        }
     }
 
     public class TablePartNIC : DisplayNIC
     {
         public bool isExplicit;
+
+        public void CopyFrom(TablePartNIC other)
+        {
+            base.CopyFrom(other);
+            isExplicit = other.isExplicit;
+        }
     }
 
     public class TableColumnNIC
@@ -456,6 +574,14 @@ public class FOTBuilder
         public uint nColumnsSpanned = 1;
         public bool hasWidth = false;
         public TableLengthSpec width = new TableLengthSpec();
+
+        public void CopyFrom(TableColumnNIC other)
+        {
+            columnIndex = other.columnIndex;
+            nColumnsSpanned = other.nColumnsSpanned;
+            hasWidth = other.hasWidth;
+            width = other.width;
+        }
     }
 
     public class TableCellNIC
@@ -464,6 +590,14 @@ public class FOTBuilder
         public uint columnIndex = 0;
         public uint nColumnsSpanned = 1;
         public uint nRowsSpanned = 1;
+
+        public void CopyFrom(TableCellNIC other)
+        {
+            missing = other.missing;
+            columnIndex = other.columnIndex;
+            nColumnsSpanned = other.nColumnsSpanned;
+            nRowsSpanned = other.nRowsSpanned;
+        }
     }
 
     public struct DeviceRGBColor
@@ -503,12 +637,24 @@ public class FOTBuilder
     {
         public uint nColumns = 1;
         public uint nRows = 1;
+
+        public void CopyFrom(GridNIC other)
+        {
+            nColumns = other.nColumns;
+            nRows = other.nRows;
+        }
     }
 
     public class GridCellNIC
     {
         public uint columnNumber = 1;
         public uint rowNumber = 1;
+
+        public void CopyFrom(GridCellNIC other)
+        {
+            columnNumber = other.columnNumber;
+            rowNumber = other.rowNumber;
+        }
     }
 
     public enum HF

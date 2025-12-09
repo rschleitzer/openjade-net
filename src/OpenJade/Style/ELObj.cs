@@ -1477,8 +1477,8 @@ public class AppendSosofoObj : SosofoObj
 
     public override void process(ProcessContext context)
     {
-        foreach (var sosofo in v_)
-            sosofo.process(context);
+        for (int i = 0; i < v_.Count; i++)
+            v_[i].process(context);
     }
 }
 

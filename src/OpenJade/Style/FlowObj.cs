@@ -210,7 +210,7 @@ public class ParagraphFlowObj : CompoundFlowObj
         ParagraphFlowObj c = new ParagraphFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -242,7 +242,7 @@ public class ParagraphBreakFlowObj : FlowObj
     {
         ParagraphBreakFlowObj c = new ParagraphBreakFlowObj();
         c.setStyle(style());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -272,7 +272,7 @@ public class DisplayGroupFlowObj : CompoundFlowObj
         DisplayGroupFlowObj c = new DisplayGroupFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -427,7 +427,7 @@ public class BoxFlowObj : CompoundFlowObj
         BoxFlowObj c = new BoxFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -707,7 +707,7 @@ public class CharacterFlowObj : FlowObj
         CharacterFlowObj c = new CharacterFlowObj();
         c.setStyle(style());
         c.ch_ = ch_;
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -835,7 +835,7 @@ public class ExternalGraphicFlowObj : FlowObj
     {
         ExternalGraphicFlowObj c = new ExternalGraphicFlowObj();
         c.setStyle(style());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -958,7 +958,7 @@ public class RuleFlowObj : FlowObj
     {
         RuleFlowObj c = new RuleFlowObj();
         c.setStyle(style());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -1035,7 +1035,7 @@ public class LeaderFlowObj : CompoundFlowObj
         LeaderFlowObj c = new LeaderFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -1101,7 +1101,7 @@ public class LineFieldFlowObj : CompoundFlowObj
         LineFieldFlowObj c = new LineFieldFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -1267,7 +1267,7 @@ public class TableFlowObj : CompoundFlowObj
         TableFlowObj c = new TableFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         c.beforeRowBorder_ = beforeRowBorder_;
         c.afterRowBorder_ = afterRowBorder_;
         c.beforeColumnBorder_ = beforeColumnBorder_;
@@ -1454,7 +1454,7 @@ public class TableColumnFlowObj : FlowObj
     {
         TableColumnFlowObj c = new TableColumnFlowObj();
         c.setStyle(style());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         c.hasColumnNumber_ = hasColumnNumber_;
         return c;
     }
@@ -1558,7 +1558,7 @@ public class TableCellFlowObj : CompoundFlowObj
         TableCellFlowObj c = new TableCellFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         c.hasColumnNumber_ = hasColumnNumber_;
         c.startsRow_ = startsRow_;
         c.endsRow_ = endsRow_;
@@ -2022,7 +2022,7 @@ public class GridFlowObj : CompoundFlowObj
         GridFlowObj c = new GridFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -2081,7 +2081,7 @@ public class GridCellFlowObj : CompoundFlowObj
         GridCellFlowObj c = new GridCellFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 
@@ -2149,6 +2149,13 @@ public class MultiModeFlowObj : CompoundFlowObj
         public bool hasPrincipalMode = false;
         public FOTBuilder.MultiMode principalMode = new FOTBuilder.MultiMode();
         public System.Collections.Generic.List<FOTBuilder.MultiMode> namedModes = new();
+
+        public void CopyFrom(NIC other)
+        {
+            hasPrincipalMode = other.hasPrincipalMode;
+            principalMode = other.principalMode;
+            namedModes = new System.Collections.Generic.List<FOTBuilder.MultiMode>(other.namedModes);
+        }
     }
 
     private NIC nic_ = new NIC();
@@ -2158,7 +2165,7 @@ public class MultiModeFlowObj : CompoundFlowObj
         MultiModeFlowObj c = new MultiModeFlowObj();
         c.setStyle(style());
         c.setContent(content());
-        c.nic_ = nic_;
+        c.nic_.CopyFrom(nic_);
         return c;
     }
 

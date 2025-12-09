@@ -29,6 +29,9 @@ public class SgmlFOTBuilder : FOTBuilder
     // SaveFOTBuilder stack for serial flow object processing (from C++ SerialFOTBuilder)
     private System.Collections.Generic.Stack<SaveFOTBuilder> save_ = new();
 
+    // Multi-mode tracking
+    private System.Collections.Generic.List<bool> multiModeHasPrincipalMode_ = new();
+
     private const char RE = '\r';
     private const char quot = '"';
     private const string trueString = "true";
@@ -86,7 +89,6 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startParagraph(ParagraphNIC nic)
     {
-        flushPendingElements();
         os().put((Char)'<').write("paragraph");
         displayNIC(nic);
         outputIcs();
@@ -110,7 +112,6 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void startDisplayGroup(DisplayGroupNIC nic)
     {
-        flushPendingElements();
         os().put((Char)'<').write("display-group");
         if (nic.hasCoalesceId)
         {
@@ -334,7 +335,6 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void paragraphBreak(ParagraphNIC nic)
     {
-        flushPendingElements();
         os().put((Char)'<').write("paragraph-break");
         displayNIC(nic);
         outputIcs();
@@ -938,44 +938,56 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void pageNumber()
     {
-        flushPendingElements();
-        os().put((Char)'<').write("page-number");
-        outputIcs();
-        os().write("/>").put((Char)RE);
+        os().put((Char)'<').write("page-number/>");
+        os().put((Char)RE);
     }
 
     // Multi-mode methods
     public override void startMultiModeSerial(MultiMode? principalMode)
     {
-        flushPendingElements();
-        os().put((Char)'<').write("multi-mode");
-        if (principalMode != null && principalMode.name.size() > 0)
+        startSimpleFlowObj("multi-mode");
+        if (principalMode != null)
         {
-            os().write(" principal-mode=\"");
-            writeEscapedData(principalMode.name.data()!, principalMode.name.size());
-            os().put((Char)'"');
+            os().put((Char)'<').write("multi-mode.mode");
+            if (principalMode.hasDesc)
+            {
+                os().write(" desc=").put((Char)quot);
+                writeEscapedData(principalMode.desc.data()!, principalMode.desc.size());
+                os().put((Char)quot);
+            }
+            os().put((Char)'>').put((Char)RE);
         }
-        outputIcs();
-        os().put((Char)'>').put((Char)RE);
+        multiModeHasPrincipalMode_.Add(principalMode != null);
     }
 
     public override void endMultiModeSerial()
     {
+        if (multiModeHasPrincipalMode_[multiModeHasPrincipalMode_.Count - 1])
+            endFlow("multi-mode.mode");
+        multiModeHasPrincipalMode_.RemoveAt(multiModeHasPrincipalMode_.Count - 1);
         endFlow("multi-mode");
     }
 
     public override void startMultiModeMode(MultiMode mode)
     {
-        os().put((Char)'<').write("mode name=\"");
-        writeEscapedData(mode.name.data()!, mode.name.size());
-        os().put((Char)'"');
-        outputIcs();
+        if (multiModeHasPrincipalMode_[multiModeHasPrincipalMode_.Count - 1])
+        {
+            endFlow("multi-mode.mode");
+            multiModeHasPrincipalMode_[multiModeHasPrincipalMode_.Count - 1] = false;
+        }
+        os().put((Char)'<').write("multi-mode.mode");
+        if (mode.hasDesc)
+        {
+            os().write(" desc=").put((Char)quot);
+            writeEscapedData(mode.desc.data()!, mode.desc.size());
+            os().put((Char)quot);
+        }
         os().put((Char)'>').put((Char)RE);
     }
 
     public override void endMultiModeMode()
     {
-        endFlow("mode");
+        endFlow("multi-mode.mode");
     }
 
     // Math flow objects
@@ -1166,8 +1178,7 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void radicalRadical(CharacterNIC nic)
     {
-        flushPendingElements();
-        os().put((Char)'<').write("radical-char");
+        os().put((Char)'<').write("radical.radical");
         characterNIC(nic);
         outputIcs();
         os().write("/>").put((Char)RE);
@@ -1175,10 +1186,7 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void radicalRadicalDefaulted()
     {
-        flushPendingElements();
-        os().put((Char)'<').write("radical-char-defaulted");
-        outputIcs();
-        os().write("/>").put((Char)RE);
+        startPortFlow("radical.principal");
     }
 
     public override void startMathOperatorSerial()
@@ -1299,12 +1307,11 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void currentNodePageNumber(NodePtr node)
     {
-        flushPendingElements();
-        os().put((Char)'<').write("current-node-page-number node=\"");
+        if (!nodeIsElement(node))
+            return;
+        os().put((Char)'<').write("page-number ref=").put((Char)quot);
         outputElementName(node);
-        os().put((Char)'"');
-        outputIcs();
-        os().write("/>").put((Char)RE);
+        os().put((Char)quot).write("/>").put((Char)RE);
     }
 
     public override void charactersFromNode(NodePtr nd, Char[] data, nuint size)
@@ -1314,7 +1321,6 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void formattingInstruction(StringC s)
     {
-        flushPendingElements();
         os().put((Char)'<').write("formatting-instruction").put((Char)'>');
         writeEscapedData(s.data()!, s.size());
         os().put((Char)'<').put((Char)'/').write("formatting-instruction").put((Char)'>').put((Char)RE);
@@ -1394,7 +1400,6 @@ public class SgmlFOTBuilder : FOTBuilder
     // Private helper methods
     private void startSimpleFlowObj(string name)
     {
-        flushPendingElements();
         os().put((Char)'<').write(name);
         outputIcs();
         os().put((Char)'>').put((Char)RE);
@@ -1402,10 +1407,14 @@ public class SgmlFOTBuilder : FOTBuilder
 
     private void simpleFlowObj(string name)
     {
-        flushPendingElements();
         os().put((Char)'<').write(name);
         outputIcs();
         os().write("/>").put((Char)RE);
+    }
+
+    private void startPortFlow(string name)
+    {
+        os().put((Char)'<').write(name).put((Char)'>').put((Char)RE);
     }
 
     private void endFlow(string name)

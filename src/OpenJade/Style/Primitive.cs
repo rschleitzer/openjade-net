@@ -1394,6 +1394,30 @@ public class ProcessChildrenTrimPrimitiveObj : PrimitiveObj
     }
 }
 
+// Page-number-sosofo primitive - returns a sosofo that outputs the current page number
+public class PageNumberSosofoPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public PageNumberSosofoPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        return new PageNumberSosofoObj();
+    }
+}
+
+// Current-node-page-number-sosofo primitive - returns a sosofo that outputs the page number for the current node
+public class CurrentNodePageNumberSosofoPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 0, false);
+    public CurrentNodePageNumberSosofoPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        return new CurrentNodePageNumberSosofoObj(ctx.currentNode);
+    }
+}
+
 // Sosofo-append primitive
 public class SosofoAppendPrimitiveObj : PrimitiveObj
 {

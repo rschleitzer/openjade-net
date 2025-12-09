@@ -314,7 +314,8 @@ public class SosofoAppendInsn : Insn
         for (int i = 0; i < n_; i++)
         {
             System.Diagnostics.Debug.Assert(vm.sbase[tem + i]!.asSosofo() != null);
-            obj.append((SosofoObj)vm.sbase[tem + i]!);
+            var sosofo = (SosofoObj)vm.sbase[tem + i]!;
+            obj.append(sosofo);
         }
         vm.sp -= n_ - 1;
         vm.sbase[vm.sp - 1] = obj;
@@ -596,8 +597,8 @@ public class LiteralSosofoObj : SosofoObj
     {
         Char[]? s = null;
         nuint n = 0;
-        if (str_.stringData(out s, out n))
-            context.currentFOTBuilder().characters(s!, n);
+        if (str_.stringData(out s, out n) && s != null)
+            context.currentFOTBuilder().characters(s, n);
     }
 }
 

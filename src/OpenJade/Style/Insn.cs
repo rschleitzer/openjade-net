@@ -177,7 +177,8 @@ public class TestInsn : Insn
 
     public override Insn? execute(VM vm)
     {
-        return vm.sbase[--vm.sp]!.isTrue() ? consequent_.pointer() : alternative_.pointer();
+        bool wasTrue = vm.sbase[--vm.sp]!.isTrue();
+        return wasTrue ? consequent_.pointer() : alternative_.pointer();
     }
 }
 
@@ -217,7 +218,10 @@ public class AndInsn : Insn
     public override Insn? execute(VM vm)
     {
         if (!vm.sbase[vm.sp - 1]!.isTrue())
+        {
+            // Test is false - leaves #f on stack and skips to next
             return next_.pointer();
+        }
         --vm.sp;
         return nextTest_.pointer();
     }
