@@ -90,8 +90,10 @@ public class ProcessingMode : Named
         // Create action for the rule
         Ptr<Action> action = new Ptr<Action>(new Action(part, expr, loc));
 
-        // Add element rule
-        elementRules_[(int)ruleType].Add(new ElementRule(action, pattern));
+        // Add element rule - but NOT for root patterns (matching C++ behavior)
+        // In C++, root rules have an empty patterns list, so no ElementRule is created
+        if (!matchesRoot)
+            elementRules_[(int)ruleType].Add(new ElementRule(action, pattern));
 
         // If it's a root pattern, add to root rules
         if (matchesRoot)
@@ -104,7 +106,9 @@ public class ProcessingMode : Named
                 int cmp = rules[i - 1].compareSpecificity(rules[i]);
                 if (cmp <= 0)
                     break;
-                rules[i].swap(rules[i - 1]);
+                var temp = rules[i];
+                rules[i] = rules[i - 1];
+                rules[i - 1] = temp;
             }
         }
     }
@@ -484,13 +488,17 @@ public class ProcessingMode : Named
         public static void sortRules(System.Collections.Generic.List<ElementRule> v)
         {
             // Simple insertion sort by specificity
+            // Swap list elements directly (not using Rule.swap which only swaps action)
+            // This matches C++ behavior where pointers are sorted, keeping action+pattern together
             for (int i = 1; i < v.Count; i++)
             {
                 for (int j = i; j > 0; j--)
                 {
                     if (v[j - 1].compareSpecificity(v[j]) <= 0)
                         break;
-                    v[j].swap(v[j - 1]);
+                    var temp = v[j];
+                    v[j] = v[j - 1];
+                    v[j - 1] = temp;
                 }
             }
         }

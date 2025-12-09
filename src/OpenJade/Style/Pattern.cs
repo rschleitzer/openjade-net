@@ -68,7 +68,9 @@ public class Pattern
         for (int i = 0; i < nSpecificity; i++)
         {
             if (spec1[i] != spec2[i])
-                return spec1[i] - spec2[i];
+                // Match C++: more specific (higher value) should be "less than" (negative)
+                // so that more specific rules sort first
+                return spec1[i] > spec2[i] ? -1 : 1;
         }
         return 0;
     }
@@ -96,11 +98,15 @@ public class Pattern
 
     private static bool computeTrivial(System.Collections.Generic.List<Element> ancestors)
     {
-        foreach (var elem in ancestors)
-        {
-            if (!elem.trivial())
-                return false;
-        }
+        // Match C++ exactly: Pattern is trivial if it has exactly one ancestor element
+        // and that element is trivial. This is because trivial patterns can skip the
+        // full matches() check since the GI lookup already narrows down candidates.
+        if (ancestors.Count == 0)
+            return true;  // Empty ancestors list is trivial
+        if (!ancestors[0].trivial())
+            return false; // First element not trivial
+        if (ancestors.Count > 1)
+            return false; // More than one element - not trivial
         return true;
     }
 

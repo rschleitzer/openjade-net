@@ -511,17 +511,8 @@ public class SimplePageSequenceFlowObj : CompoundFlowObj
         FOTBuilder?[] hf_fotb = new FOTBuilder?[FOTBuilder.nHF];
         fotb.startSimplePageSequence(hf_fotb);
 
-        // Map part index (0-5) to HF flags for hf_fotb slot calculation
-        int[] partToHF = {
-            (int)FOTBuilder.HF.leftHF,                                    // 0 = leftFooter
-            (int)FOTBuilder.HF.leftHF | (int)FOTBuilder.HF.headerHF,     // 1 = leftHeader
-            (int)FOTBuilder.HF.centerHF,                                  // 2 = centerFooter
-            (int)FOTBuilder.HF.centerHF | (int)FOTBuilder.HF.headerHF,   // 3 = centerHeader
-            (int)FOTBuilder.HF.rightHF,                                   // 4 = rightFooter
-            (int)FOTBuilder.HF.rightHF | (int)FOTBuilder.HF.headerHF     // 5 = rightHeader
-        };
-
         // Process header/footer sosofos for each page type
+        // Matching C++: hf_fotb[i | (j << nPageTypeBits)]
         for (int i = 0; i < (1 << nPageTypeBits); i++)  // 4 page types
         {
             context.setPageType((uint)i);
@@ -529,7 +520,7 @@ public class SimplePageSequenceFlowObj : CompoundFlowObj
             {
                 if (headerFooter_[j] != null)
                 {
-                    int hfSlot = i | partToHF[j];
+                    int hfSlot = i | (j << nPageTypeBits);
                     context.pushPrincipalPort(hf_fotb[hfSlot]);
                     headerFooter_[j]!.process(context);
                     context.popPrincipalPort();

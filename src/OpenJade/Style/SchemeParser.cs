@@ -2034,10 +2034,7 @@ public class SchemeParser : Messenger
 
         // Get or create the processing mode
         ProcessingMode? mode = interp_.lookupProcessingMode(modeName);
-        if (mode == null)
-        {
-            mode = interp_.defineProcessingMode(modeName, loc);
-        }
+        mode.setDefined();
 
         // Save current default mode
         ProcessingMode? savedMode = defMode_;
