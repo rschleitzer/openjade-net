@@ -85,6 +85,40 @@ public abstract class DssslApp : GroveApp, IGroveManager
     public override int processSysid(StringC sysid)
     {
         rootSystemId_ = sysid;
+        ParsedSystemId v = new ParsedSystemId();
+        if (!entityManager().pointer()!.parseSystemId(sysid, systemCharset(), false, null, this, v))
+            return 0;
+        for (nuint i = v.size(); i > 0; i--)
+        {
+            if (v[(int)(i - 1)].storageManager?.inheritable() == true)
+            {
+                ParsedSystemId specId = new ParsedSystemId();
+                specId.resize(1);
+                StorageObjectSpec spec = v[(int)(i - 1)];
+                specId[0] = spec;
+                StringC s = spec.specId;
+                // replace an up to 5 character extension with .dsl
+                for (nuint j = 0; j < 5; j++)
+                {
+                    if (s.size() < j + 1)
+                        break;
+                    if (s[s.size() - j - 1] == '.')
+                    {
+                        s.resize(s.size() - j - 1);
+                        break;
+                    }
+                }
+                if (v[(int)(i - 1)].storageManager?.type() == "OSFILE")
+                    defaultOutputBasename_ = s;
+                if (!dssslSpecOption_)
+                {
+                    Char[] ext = { (Char)'.', (Char)'d', (Char)'s', (Char)'l' };
+                    s.append(ext, 4);
+                    specId.unparse(systemCharset(), false, dssslSpecSysid_);
+                }
+                break;
+            }
+        }
         return base.processSysid(sysid);
     }
 
