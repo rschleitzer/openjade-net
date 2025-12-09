@@ -234,17 +234,26 @@ public class ProcessingMode : Named
                                            IMessenger? mgr, ref Specificity specificity,
                                            System.Collections.Generic.List<ElementRule> vec)
     {
-        // Find next matching rule starting from specificity.nextRuleIndex
-        for (nuint i = specificity.nextRuleIndex; i < (nuint)vec.Count; i++)
+        // Match C++ logic exactly
+        if (specificity.ruleType != RuleType.constructionRule)
         {
-            if (vec[(int)i].pattern.matches(nd, context))
-            {
-                specificity.nextRuleIndex = i;
-                return;
-            }
+            // For style rules, just increment to next rule
+            specificity.nextRuleIndex++;
+            return;
         }
-        // No match found
-        specificity.nextRuleIndex = (nuint)vec.Count;
+        // For construction rules, advance to next rule with different specificity
+        // or to the next matching rule with same specificity (ambiguous match)
+        nuint hit = specificity.nextRuleIndex;
+        do
+        {
+            specificity.nextRuleIndex++;
+            if (specificity.nextRuleIndex >= (nuint)vec.Count
+                || vec[(int)hit].compareSpecificity(vec[(int)specificity.nextRuleIndex]) != 0)
+                return;
+        } while (!(vec[(int)specificity.nextRuleIndex].pattern.trivial()
+                   || vec[(int)specificity.nextRuleIndex].pattern.matches(nd, context)));
+        // If we get here, there's an ambiguous match - C++ reports a message
+        // For now, we'll just continue
     }
 
     // Specificity of a pattern match
@@ -259,6 +268,14 @@ public class ProcessingMode : Named
             toInitial_ = false;
             ruleType_ = RuleType.styleRule;
             nextRuleIndex_ = 0;
+        }
+
+        // Copy constructor to match C++ behavior
+        public Specificity(Specificity other)
+        {
+            toInitial_ = other.toInitial_;
+            ruleType_ = other.ruleType_;
+            nextRuleIndex_ = other.nextRuleIndex_;
         }
 
         public bool isStyle()
@@ -525,7 +542,10 @@ public class CurrentNodeSetter : IDisposable
     public CurrentNodeSetter(NodePtr node, ProcessingMode? mode, VM ec)
     {
         ec_ = ec;
-        saveCurrentNode_ = ec.currentNode;
+        // Make a copy of the NodePtr, not just a reference copy
+        // In C++, saveCurrentNode_(ec.currentNode) calls the copy constructor
+        // In C#, we need to explicitly create a new NodePtr with the same node
+        saveCurrentNode_ = new NodePtr(ec.currentNode);
         saveProcessingMode_ = ec.processingMode;
         ec.currentNode = node;
         ec.processingMode = mode;

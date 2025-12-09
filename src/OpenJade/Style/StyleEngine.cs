@@ -406,33 +406,42 @@ public class ProcessContextImpl : ProcessContext
 
     public override void nextMatch(StyleObj? style)
     {
+        // Save specificity and overriding style (matching C++)
+        var saveSpecificity = new ProcessingMode.Specificity(matchSpecificity_);
+        StyleObj? saveOverridingStyle = vm_.overridingStyle;
+        if (style != null)
+            vm_.overridingStyle = style;
+
         // Find next matching rule and process it
         var rule = vm_.processingMode?.findMatch(vm_.currentNode, new Pattern.MatchContext(), vm_.interp, ref matchSpecificity_);
-        if (rule == null)
+        if (rule != null)
         {
-            // No more rules - process children
-            processChildren(vm_.processingMode);
-        }
-        else if (!matchSpecificity_.isStyle())
-        {
-            // Construction rule
+            // Construction rule (C++ asserts !matchSpecificity_.isStyle())
             rule.action().get(out InsnPtr? insn, out SosofoObj? sosofoObj);
             if (sosofoObj != null)
                 sosofoObj.process(this);
-            else if (insn?.get() != null)
+            else if (insn != null)
             {
-                ELObj? result = vm_.eval(insn.get());
-                if (result?.asSosofo() != null)
-                    result.asSosofo()!.process(this);
+                ELObj? result = vm_.eval(insn.pointer(), null, null);
+                if (vm_.interp.isError(result))
+                    processChildren(vm_.processingMode);
+                else
+                {
+                    SosofoObj? resultSosofo = result?.asSosofo();
+                    if (resultSosofo != null)
+                        resultSosofo.process(this);
+                }
             }
         }
         else
         {
-            // Style rule
-            if (style != null)
-                currentStyleStack().push(style, vm_, currentFOTBuilder());
+            // No more rules - process children
             processChildren(vm_.processingMode);
         }
+
+        // Restore saved state
+        vm_.overridingStyle = saveOverridingStyle;
+        matchSpecificity_ = saveSpecificity;
     }
 
     public override void processChildren(ProcessingMode? mode)

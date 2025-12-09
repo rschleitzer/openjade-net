@@ -174,9 +174,9 @@ public class CompoundFlowObj : FlowObj
     public override void processInner(ProcessContext context)
     {
         if (content_ != null)
-        {
             content_.process(context);
-        }
+        else
+            context.processChildren(context.vm().interp.initialProcessingMode());
     }
 }
 
