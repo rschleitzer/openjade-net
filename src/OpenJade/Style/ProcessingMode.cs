@@ -142,46 +142,51 @@ public class ProcessingMode : Named
                                    Pattern.MatchContext context, IMessenger? mgr,
                                    ref Specificity specificity)
     {
-        GroveRules gr = groveRulesForNode(nd, mgr);
+        System.Collections.Generic.List<ElementRule>[]? vecP = null;
 
-        // First try element-specific rules
-        // Use lowercase for lookup since SGML element names are case-insensitive
-        string giKey = gi.ToString().ToLowerInvariant();
-        for (int ruleType = (int)specificity.ruleType; ruleType < nRuleType; ruleType++)
+        // Outer loop handles switching between style and construction rule types
+        for (;;)
         {
-            if (gr.elementTable.TryGetValue(giKey, out ElementRules? er))
+            // Middle loop handles mode transitions (current mode vs initial mode)
+            for (;;)
             {
-                var vec = er.rules[ruleType];
-                if (vec.Count > 0)
+                ProcessingMode mode = (initial_ != null && specificity.toInitial) ? initial_ : this;
+                if (vecP == null)
                 {
-                    elementRuleAdvance(nd, context, mgr, ref specificity, vec);
-                    if (specificity.nextRuleIndex < (nuint)vec.Count)
+                    GroveRules gr = mode.groveRulesForNode(nd, mgr);
+                    // Use lowercase for lookup since SGML element names are case-insensitive
+                    string giKey = gi.ToString().ToLowerInvariant();
+                    if (gr.elementTable.TryGetValue(giKey, out ElementRules? er))
+                        vecP = er.rules;  // Element rules (already includes wildcards)
+                    else
+                        vecP = gr.otherRules;  // Just wildcards
+                }
+                var vec = vecP[(int)specificity.ruleType];
+
+                // Inner loop searches for matching rule
+                for (; specificity.nextRuleIndex < (nuint)vec.Count; specificity.nextRuleIndex++)
+                {
+                    var rule = vec[(int)specificity.nextRuleIndex];
+                    if (rule.pattern.trivial() || rule.pattern.matches(nd, context))
                     {
-                        specificity.ruleType = (RuleType)ruleType;
-                        return vec[(int)specificity.nextRuleIndex];
+                        elementRuleAdvance(nd, context, mgr, ref specificity, vec);
+                        return rule;
                     }
                 }
-            }
 
-            // Try other rules (wildcard patterns)
-            var otherVec = gr.otherRules[ruleType];
-            if (otherVec.Count > 0)
-            {
-                elementRuleAdvance(nd, context, mgr, ref specificity, otherVec);
-                if (specificity.nextRuleIndex < (nuint)otherVec.Count)
-                {
-                    specificity.ruleType = (RuleType)ruleType;
-                    return otherVec[(int)specificity.nextRuleIndex];
-                }
+                if (initial_ == null)
+                    break;
+                vecP = null;
+                if (specificity.toInitial)
+                    break;
+                specificity.nextRuleIndex = 0;
+                specificity.toInitial = true;
             }
+            if (specificity.ruleType == RuleType.constructionRule)
+                break;
+            specificity.ruleType = RuleType.constructionRule;
             specificity.nextRuleIndex = 0;
-        }
-
-        // Fall through to initial mode if we have one
-        if (initial_ != null)
-        {
-            specificity.toInitial = true;
-            return initial_.findElementMatch(gi, nd, context, mgr, ref specificity);
+            specificity.toInitial = false;
         }
         return null;
     }
@@ -189,21 +194,25 @@ public class ProcessingMode : Named
     private Rule? findRootMatch(NodePtr nd, Pattern.MatchContext context, IMessenger? mgr,
                                 ref Specificity specificity)
     {
-        for (int ruleType = (int)specificity.ruleType; ruleType < nRuleType; ruleType++)
+        // Loop structure matching C++ to handle style/construction rules and initial mode
+        for (;;)
         {
-            var rules = rootRules_[ruleType];
-            if (rules.Count > 0)
+            for (;;)
             {
-                specificity.ruleType = (RuleType)ruleType;
-                return rules[0];
+                ProcessingMode mode = (initial_ != null && specificity.toInitial) ? initial_ : this;
+                var rules = mode.rootRules_[(int)specificity.ruleType];
+                if (specificity.nextRuleIndex < (nuint)rules.Count)
+                    return rules[(int)specificity.nextRuleIndex++];
+                if (initial_ == null || specificity.toInitial)
+                    break;
+                specificity.nextRuleIndex = 0;
+                specificity.toInitial = true;
             }
-        }
-
-        // Fall through to initial mode if we have one
-        if (initial_ != null)
-        {
-            specificity.toInitial = true;
-            return initial_.findRootMatch(nd, context, mgr, ref specificity);
+            if (specificity.ruleType == RuleType.constructionRule)
+                break;
+            specificity.ruleType = RuleType.constructionRule;
+            specificity.nextRuleIndex = 0;
+            specificity.toInitial = false;
         }
         return null;
     }
@@ -416,6 +425,7 @@ public class ProcessingMode : Named
         public void build(System.Collections.Generic.List<ElementRule>[] rules, NodePtr nd, IMessenger? mgr)
         {
             built = true;
+            // First pass: categorize rules
             for (int ruleType = 0; ruleType < nRuleType; ruleType++)
             {
                 foreach (var rule in rules[ruleType])
@@ -438,9 +448,18 @@ public class ProcessingMode : Named
                         otherRules[ruleType].Add(rule);
                     }
                 }
-                // Sort rules by specificity
+            }
+            // Second pass: append otherRules to each element's rules (matching C++)
+            // This ensures wildcard rules are checked along with element-specific rules
+            for (int ruleType = 0; ruleType < nRuleType; ruleType++)
+            {
                 foreach (var er in elementTable.Values)
+                {
+                    // Append all wildcard rules to this element's rules
+                    er.rules[ruleType].AddRange(otherRules[ruleType]);
+                    // Sort all rules together by specificity
                     sortRules(er.rules[ruleType]);
+                }
                 sortRules(otherRules[ruleType]);
             }
         }

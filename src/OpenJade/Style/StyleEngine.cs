@@ -257,21 +257,15 @@ public class ProcessContextImpl : ProcessContext
     {
         Interpreter interp = vm_.interp;
 
-        // Get the document element from the document node
-        NodePtr docElement = new NodePtr();
-        if (node.getDocumentElement(ref docElement) != AccessResult.accessOK)
-        {
-            // Fallback: try to use node directly if it's already an element
-            docElement = node;
-        }
-
+        // Match C++ exactly - pass node directly, don't get document element
+        // The document node (with no origin) will be matched by root rules
         StyleObj? style = interp.initialStyle();
         if (style != null)
         {
             currentStyleStack().push(style, vm(), currentFOTBuilder());
             currentFOTBuilder().startSequence();
         }
-        processNode(docElement, interp.initialProcessingMode());
+        processNode(node, interp.initialProcessingMode());
         if (style != null)
         {
             currentFOTBuilder().endSequence();
@@ -296,40 +290,83 @@ public class ProcessContextImpl : ProcessContext
         using var cns = new CurrentNodeSetter(node, mode, vm_);
         var saveSpecificity = matchSpecificity_;
         matchSpecificity_ = new ProcessingMode.Specificity();
+        bool hadStyle = false;
 
         currentFOTBuilder().startNode(node, mode.name());
 
-        // Find matching rule and execute it
-        var context = new Pattern.MatchContext();
-        var rule = mode.findMatch(node, context, vm_.interp, ref matchSpecificity_);
-
-        if (rule != null)
+        // Loop to find and process rules (matching C++ for(;;) loop)
+        for (;;)
         {
-            // Get the action's instruction and sosofo
-            InsnPtr? insn;
-            SosofoObj? sosofo;
-            rule.action().get(out insn, out sosofo);
+            var rule = vm_.processingMode?.findMatch(node, new Pattern.MatchContext(), vm_.interp, ref matchSpecificity_);
 
-            if (sosofo != null)
+            if (rule == null)
             {
-                // Use pre-compiled sosofo directly
-                sosofo.process(this);
-            }
-            else if (insn != null)
-            {
-                // Evaluate the instruction to get a sosofo
-                ELObj? result = vm_.eval(insn.pointer(), null, null);
-                SosofoObj? resultSosofo = result?.asSosofo();
-                if (resultSosofo != null)
+                // No more rules - process children
+                if (hadStyle)
                 {
-                    resultSosofo.process(this);
+                    currentStyleStack().pushEnd(vm_, currentFOTBuilder());
+                    currentFOTBuilder().startSequence();
                 }
+                processChildren(mode);
+                break;
+            }
+
+            if (!matchSpecificity_.isStyle())
+            {
+                // Construction rule - process sosofo and break
+                InsnPtr? insn;
+                SosofoObj? sosofo;
+                rule.action().get(out insn, out sosofo);
+
+                if (hadStyle)
+                {
+                    currentStyleStack().pushEnd(vm_, currentFOTBuilder());
+                    currentFOTBuilder().startSequence();
+                }
+
+                if (sosofo != null)
+                {
+                    sosofo.process(this);
+                }
+                else if (insn != null)
+                {
+                    ELObj? result = vm_.eval(insn.pointer(), null, null);
+                    if (vm_.interp.isError(result))
+                    {
+                        // On error in unnamed mode, process children
+                        if (mode.name().size() == 0)
+                            processChildren(mode);
+                    }
+                    else
+                    {
+                        SosofoObj? resultSosofo = result?.asSosofo();
+                        if (resultSosofo != null)
+                            resultSosofo.process(this);
+                    }
+                }
+                break;
+            }
+
+            // Style rule - accumulate styles and continue looking for construction rule
+            InsnPtr? styleInsn;
+            SosofoObj? styleSosofo;
+            rule.action().get(out styleInsn, out styleSosofo);
+            ELObj? styleObj = vm_.eval(styleInsn?.pointer(), null, null);
+            if (!vm_.interp.isError(styleObj))
+            {
+                if (!hadStyle)
+                {
+                    currentStyleStack().pushStart();
+                    hadStyle = true;
+                }
+                currentStyleStack().pushContinue(styleObj as StyleObj, rule, node, null);
             }
         }
-        else
+
+        if (hadStyle)
         {
-            // No matching rule - process children by default
-            processChildren(mode);
+            currentFOTBuilder().endSequence();
+            currentStyleStack().pop();
         }
 
         currentFOTBuilder().endNode();
