@@ -1715,8 +1715,56 @@ public class SchemeParser : Messenger
     private bool doDefineUnit()
     {
         // (define-unit name value)
-        // For now, just skip the form - full implementation requires unit evaluation
-        return skipForm();
+        Location loc = in_?.currentLocation() ?? new Location();
+        Token tok;
+
+        if (!getToken(TokenAllow.Identifier, out tok))
+            return false;
+
+        // Validate unit name: must be all letters and not just "e" (reserved for exponent)
+        for (nuint j = 0; j < currentToken_.size(); j++)
+        {
+            Char c = currentToken_[j];
+            bool isLetter = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+            if (!isLetter)
+            {
+                message(InterpreterMessages.invalidUnitName);
+                return false;
+            }
+        }
+        if (currentToken_.size() == 1 && currentToken_[0] == 'e')
+        {
+            message(InterpreterMessages.invalidUnitName);
+            return false;
+        }
+
+        Unit? unit = interp_.lookupUnit(currentToken_);
+        if (unit == null)
+            return false;
+
+        Expression? expr = null;
+        Identifier.SyntacticKey key;
+        if (!parseExpression(0, out expr, out key, out tok))
+            return false;
+
+        if (!getToken(TokenAllow.CloseParen, out tok))
+            return false;
+
+        // Check for duplicate definition
+        uint defPart = 0;
+        Location defLoc = new Location();
+        if (unit.defined(ref defPart, ref defLoc) && defPart <= interp_.currentPartIndex())
+        {
+            if (defPart == interp_.currentPartIndex())
+            {
+                message(InterpreterMessages.duplicateUnitDefinition);
+            }
+        }
+        else if (expr != null)
+        {
+            unit.setDefinition(expr, interp_.currentPartIndex(), loc);
+        }
+        return true;
     }
 
     private bool doElement()

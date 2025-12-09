@@ -15,67 +15,170 @@ public interface IEvalContext { }
 
 public class Unit : Named
 {
+    private enum ComputedState
+    {
+        notComputed,
+        beingComputed,
+        computedExact,
+        computedInexact,
+        computedError
+    }
+
+    private uint defPart_ = uint.MaxValue;
+    private Location defLoc_ = new Location();
+    private Expression? def_ = null;
+    private InsnPtr? insn_ = null;
+    private ComputedState computed_ = ComputedState.notComputed;
     private long exact_ = 0;
     private double inexact_ = 0.0;
-    private bool isDefined_ = false;
-    private bool isExact_ = false;
-    private uint defPart_ = 0;
-    private Location defLoc_ = new Location();
+    private int dim_ = 1;
 
     public Unit() : base(new StringC()) { }
     public Unit(StringC name) : base(name) { }
 
     public void setValue(long val)
     {
+        computed_ = ComputedState.computedExact;
         exact_ = val;
-        isDefined_ = true;
-        isExact_ = true;
+        dim_ = 1;
+        defPart_ = uint.MaxValue;
     }
 
     public void setValue(double val)
     {
+        computed_ = ComputedState.computedInexact;
         inexact_ = val;
-        isDefined_ = true;
-        isExact_ = false;
+        dim_ = 1;
+        defPart_ = uint.MaxValue;
+    }
+
+    public void setDefinition(Expression expr, uint part, Location loc)
+    {
+        def_ = expr;
+        defPart_ = part;
+        defLoc_ = loc;
+        computed_ = ComputedState.notComputed;
     }
 
     public bool defined(ref uint part, ref Location loc)
     {
-        if (!isDefined_)
+        if (def_ == null && computed_ == ComputedState.notComputed)
             return false;
         part = defPart_;
         loc = defLoc_;
         return true;
     }
 
+    private void tryCompute(bool force, Interpreter interp)
+    {
+        if (computed_ == ComputedState.notComputed)
+        {
+            computed_ = ComputedState.beingComputed;
+            if (insn_ == null && def_ != null)
+                insn_ = Expression.optimizeCompile(def_, interp, new Environment(), 0, new InsnPtr());
+            if (insn_ != null && (force || (def_ != null && def_.canEval(false))))
+            {
+                VM vm = new VM(interp);
+                ELObj? v = vm.eval(insn_.pointer());
+                if (v != null)
+                {
+                    long exactVal;
+                    double inexactVal;
+                    int dimVal;
+                    var qv = v.quantityValue(out exactVal, out inexactVal, out dimVal);
+                    switch (qv)
+                    {
+                        case ELObj.QuantityType.noQuantity:
+                            if (!interp.isError(v))
+                            {
+                                interp.setNextLocation(defLoc_);
+                                interp.message(InterpreterMessages.badUnitDefinition, name().ToString());
+                            }
+                            computed_ = ComputedState.computedError;
+                            break;
+                        case ELObj.QuantityType.longQuantity:
+                            exact_ = exactVal;
+                            dim_ = dimVal;
+                            computed_ = ComputedState.computedExact;
+                            break;
+                        case ELObj.QuantityType.doubleQuantity:
+                            inexact_ = inexactVal;
+                            dim_ = dimVal;
+                            computed_ = ComputedState.computedInexact;
+                            break;
+                    }
+                }
+            }
+            if (computed_ == ComputedState.beingComputed)
+                computed_ = ComputedState.notComputed;
+        }
+        else if (computed_ == ComputedState.beingComputed)
+        {
+            interp.setNextLocation(defLoc_);
+            interp.message(InterpreterMessages.unitLoop, name().ToString());
+            computed_ = ComputedState.computedError;
+        }
+    }
+
     public ELObj? resolveQuantity(bool force, Interpreter interp, long val, int valExp)
     {
-        if (!isDefined_)
-            return null;
-        if (isExact_)
+        tryCompute(force, interp);
+        if (computed_ == ComputedState.computedExact)
         {
-            // Scale val by exact_
-            double x = val;
-            while (valExp > 0) { x *= 10.0; valExp--; }
-            while (valExp < 0) { x /= 10.0; valExp++; }
-            return new LengthObj((long)(x * exact_));
+            long result;
+            if (scale(val, valExp, exact_, out result))
+                return new LengthObj(result);
         }
-        else
-        {
-            double x = val;
-            while (valExp > 0) { x *= 10.0; valExp--; }
-            while (valExp < 0) { x /= 10.0; valExp++; }
-            return new LengthObj((long)(x * inexact_));
-        }
+        // Fall back to double calculation
+        double x = val;
+        while (valExp > 0) { x *= 10.0; valExp--; }
+        while (valExp < 0) { x /= 10.0; valExp++; }
+        return resolveQuantity(force, interp, x, 1);
     }
 
     public ELObj? resolveQuantity(bool force, Interpreter interp, double val, int unitExp)
     {
-        if (!isDefined_)
-            return null;
-        double factor = isExact_ ? exact_ : inexact_;
-        while (unitExp > 0) { factor *= factor; unitExp--; }
-        return new QuantityObj(val * factor, unitExp);
+        tryCompute(force, interp);
+        if (computed_ == ComputedState.computedError)
+            return interp.makeError();
+        if (computed_ == ComputedState.notComputed)
+            return null;  // Can't compute yet
+        double factor = (computed_ == ComputedState.computedExact) ? exact_ : inexact_;
+        // For simple length (unitExp=1), return LengthObj
+        if (unitExp == 1 && dim_ == 1)
+            return new LengthObj((long)(val * factor));
+        return new QuantityObj(val * factor, dim_ * unitExp);
+    }
+
+    private static bool scale(long val, int valExp, long factor, out long result)
+    {
+        result = 0;
+        if (factor <= 0)
+            return false;
+        while (valExp > 0)
+        {
+            if (factor > long.MaxValue / 10)
+                return false;
+            valExp--;
+            factor *= 10;
+        }
+        if (val >= 0)
+        {
+            if (val > long.MaxValue / factor)
+                return false;
+        }
+        else
+        {
+            if (-val > long.MaxValue / factor)
+                return false;
+        }
+        result = val * factor;
+        while (valExp < 0)
+        {
+            result /= 10;
+            valExp++;
+        }
+        return true;
     }
 }
 

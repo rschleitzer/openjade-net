@@ -99,6 +99,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("center-footer", Identifier.SyntacticKey.keyCenterFooter);
         installSyntacticKey("right-footer", Identifier.SyntacticKey.keyRightFooter);
 
+        // Install built-in units
+        installUnits();
+
         // Install flow objects
         installFlowObjs();
 
@@ -826,13 +829,11 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
                 else
                     return null;  // Invalid character in unit
             }
-            long unitValue = lookupUnit(unitName);
-            if (unitValue == 0)
+            Unit? unit = lookupUnit(unitName);
+            if (unit == null)
                 return null;  // Unknown unit
-            // Calculate length in internal units
-            double factor = Math.Pow(10, exp);
-            long lengthUnits = (long)(n * factor * unitValue);
-            return new LengthObj(lengthUnits);
+            // Return unresolved length - will be resolved later when quantities are resolved
+            return new UnresolvedLengthObj(n, exp, unit);
         }
 
         if (hadDecimalPoint)
@@ -1476,31 +1477,53 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     }
 
     // Unit conversion support
-    // Values are in internal units where 72000 units = 1 inch (1000 units/point)
-    private Dictionary<string, long> unitTable_ = new()
-    {
-        { "pt", 1000 },          // 1000 units per point (based on 72000 units/inch = 72 points/inch * 1000)
-        { "pc", 12000 },         // 12 points = 1 pica
-        { "pi", 12000 },         // pica (alternate name)
-        { "in", 72000 },         // 72 points = 1 inch, so 72000 units/inch
-        { "cm", 28346 },         // 72000 / 2.54 ≈ 28346 units/cm
-        { "mm", 2835 },          // 72000 / 25.4 ≈ 2835 units/mm
-        { "px", 1000 },          // Assume 1px = 1pt for screen (CSS standard 96dpi would be 750)
-        { "em", 0 },             // Relative unit - context dependent
-        { "ex", 0 },             // Relative unit - context dependent
-    };
+    // Values are in internal units where unitsPerInch_ (72000) units = 1 inch
+    private Dictionary<string, Unit> unitTable_ = new();
 
-    public long lookupUnit(StringC name)
+    // Initialize built-in units - called from constructor
+    private void installUnits()
+    {
+        // Built-in units with their values in internal units
+        // Based on unitsPerInch_ = 72000 (1000 units per point at 72 points/inch)
+        (string name, int numer, int denom)[] units = {
+            ("m", 5000, 127),     // meters: 72000 * 5000 / 127
+            ("cm", 50, 127),      // centimeters
+            ("mm", 5, 127),       // millimeters
+            ("in", 1, 1),         // inches: 72000 units
+            ("pt", 1, 72),        // points: 1000 units
+            ("pica", 1, 6),       // picas: 12000 units (12 points)
+            ("pc", 1, 6),         // picas (alternate)
+            ("pi", 1, 6),         // picas (alternate)
+        };
+
+        foreach (var (name, numer, denom) in units)
+        {
+            Unit unit = lookupUnit(new StringC(name))!;
+            long n = unitsPerInch_ * numer;
+            if (n % denom == 0)
+                unit.setValue(n / denom);
+            else
+                unit.setValue((double)n / denom);
+        }
+    }
+
+    // Look up or create a unit by name
+    public Unit? lookupUnit(StringC name)
     {
         string key = name.ToString().ToLowerInvariant();
-        if (unitTable_.TryGetValue(key, out long value))
-            return value;
-        return 0;
+        if (unitTable_.TryGetValue(key, out Unit? unit))
+            return unit;
+        // Create new unit
+        unit = new Unit(name);
+        unitTable_[key] = unit;
+        return unit;
     }
 
     public void installUnit(StringC name, long value)
     {
-        unitTable_[name.ToString().ToLowerInvariant()] = value;
+        Unit? unit = lookupUnit(name);
+        if (unit != null)
+            unit.setValue(value);
     }
 
     // SDATA entity mapping
@@ -1963,4 +1986,9 @@ public enum InterpreterMessages
     notAStringOrSymbol,
     notASingletonNode,
     noNodePropertyValue,
+    // Unit definition messages
+    badUnitDefinition,
+    unitLoop,
+    duplicateUnitDefinition,
+    invalidUnitName,
 }
