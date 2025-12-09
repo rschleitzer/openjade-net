@@ -26,6 +26,9 @@ public class SgmlFOTBuilder : FOTBuilder
     private OutputCharStream curOs_; // current output stream
     private StringC[] hf_; // array of header/footer content by flags
 
+    // SaveFOTBuilder stack for serial flow object processing (from C++ SerialFOTBuilder)
+    private System.Collections.Generic.Stack<SaveFOTBuilder> save_ = new();
+
     private const char RE = '\r';
     private const char quot = '"';
     private const string trueString = "true";
@@ -815,9 +818,13 @@ public class SgmlFOTBuilder : FOTBuilder
     // Page sequence methods
     public override void startSimplePageSequence(FOTBuilder?[] headerFooter)
     {
-        // Fill array with this builder for default behavior
+        // Create SaveFOTBuilders for each header/footer slot (like C++ SerialFOTBuilder)
         for (int i = 0; i < nHF; i++)
-            headerFooter[i] = this;
+        {
+            var saveFotb = new SaveFOTBuilder();
+            save_.Push(saveFotb);
+            headerFooter[nHF - 1 - i] = saveFotb;
+        }
         startSimplePageSequenceSerial();
     }
 
@@ -826,15 +833,33 @@ public class SgmlFOTBuilder : FOTBuilder
         endSimplePageSequenceSerial();
     }
 
+    // SerialFOTBuilder pattern: retrieve buffered HF content and emit it
+    public override void endSimplePageSequenceHeaderFooter()
+    {
+        // Retrieve all 24 SaveFOTBuilders from the stack
+        SaveFOTBuilder[] hfBuilders = new SaveFOTBuilder[nHF];
+        for (int k = 0; k < nHF; k++)
+            hfBuilders[k] = save_.Pop();
+
+        // Emit all 24 parts in the same order as C++ 1.2.1 for compatibility
+        for (int i = 0; i < (1 << 2); i++)  // 4 page types
+        {
+            for (int j = 0; j < 6; j++)  // 6 header/footer parts
+            {
+                uint k = (uint)(i | (j << 2));
+                startSimplePageSequenceHeaderFooter(k);
+                hfBuilders[k].emit(this);
+                endSimplePageSequenceHeaderFooter(k);
+            }
+        }
+        endAllSimplePageSequenceHeaderFooter();
+    }
+
     public override void startSimplePageSequenceSerial()
     {
         startSimpleFlowObj("simple-page-sequence");
         suppressAnchors_ = true;
-        // TODO: Header/footer redirection disabled until SimplePageSequenceFlowObj
-        // properly processes header/footer sosofos. Currently processInner()
-        // just calls endSimplePageSequenceHeaderFooter() immediately without
-        // processing any header/footer content, so redirecting would lose body content.
-        // In C++: curOs_ = &hfs_;
+        curOs_ = hfs_;  // Redirect output to header/footer stream buffer
     }
 
     public override void endSimplePageSequenceSerial()
@@ -855,8 +880,8 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void endAllSimplePageSequenceHeaderFooter()
     {
-        // TODO: Restore output when header/footer redirection is enabled
-        // curOs_ = os_;
+        // Restore output to main stream
+        curOs_ = os_;
         suppressAnchors_ = false;
         // Output all collected header/footer content as simple-page-sequence.side-hf elements
         for (int i = 0; i < nHF; i += nHF / 6)

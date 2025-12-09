@@ -31,10 +31,14 @@ public class SaveFOTBuilder : FOTBuilder
 
     public void emit(FOTBuilder target)
     {
-        target.startNode(node_, modeName_);
+        // Only wrap with startNode/endNode if node_ is set (like C++)
+        bool hasNode = node_;  // Uses implicit bool conversion
+        if (hasNode)
+            target.startNode(node_, modeName_);
         foreach (var op in operations_)
             op(target);
-        target.endNode();
+        if (hasNode)
+            target.endNode();
     }
 
     // Capture FOT operations for later replay
@@ -75,6 +79,33 @@ public class SaveFOTBuilder : FOTBuilder
     public override void endDisplayGroup()
     {
         operations_.Add(fotb => fotb.endDisplayGroup());
+    }
+
+    public override void pageNumber()
+    {
+        operations_.Add(fotb => fotb.pageNumber());
+    }
+
+    // Font and styling characteristics
+    public override void setFontSize(long size)
+    {
+        operations_.Add(fotb => fotb.setFontSize(size));
+    }
+
+    public override void setFontFamilyName(StringC name)
+    {
+        var copy = new StringC(name);
+        operations_.Add(fotb => fotb.setFontFamilyName(copy));
+    }
+
+    public override void setFontWeight(Symbol weight)
+    {
+        operations_.Add(fotb => fotb.setFontWeight(weight));
+    }
+
+    public override void setFontPosture(Symbol posture)
+    {
+        operations_.Add(fotb => fotb.setFontPosture(posture));
     }
 }
 
@@ -482,15 +513,15 @@ public class FOTBuilder
 
     public enum HF
     {
-        firstHF = 1,
+        firstHF = 1,    // 01 octal
         otherHF = 0,
-        frontHF = 2,
+        frontHF = 2,    // 02 octal
         backHF = 0,
-        headerHF = 4,
+        headerHF = 4,   // 04 octal
         footerHF = 0,
-        leftHF = 8,
-        centerHF = 16,
-        rightHF = 24
+        leftHF = 0,     // 0 octal
+        centerHF = 8,   // 010 octal
+        rightHF = 16    // 020 octal
     }
 
     public class SimplePageSequenceHeaderFooter
