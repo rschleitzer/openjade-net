@@ -400,25 +400,17 @@ public class ProcessContextImpl : ProcessContext
 
     public override void processChildren(ProcessingMode? mode)
     {
-        // Make a copy of the current node ptr to avoid modifications from inner processing
-        NodePtr currentNode = new NodePtr(vm_.currentNode);
-        AccessResult res = currentNode.assignFirstChild();
-        if (res == AccessResult.accessOK)
+        // Match C++ exactly: use vm_.currentNode directly and modify it during iteration
+        if (vm_.currentNode.assignFirstChild() == AccessResult.accessOK)
         {
             do
             {
-                processNode(currentNode, mode);
-                AccessResult sibRes = currentNode.assignNextChunkSibling();
-                if (sibRes != AccessResult.accessOK) break;
-            } while (true);
+                processNode(vm_.currentNode, mode);
+            } while (vm_.currentNode.assignNextChunkSibling() == AccessResult.accessOK);
         }
-        else
+        else if (vm_.currentNode.getDocumentElement(ref vm_.currentNode) == AccessResult.accessOK)
         {
-            // Try to get document element
-            NodePtr docElement = new NodePtr();
-            AccessResult result = currentNode.getDocumentElement(ref docElement);
-            if (result == AccessResult.accessOK)
-                processNode(docElement, mode);
+            processNode(vm_.currentNode, mode);
         }
     }
 
