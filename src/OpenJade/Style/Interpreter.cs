@@ -99,6 +99,21 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("center-footer", Identifier.SyntacticKey.keyCenterFooter);
         installSyntacticKey("right-footer", Identifier.SyntacticKey.keyRightFooter);
 
+        // Display NIC syntactic keys
+        installSyntacticKey("position-preference", Identifier.SyntacticKey.keyPositionPreference);
+        installSyntacticKey("keep", Identifier.SyntacticKey.keyKeep);
+        installSyntacticKey("keep-with-previous?", Identifier.SyntacticKey.keyIsKeepWithPrevious);
+        installSyntacticKey("keep-with-next?", Identifier.SyntacticKey.keyIsKeepWithNext);
+        installSyntacticKey("break-before", Identifier.SyntacticKey.keyBreakBefore);
+        installSyntacticKey("break-after", Identifier.SyntacticKey.keyBreakAfter);
+        installSyntacticKey("may-violate-keep-before?", Identifier.SyntacticKey.keyIsMayViolateKeepBefore);
+        installSyntacticKey("may-violate-keep-after?", Identifier.SyntacticKey.keyIsMayViolateKeepAfter);
+        installSyntacticKey("space-before", Identifier.SyntacticKey.keySpaceBefore);
+        installSyntacticKey("space-after", Identifier.SyntacticKey.keySpaceAfter);
+        installSyntacticKey("break-before-priority", Identifier.SyntacticKey.keyBreakBeforePriority);
+        installSyntacticKey("break-after-priority", Identifier.SyntacticKey.keyBreakAfterPriority);
+        installSyntacticKey("coalesce-id", Identifier.SyntacticKey.keyCoalesceId);
+
         // Install built-in units
         installUnits();
 
