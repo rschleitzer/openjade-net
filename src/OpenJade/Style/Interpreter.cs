@@ -91,6 +91,14 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("union-for-each", Identifier.SyntacticKey.unionForEach);
         installSyntacticKey("destination", Identifier.SyntacticKey.keyDestination);
 
+        // Header/footer syntactic keys for simple-page-sequence
+        installSyntacticKey("left-header", Identifier.SyntacticKey.keyLeftHeader);
+        installSyntacticKey("center-header", Identifier.SyntacticKey.keyCenterHeader);
+        installSyntacticKey("right-header", Identifier.SyntacticKey.keyRightHeader);
+        installSyntacticKey("left-footer", Identifier.SyntacticKey.keyLeftFooter);
+        installSyntacticKey("center-footer", Identifier.SyntacticKey.keyCenterFooter);
+        installSyntacticKey("right-footer", Identifier.SyntacticKey.keyRightFooter);
+
         // Install flow objects
         installFlowObjs();
 

@@ -649,13 +649,15 @@ public class ProcessContextImpl : ProcessContext
 
     public override void pushPrincipalPort(FOTBuilder? principalPort)
     {
-        connectionStack_.Insert(0, new Connection(principalPort));
+        // Push to end so currentFOTBuilder() returns the new port
+        connectionStack_.Add(new Connection(principalPort));
     }
 
     public override void popPrincipalPort()
     {
-        if (connectionStack_.Count > 0)
-            connectionStack_.RemoveAt(0);
+        // Pop from end to match push
+        if (connectionStack_.Count > 1)  // Keep at least the main fotb
+            connectionStack_.RemoveAt(connectionStack_.Count - 1);
     }
 
     public void startMapContent(ELObj? contentMap, Location loc)
