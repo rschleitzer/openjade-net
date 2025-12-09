@@ -1783,50 +1783,51 @@ public class SchemeParser : Messenger
     private bool doElement()
     {
         // (element gi-spec action)
-        // gi-spec can be: name, (name ...), (or name ...), (match name (: name)*)
+        // gi-spec can be: name, (name ...) for ancestors list, (or name ...) for alternatives
+        // NOTE: (name1 name2) means name2 element with name1 as parent (ancestors list), NOT two separate rules!
         Location loc = in_?.currentLocation() ?? new Location();
         Token tok;
-
-        // Parse gi-spec (element name or list of names)
-        var names = new System.Collections.Generic.List<StringC>();
-        Pattern? pattern = null;
 
         if (!getToken(TokenAllow.Identifier | TokenAllow.OpenParen, out tok))
             return false;
 
+        Pattern? pattern = null;
+
         if (tok == Token.Identifier)
         {
-            // Single element name
-            names.Add(new StringC(currentToken_));
+            // Single element name - create simple element pattern
+            pattern = new ElementPattern(new StringC(currentToken_));
         }
         else
         {
-            // List of names or match pattern
+            // List - could be (name1 name2 ...) ancestors list
             if (!getToken(TokenAllow.Identifier, out tok))
                 return false;
 
-            Identifier.SyntacticKey key;
-            Identifier ident = lookup(currentToken_);
-            if (ident.syntacticKey(out key) && key == Identifier.SyntacticKey.match)
+            // Build ancestors list - first name is parent, last name is target (self)
+            // In Pattern, ancestors_[0] is self, ancestors_[1] is parent, etc.
+            // So we need to reverse the order from the source
+            var elementNames = new System.Collections.Generic.List<StringC>();
+            elementNames.Add(new StringC(currentToken_));
+
+            for (;;)
             {
-                // Match pattern - parse element name and optional ancestors
-                pattern = parsePattern();
-                if (pattern == null)
+                if (!getToken(TokenAllow.Identifier | TokenAllow.CloseParen, out tok))
                     return false;
+                if (tok == Token.CloseParen)
+                    break;
+                elementNames.Add(new StringC(currentToken_));
             }
-            else
+
+            // Build Pattern with ancestors list in correct order
+            // Source: (parent child) -> ancestors_[0]=child (self), ancestors_[1]=parent
+            var ancestors = new System.Collections.Generic.List<Pattern.Element>();
+            // Reverse the list so last element (target) becomes first
+            for (int i = elementNames.Count - 1; i >= 0; i--)
             {
-                // List of element names
-                names.Add(new StringC(currentToken_));
-                for (;;)
-                {
-                    if (!getToken(TokenAllow.Identifier | TokenAllow.CloseParen, out tok))
-                        return false;
-                    if (tok == Token.CloseParen)
-                        break;
-                    names.Add(new StringC(currentToken_));
-                }
+                ancestors.Add(new Pattern.Element(elementNames[i]));
             }
+            pattern = new Pattern(ancestors);
         }
 
         // Parse action expression
@@ -1838,19 +1839,8 @@ public class SchemeParser : Messenger
         if (!expectCloseParen())
             return false;
 
-        // Register rule with defMode_
-        if (pattern != null)
-        {
-            defMode_?.addRule(false, pattern, action!, 0, loc, interp_);
-        }
-        else
-        {
-            foreach (var name in names)
-            {
-                Pattern p = new ElementPattern(name);
-                defMode_?.addRule(false, p, action!, 0, loc, interp_);
-            }
-        }
+        // Register single rule with the pattern
+        defMode_?.addRule(false, pattern!, action!, 0, loc, interp_);
 
         return true;
     }
