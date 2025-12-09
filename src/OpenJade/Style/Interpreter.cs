@@ -89,6 +89,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("for-all?", Identifier.SyntacticKey.forAll);
         installSyntacticKey("select-each", Identifier.SyntacticKey.selectEach);
         installSyntacticKey("union-for-each", Identifier.SyntacticKey.unionForEach);
+        installSyntacticKey("destination", Identifier.SyntacticKey.keyDestination);
 
         // Install flow objects
         installFlowObjs();
