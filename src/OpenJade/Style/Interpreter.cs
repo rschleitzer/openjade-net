@@ -213,6 +213,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("sosofo-append", new SosofoAppendPrimitiveObj());
         installPrimitive("process-children", new ProcessChildrenPrimitiveObj());
         installPrimitive("process-children-trim", new ProcessChildrenTrimPrimitiveObj());
+        installPrimitive("page-number-sosofo", new PageNumberSosofoPrimitiveObj());
+        installPrimitive("current-node-page-number-sosofo", new CurrentNodePageNumberSosofoPrimitiveObj());
         installPrimitive("literal", new LiteralPrimitiveObj());
         installPrimitive("next-match", new NextMatchPrimitiveObj());
         installPrimitive("merge-style", new MergeStylePrimitiveObj());
@@ -1243,7 +1245,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         int dim;
         if (obj.quantityValue(out lval, out dval, out dim) != ELObj.QuantityType.noQuantity && dim == 1)
         {
-            result = new FOTBuilder.LengthSpec((long)dval);
+            // Round to nearest integer like C++ does: d < 0.0 ? long(d - .5) : long(d + .5)
+            result = new FOTBuilder.LengthSpec((long)(dval < 0.0 ? dval - 0.5 : dval + 0.5));
             return true;
         }
         invalidCharacteristicValue(ident, loc);
