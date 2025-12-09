@@ -1744,7 +1744,7 @@ public class SchemeParser : Messenger
 
         Expression? expr = null;
         Identifier.SyntacticKey key;
-        if (!parseExpression(0, out expr, out key, out tok))
+        if (!parseExpression(TokenAllow.Expr, out expr, out key, out tok))
             return false;
 
         if (!getToken(TokenAllow.CloseParen, out tok))
@@ -1756,9 +1756,7 @@ public class SchemeParser : Messenger
         if (unit.defined(ref defPart, ref defLoc) && defPart <= interp_.currentPartIndex())
         {
             if (defPart == interp_.currentPartIndex())
-            {
                 message(InterpreterMessages.duplicateUnitDefinition);
-            }
         }
         else if (expr != null)
         {

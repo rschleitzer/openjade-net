@@ -25,3 +25,6 @@ packages/
 
 # Windows
 Thumbs.db
+
+# Test output files
+*.fot

@@ -1513,8 +1513,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         string key = name.ToString().ToLowerInvariant();
         if (unitTable_.TryGetValue(key, out Unit? unit))
             return unit;
-        // Create new unit
-        unit = new Unit(name);
+        // Create new unit - MUST copy the name since caller may modify the StringC
+        unit = new Unit(new StringC(name));
         unitTable_[key] = unit;
         return unit;
     }
