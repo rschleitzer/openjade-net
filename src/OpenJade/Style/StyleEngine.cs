@@ -462,7 +462,8 @@ public class ProcessContextImpl : ProcessContext
 
     public override void processChildrenTrim(ProcessingMode? mode)
     {
-        NodePtr origNode = vm_.currentNode;
+        // Use copy constructor to create a separate copy (matching C++ copy semantics)
+        NodePtr origNode = new NodePtr(vm_.currentNode);
         if (vm_.currentNode.assignFirstChild() == AccessResult.accessOK)
         {
             bool atStart = true;

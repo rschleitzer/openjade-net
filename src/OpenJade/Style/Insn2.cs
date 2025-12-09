@@ -535,7 +535,8 @@ public class ProcessChildrenSosofoObj : SosofoObj
 
     public override void process(ProcessContext context)
     {
-        NodePtr node = context.vm().currentNode;
+        // Use copy constructor to create a separate copy (matching C++ copy semantics)
+        NodePtr node = new NodePtr(context.vm().currentNode);
         context.processChildren(mode_);
         context.vm().currentNode = node;
     }
@@ -614,7 +615,8 @@ public class ProcessChildrenTrimSosofoObj : SosofoObj
 
     public override void process(ProcessContext context)
     {
-        NodePtr node = context.vm().currentNode;
+        // Use copy constructor to create a separate copy (matching C++ copy semantics)
+        NodePtr node = new NodePtr(context.vm().currentNode);
         context.processChildrenTrim(mode_);
         context.vm().currentNode = node;
     }

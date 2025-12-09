@@ -44,6 +44,8 @@ public class StringC : String<Char>
     {
         if (other == null) return false;
         if (size() != other.size()) return false;
+        // Both empty strings are equal regardless of internal ptr_ state
+        if (size() == 0) return true;
         Char[]? data1 = data();
         Char[]? data2 = other.data();
         if (data1 == null && data2 == null) return true;
