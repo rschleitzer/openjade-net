@@ -144,10 +144,27 @@ public class Unit : Named
         if (computed_ == ComputedState.notComputed)
             return null;  // Can't compute yet
         double factor = (computed_ == ComputedState.computedExact) ? exact_ : inexact_;
-        // For simple length (unitExp=1), return LengthObj
-        if (unitExp == 1 && dim_ == 1)
-            return new LengthObj((long)(val * factor));
-        return new QuantityObj(val * factor, dim_ * unitExp);
+        int resultDim = 0;
+        double resultVal = val;
+        while (unitExp > 0)
+        {
+            resultDim += dim_;
+            resultVal *= factor;
+            unitExp--;
+        }
+        while (unitExp < 0)
+        {
+            resultDim -= dim_;
+            resultVal /= factor;
+            unitExp++;
+        }
+        if (resultDim == 0)
+            return new RealObj(resultVal);
+        // For simple length (resultDim=1), return LengthObj
+        // Use truncation like C++ does in convertLengthC: n = long(d)
+        if (resultDim == 1)
+            return new LengthObj((long)resultVal);
+        return new QuantityObj(resultVal, resultDim);
     }
 
     private static bool scale(long val, int valExp, long factor, out long result)
@@ -1320,7 +1337,9 @@ public class LengthSpecObj : ELObj
         if (fotLengthSpec_.HasValue)
             return fotLengthSpec_.Value;
         // Convert ELObj.LengthSpec to FOTBuilder.LengthSpec
-        return new FOTBuilder.LengthSpec((long)lengthSpec_.val()[0]);
+        // Round to nearest integer like C++ does: d < 0.0 ? long(d - .5) : long(d + .5)
+        double val0 = lengthSpec_.val()[0];
+        return new FOTBuilder.LengthSpec((long)(val0 < 0.0 ? val0 - 0.5 : val0 + 0.5));
     }
 }
 
