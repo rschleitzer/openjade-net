@@ -307,8 +307,11 @@ public class RtfFOTBuilder : FOTBuilder
         nextRtfFontNumber_ = 0;
         colorTable_ = new System.Collections.Generic.List<DeviceRGBColor>();
 
-        // Initialize with default font
+        // Initialize fonts to match header (f0=Times, f1=Helvetica)
         fontFamilyNameTable_["Times New Roman"] = nextRtfFontNumber_++;
+        fontFamilyNameTable_["Helvetica"] = nextRtfFontNumber_++;
+        fontFamilyNameTable_["iso-serif"] = 0;  // Map generic serif to Times
+        fontFamilyNameTable_["iso-sanserif"] = 1;  // Map generic sans to Helvetica
 
         // Write RTF header
         writeHeader();
@@ -433,6 +436,13 @@ public class RtfFOTBuilder : FOTBuilder
             os("\\fs");
             os(specFormat_.fontSize);
             outputFormat_.fontSize = specFormat_.fontSize;
+            changed = true;
+        }
+        if (specFormat_.fontFamily != outputFormat_.fontFamily)
+        {
+            os("\\f");
+            os(specFormat_.fontFamily);
+            outputFormat_.fontFamily = specFormat_.fontFamily;
             changed = true;
         }
         if (changed)
