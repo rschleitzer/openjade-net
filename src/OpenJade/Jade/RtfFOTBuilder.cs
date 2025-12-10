@@ -513,13 +513,15 @@ public class RtfFOTBuilder : FOTBuilder
         nextRtfFontNumber_ = 0;
         colorTable_ = new System.Collections.Generic.List<DeviceRGBColor>();
 
-        // Initialize fonts to match header (f0=Times, f1=Helvetica, f2=Symbol)
+        // Initialize fonts to match header (f0=Times, f1=Helvetica, f2=Symbol, f3=Courier)
         fontFamilyNameTable_["Times New Roman"] = nextRtfFontNumber_++;
         fontFamilyNameTable_["Helvetica"] = nextRtfFontNumber_++;
         symbolFontNumber_ = nextRtfFontNumber_++;
         fontFamilyNameTable_["Symbol"] = symbolFontNumber_;
+        fontFamilyNameTable_["Courier"] = nextRtfFontNumber_++;
         fontFamilyNameTable_["iso-serif"] = 0;  // Map generic serif to Times
         fontFamilyNameTable_["iso-sanserif"] = 1;  // Map generic sans to Helvetica
+        fontFamilyNameTable_["iso-monospace"] = 3;  // Map generic mono to Courier
 
         // Write RTF header
         writeHeader();
@@ -529,9 +531,10 @@ public class RtfFOTBuilder : FOTBuilder
     {
         if (stream_ == null) return;
         os("{\\rtf1\\ansi\\deff0\n");
-        // Font table - f0=Times, f1=Helvetica, f2=Symbol (charset 2)
+        // Font table - f0=Times, f1=Helvetica, f2=Symbol, f3=Courier
         os("{\\fonttbl{\\f1\\fnil\\fcharset0 Helvetica;}\n");
         os("{\\f2\\fnil\\fcharset2 Symbol;}\n");
+        os("{\\f3\\fnil\\fcharset0 Courier;}\n");
         os("{\\f0\\fnil\\fcharset0 Times New Roman;}\n");
         os("}\n");
         // Color table (starts with auto color)
