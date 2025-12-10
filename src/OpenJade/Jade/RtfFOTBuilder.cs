@@ -34,6 +34,7 @@ public class RtfFOTBuilder : FOTBuilder
     private bool keepWithNext_;
     private long displaySize_;
     private bool hadSection_;
+    private bool hyphenateSuppressed_;
 
     // Font management
     private System.Collections.Generic.Dictionary<string, int> fontFamilyNameTable_;
@@ -441,6 +442,11 @@ public class RtfFOTBuilder : FOTBuilder
 
     public override void endParagraph()
     {
+        if (hyphenateSuppressed_)
+        {
+            os("\\hyphpar0");
+            hyphenateSuppressed_ = false;
+        }
         os("\\par\n");
         if (paraStack_.Count > 0)
         {
@@ -453,6 +459,10 @@ public class RtfFOTBuilder : FOTBuilder
 
     private void startDisplay(DisplayNIC nic)
     {
+        // Accumulate space before (take maximum)
+        int spaceBefore = twips(nic.spaceBefore.nominal.length);
+        if (spaceBefore > accumSpace_)
+            accumSpace_ = spaceBefore;
         DisplayInfo info = new DisplayInfo();
         info.spaceAfter = twips(nic.spaceAfter.nominal.length);
         info.keepWithNext = nic.keepWithNext;
@@ -462,12 +472,37 @@ public class RtfFOTBuilder : FOTBuilder
     private void endDisplay()
     {
         if (displayStack_.Count > 0)
+        {
+            DisplayInfo info = displayStack_[displayStack_.Count - 1];
+            // Accumulate space after (take maximum)
+            if (info.spaceAfter > accumSpace_)
+                accumSpace_ = info.spaceAfter;
             displayStack_.RemoveAt(displayStack_.Count - 1);
+        }
     }
 
     private void newPar(bool allowSpaceBefore = true)
     {
         os("\\pard");
+        // Space before from accumulated space
+        if (accumSpace_ != 0)
+        {
+            os("\\sb");
+            os(accumSpace_);
+            accumSpace_ = 0;
+        }
+        // Heading level/style
+        if (paraFormat_.headingLevel != 0)
+        {
+            os("\\s");
+            os(paraFormat_.headingLevel);
+        }
+        // Line spacing (negative = exact, positive = at least)
+        if (paraFormat_.lineSpacing != 0)
+        {
+            os("\\sl");
+            os(paraFormat_.lineSpacingAtLeast ? paraFormat_.lineSpacing : -paraFormat_.lineSpacing);
+        }
         // Output paragraph formatting
         if (paraFormat_.leftIndent != 0)
         {
@@ -636,6 +671,18 @@ public class RtfFOTBuilder : FOTBuilder
     public override void setLineSpacing(LengthSpec spacing)
     {
         paraFormat_.lineSpacing = twips(spacing.length);
+    }
+
+    public override void setMinLeading(OptLengthSpec leading)
+    {
+        paraFormat_.lineSpacingAtLeast = leading.hasLength;
+    }
+
+    public override void setHyphenate(bool hyphenate)
+    {
+        specFormat_.hyphenate = hyphenate;
+        if (!hyphenate)
+            hyphenateSuppressed_ = true;
     }
 
     public override void setPageWidth(long width)
