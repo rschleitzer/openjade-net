@@ -41,6 +41,14 @@ public class RtfFOTBuilder : FOTBuilder
     private bool keep_;
     private bool hadParInKeep_;
 
+    // Leader support
+    private int leaderDepth_;
+    private OutputFormat? leaderSaveOutputFormat_;
+    private bool inLeader_;
+
+    // Link output format save (RTF groups scope format changes)
+    private OutputFormat? linkSaveOutputFormat_;
+
     // Header/footer line spacing constants (in twips)
     // Use a line-spacing of 12pt for the header and footer
     // and assume 2.5pt of it occur after the baseline
@@ -325,6 +333,9 @@ public class RtfFOTBuilder : FOTBuilder
         doBreak_ = BreakType.breakNone;
         keep_ = false;
         hadParInKeep_ = false;
+        leaderDepth_ = 0;
+        leaderSaveOutputFormat_ = null;
+        inLeader_ = false;
         hfPart_ = new string[nHF];
         for (int i = 0; i < nHF; i++)
             hfPart_[i] = "";
@@ -371,6 +382,8 @@ public class RtfFOTBuilder : FOTBuilder
             hfBuilder_.Append(s);
             return;
         }
+        // Suppress output when in leader (C++ redirects to nullos_)
+        if (inLeader_) return;
         if (stream_ == null) return;
         foreach (char c in s)
             stream_.sputc((sbyte)c);
@@ -387,9 +400,14 @@ public class RtfFOTBuilder : FOTBuilder
     }
 
     // Convert points to twips (20 twips per point, length is in millipoints)
+    // Use rounding to match C++ behavior
     private static int twips(long millipoints)
     {
-        return (int)((millipoints * 20) / 1000);
+        // Add 500 for positive values, subtract 500 for negative to achieve rounding
+        if (millipoints >= 0)
+            return (int)((millipoints * 20 + 500) / 1000);
+        else
+            return (int)((millipoints * 20 - 500) / 1000);
     }
 
     // Convert half-points (RTF font size unit)
@@ -630,13 +648,7 @@ public class RtfFOTBuilder : FOTBuilder
             os("\\s");
             os(paraFormat_.headingLevel);
         }
-        // Line spacing (negative = exact, positive = at least)
-        if (paraFormat_.lineSpacing != 0)
-        {
-            os("\\sl");
-            os(paraFormat_.lineSpacingAtLeast ? paraFormat_.lineSpacing : -paraFormat_.lineSpacing);
-        }
-        // Output paragraph formatting
+        // Left/right indent (output before \sl to match C++ order)
         if (paraFormat_.leftIndent != 0)
         {
             os("\\li");
@@ -646,6 +658,12 @@ public class RtfFOTBuilder : FOTBuilder
         {
             os("\\ri");
             os(paraFormat_.rightIndent);
+        }
+        // Line spacing (negative = exact, positive = at least)
+        if (paraFormat_.lineSpacing != 0)
+        {
+            os("\\sl");
+            os(paraFormat_.lineSpacingAtLeast ? paraFormat_.lineSpacing : -paraFormat_.lineSpacing);
         }
         if (paraFormat_.firstLineIndent != 0)
         {
@@ -679,6 +697,8 @@ public class RtfFOTBuilder : FOTBuilder
             os("\\keepn");
         }
         keepWithNext_ = false;
+        // Sync character format before paragraph end (ensures format is output even for empty paragraphs)
+        syncCharFormat();
         // Output hyphenation suppression
         if (hyphenateSuppressed_)
         {
@@ -1187,6 +1207,8 @@ public class RtfFOTBuilder : FOTBuilder
     public override void startLink(Address addr)
     {
         start();
+        // Save outputFormat before field - RTF groups scope format changes
+        linkSaveOutputFormat_ = new OutputFormat(outputFormat_);
         switch (addr.type)
         {
             case Address.Type.resolvedNode:
@@ -1216,6 +1238,9 @@ public class RtfFOTBuilder : FOTBuilder
     public override void endLink()
     {
         os("}}");
+        // Restore outputFormat - RTF groups scope format changes
+        if (linkSaveOutputFormat_ != null)
+            outputFormat_ = linkSaveOutputFormat_;
         end();
     }
 
@@ -1237,6 +1262,34 @@ public class RtfFOTBuilder : FOTBuilder
     public override void endScore()
     {
         os("}");
+        end();
+    }
+
+    // Leader - captures content but outputs tab with leader dots
+    public override void startLeader(LeaderNIC nic)
+    {
+        start();
+        inlinePrepare();
+        syncCharFormat();
+        if (leaderDepth_++ == 0)
+        {
+            leaderSaveOutputFormat_ = new OutputFormat(outputFormat_);
+            inLeader_ = true;
+        }
+    }
+
+    public override void endLeader()
+    {
+        if (--leaderDepth_ == 0)
+        {
+            if (leaderSaveOutputFormat_ != null)
+                outputFormat_ = leaderSaveOutputFormat_;
+            inLeader_ = false;
+            // MS Word doesn't mind if tabs aren't set at the beginning of the paragraph.
+            os("\\tqr\\tldot\\tx");
+            os((int)(displaySize_ - paraFormat_.rightIndent));
+            os("\\tab ");
+        }
         end();
     }
 
