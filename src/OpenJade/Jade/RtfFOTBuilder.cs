@@ -105,6 +105,136 @@ public class RtfFOTBuilder : FOTBuilder
     // Hex digits for RTF hex escapes
     private static readonly char[] hexDigits_ = "0123456789abcdef".ToCharArray();
 
+    // Symbol font Unicode to byte mapping (reverse of C++ symbolFonts[0].mapping)
+    // Maps Unicode code points to Symbol font byte codes
+    private static readonly System.Collections.Generic.Dictionary<uint, byte> symbolFontMap_ = new()
+    {
+        // Mathematical symbols from Symbol font
+        { 0x2200, 0x22 }, // FOR ALL
+        { 0x2203, 0x24 }, // THERE EXISTS
+        { 0x220B, 0x27 }, // CONTAINS AS MEMBER
+        { 0x2217, 0x2a }, // ASTERISK OPERATOR
+        { 0x2212, 0x2d }, // MINUS SIGN
+        { 0x2245, 0x40 }, // APPROXIMATELY EQUAL TO
+        { 0x0391, 0x41 }, // GREEK CAPITAL LETTER ALPHA
+        { 0x0392, 0x42 }, // GREEK CAPITAL LETTER BETA
+        { 0x03A7, 0x43 }, // GREEK CAPITAL LETTER CHI
+        { 0x2206, 0x44 }, // INCREMENT (Delta)
+        { 0x0395, 0x45 }, // GREEK CAPITAL LETTER EPSILON
+        { 0x03A6, 0x46 }, // GREEK CAPITAL LETTER PHI
+        { 0x0393, 0x47 }, // GREEK CAPITAL LETTER GAMMA
+        { 0x0397, 0x48 }, // GREEK CAPITAL LETTER ETA
+        { 0x0399, 0x49 }, // GREEK CAPITAL LETTER IOTA
+        { 0x03D1, 0x4a }, // GREEK THETA SYMBOL
+        { 0x039A, 0x4b }, // GREEK CAPITAL LETTER KAPPA
+        { 0x039B, 0x4c }, // GREEK CAPITAL LETTER LAMBDA
+        { 0x039C, 0x4d }, // GREEK CAPITAL LETTER MU
+        { 0x039D, 0x4e }, // GREEK CAPITAL LETTER NU
+        { 0x039F, 0x4f }, // GREEK CAPITAL LETTER OMICRON
+        { 0x03A0, 0x50 }, // GREEK CAPITAL LETTER PI
+        { 0x0398, 0x51 }, // GREEK CAPITAL LETTER THETA
+        { 0x03A1, 0x52 }, // GREEK CAPITAL LETTER RHO
+        { 0x03A3, 0x53 }, // GREEK CAPITAL LETTER SIGMA
+        { 0x03A4, 0x54 }, // GREEK CAPITAL LETTER TAU
+        { 0x03A5, 0x55 }, // GREEK CAPITAL LETTER UPSILON
+        { 0x03C2, 0x56 }, // GREEK SMALL LETTER FINAL SIGMA
+        { 0x2126, 0x57 }, // OHM SIGN
+        { 0x039E, 0x58 }, // GREEK CAPITAL LETTER XI
+        { 0x03A8, 0x59 }, // GREEK CAPITAL LETTER PSI
+        { 0x0396, 0x5a }, // GREEK CAPITAL LETTER ZETA
+        { 0x2234, 0x5c }, // THEREFORE
+        { 0x22A5, 0x5e }, // UP TACK (perpendicular)
+        { 0x203E, 0x60 }, // OVERLINE
+        { 0x03B1, 0x61 }, // GREEK SMALL LETTER ALPHA
+        { 0x03B2, 0x62 }, // GREEK SMALL LETTER BETA
+        { 0x03C7, 0x63 }, // GREEK SMALL LETTER CHI
+        { 0x03B4, 0x64 }, // GREEK SMALL LETTER DELTA
+        { 0x03B5, 0x65 }, // GREEK SMALL LETTER EPSILON
+        { 0x03C6, 0x66 }, // GREEK SMALL LETTER PHI
+        { 0x03B3, 0x67 }, // GREEK SMALL LETTER GAMMA
+        { 0x03B7, 0x68 }, // GREEK SMALL LETTER ETA
+        { 0x03B9, 0x69 }, // GREEK SMALL LETTER IOTA
+        { 0x03D5, 0x6a }, // GREEK PHI SYMBOL
+        { 0x03BA, 0x6b }, // GREEK SMALL LETTER KAPPA
+        { 0x03BB, 0x6c }, // GREEK SMALL LETTER LAMBDA
+        { 0x03BC, 0x6d }, // GREEK SMALL LETTER MU
+        { 0x03BD, 0x6e }, // GREEK SMALL LETTER NU
+        { 0x03BF, 0x6f }, // GREEK SMALL LETTER OMICRON
+        { 0x03C0, 0x70 }, // GREEK SMALL LETTER PI
+        { 0x03B8, 0x71 }, // GREEK SMALL LETTER THETA
+        { 0x03C1, 0x72 }, // GREEK SMALL LETTER RHO
+        { 0x03C3, 0x73 }, // GREEK SMALL LETTER SIGMA
+        { 0x03C4, 0x74 }, // GREEK SMALL LETTER TAU
+        { 0x03C5, 0x75 }, // GREEK SMALL LETTER UPSILON
+        { 0x03D6, 0x76 }, // GREEK PI SYMBOL
+        { 0x03C9, 0x77 }, // GREEK SMALL LETTER OMEGA
+        { 0x03BE, 0x78 }, // GREEK SMALL LETTER XI
+        { 0x03C8, 0x79 }, // GREEK SMALL LETTER PSI
+        { 0x03B6, 0x7a }, // GREEK SMALL LETTER ZETA
+        { 0x223C, 0x7e }, // TILDE OPERATOR
+        // Upper range (0xa0-0xff)
+        { 0x03D2, 0xa1 }, // GREEK UPSILON WITH HOOK SYMBOL
+        { 0x2032, 0xa2 }, // PRIME
+        { 0x2264, 0xa3 }, // LESS-THAN OR EQUAL TO
+        { 0x2215, 0xa4 }, // DIVISION SLASH
+        { 0x221E, 0xa5 }, // INFINITY
+        { 0x2663, 0xa7 }, // BLACK CLUB SUIT
+        { 0x2666, 0xa8 }, // BLACK DIAMOND SUIT
+        { 0x2665, 0xa9 }, // BLACK HEART SUIT
+        { 0x2660, 0xaa }, // BLACK SPADE SUIT
+        { 0x2194, 0xab }, // LEFT RIGHT ARROW
+        { 0x2190, 0xac }, // LEFTWARDS ARROW
+        { 0x2191, 0xad }, // UPWARDS ARROW
+        { 0x2192, 0xae }, // RIGHTWARDS ARROW
+        { 0x2193, 0xaf }, // DOWNWARDS ARROW
+        { 0x2033, 0xb2 }, // DOUBLE PRIME
+        { 0x2265, 0xb3 }, // GREATER-THAN OR EQUAL TO
+        { 0x221D, 0xb5 }, // PROPORTIONAL TO
+        { 0x2202, 0xb6 }, // PARTIAL DIFFERENTIAL
+        { 0x2260, 0xb9 }, // NOT EQUAL TO
+        { 0x2261, 0xba }, // IDENTICAL TO
+        { 0x2248, 0xbb }, // ALMOST EQUAL TO
+        { 0x21B5, 0xbf }, // DOWNWARDS ARROW WITH CORNER LEFTWARDS
+        { 0x2135, 0xc0 }, // ALEF SYMBOL
+        { 0x2111, 0xc1 }, // BLACK-LETTER CAPITAL I
+        { 0x211C, 0xc2 }, // BLACK-LETTER CAPITAL R
+        { 0x2118, 0xc3 }, // SCRIPT CAPITAL P
+        { 0x2297, 0xc4 }, // CIRCLED TIMES
+        { 0x2295, 0xc5 }, // CIRCLED PLUS
+        { 0x2205, 0xc6 }, // EMPTY SET
+        { 0x2229, 0xc7 }, // INTERSECTION
+        { 0x222A, 0xc8 }, // UNION
+        { 0x2283, 0xc9 }, // SUPERSET OF
+        { 0x2287, 0xca }, // SUPERSET OF OR EQUAL TO
+        { 0x2284, 0xcb }, // NOT A SUBSET OF
+        { 0x2282, 0xcc }, // SUBSET OF
+        { 0x2286, 0xcd }, // SUBSET OF OR EQUAL TO
+        { 0x2208, 0xce }, // ELEMENT OF
+        { 0x2209, 0xcf }, // NOT AN ELEMENT OF
+        { 0x2220, 0xd0 }, // ANGLE
+        { 0x2207, 0xd1 }, // NABLA
+        { 0x220F, 0xd5 }, // N-ARY PRODUCT
+        { 0x221A, 0xd6 }, // SQUARE ROOT
+        { 0x22C5, 0xd7 }, // DOT OPERATOR
+        { 0x2227, 0xd9 }, // LOGICAL AND
+        { 0x2228, 0xda }, // LOGICAL OR
+        { 0x21D4, 0xdb }, // LEFT RIGHT DOUBLE ARROW
+        { 0x21D0, 0xdc }, // LEFTWARDS DOUBLE ARROW
+        { 0x21D1, 0xdd }, // UPWARDS DOUBLE ARROW
+        { 0x21D2, 0xde }, // RIGHTWARDS DOUBLE ARROW
+        { 0x21D3, 0xdf }, // DOWNWARDS DOUBLE ARROW
+        { 0x25CA, 0xe0 }, // LOZENGE
+        { 0x2329, 0xe1 }, // LEFT-POINTING ANGLE BRACKET
+        { 0x2211, 0xe5 }, // N-ARY SUMMATION
+        { 0x232A, 0xf1 }, // RIGHT-POINTING ANGLE BRACKET
+        { 0x222B, 0xf2 }, // INTEGRAL
+        { 0x2320, 0xf3 }, // TOP HALF INTEGRAL
+        { 0x2321, 0xf5 }, // BOTTOM HALF INTEGRAL
+    };
+
+    // Symbol font RTF font number (assigned during init)
+    private int symbolFontNumber_;
+
     public enum InlineState
     {
         inlineFirst,
@@ -383,9 +513,11 @@ public class RtfFOTBuilder : FOTBuilder
         nextRtfFontNumber_ = 0;
         colorTable_ = new System.Collections.Generic.List<DeviceRGBColor>();
 
-        // Initialize fonts to match header (f0=Times, f1=Helvetica)
+        // Initialize fonts to match header (f0=Times, f1=Helvetica, f2=Symbol)
         fontFamilyNameTable_["Times New Roman"] = nextRtfFontNumber_++;
         fontFamilyNameTable_["Helvetica"] = nextRtfFontNumber_++;
+        symbolFontNumber_ = nextRtfFontNumber_++;
+        fontFamilyNameTable_["Symbol"] = symbolFontNumber_;
         fontFamilyNameTable_["iso-serif"] = 0;  // Map generic serif to Times
         fontFamilyNameTable_["iso-sanserif"] = 1;  // Map generic sans to Helvetica
 
@@ -397,8 +529,9 @@ public class RtfFOTBuilder : FOTBuilder
     {
         if (stream_ == null) return;
         os("{\\rtf1\\ansi\\deff0\n");
-        // Font table - f0=Times, f1=Helvetica (matching original OpenJade)
+        // Font table - f0=Times, f1=Helvetica, f2=Symbol (charset 2)
         os("{\\fonttbl{\\f1\\fnil\\fcharset0 Helvetica;}\n");
+        os("{\\f2\\fnil\\fcharset2 Symbol;}\n");
         os("{\\f0\\fnil\\fcharset0 Times New Roman;}\n");
         os("}\n");
         // Color table (starts with auto color)
@@ -506,6 +639,11 @@ public class RtfFOTBuilder : FOTBuilder
                 // Character has a Windows-1252 mapping
                 hexChar(win1252Code);
             }
+            else if (symbolFontMap_.TryGetValue(c, out byte symbolCode))
+            {
+                // Character has a Symbol font mapping
+                symbolChar(symbolCode);
+            }
             else
             {
                 // Unicode escape with '?' fallback character
@@ -522,6 +660,16 @@ public class RtfFOTBuilder : FOTBuilder
         os("\\'");
         os(hexDigits_[(code >> 4) & 0xf].ToString());
         os(hexDigits_[code & 0xf].ToString());
+    }
+
+    // Output a character using Symbol font
+    // Matches C++ RtfFOTBuilder::symbolChar()
+    private void symbolChar(byte code)
+    {
+        os("{\\f");
+        os(symbolFontNumber_);
+        hexChar(code);
+        os("}");
     }
 
     private void syncCharFormat()
