@@ -1280,11 +1280,44 @@ public class TableFlowObj : CompoundFlowObj
         context.startTable();
         FOTBuilder fotb = context.currentFOTBuilder();
         fotb.startTable(nic_);
+        // Get table-border characteristic for default border style
+        Interpreter interp = context.vm().interp;
+        var dep = new System.Collections.Generic.List<nuint>();
+        ELObj? obj = context.currentStyleStack().actual(interp.tableBorderC(), interp, dep);
+        StyleObj? borderStyle = null;
+        if (obj == interp.makeFalse())
+            borderStyle = interp.borderFalseStyle();
+        else if (obj == interp.makeTrue())
+            borderStyle = interp.borderTrueStyle();
+        else
+        {
+            SosofoObj? sosofo = obj?.asSosofo();
+            if (sosofo == null || !sosofo.tableBorderStyle(out borderStyle))
+                borderStyle = null;
+        }
+        // Output border flow objects
+        border(beforeRowBorder_, borderStyle, fotb.tableBeforeRowBorder, context);
+        border(afterRowBorder_, borderStyle, fotb.tableAfterRowBorder, context);
+        border(beforeColumnBorder_, borderStyle, fotb.tableBeforeColumnBorder, context);
+        border(afterColumnBorder_, borderStyle, fotb.tableAfterColumnBorder, context);
         base.processInner(context);
         if (context.inTableRow())
             context.endTableRow();
         context.endTable();
         fotb.endTable();
+    }
+
+    // Helper method to output a border flow object
+    private void border(StyleObj? style, StyleObj? defaultStyle, Action setter, ProcessContext context)
+    {
+        FOTBuilder fotb = context.currentFOTBuilder();
+        if (style == null)
+            style = defaultStyle;
+        if (style != null)
+            context.currentStyleStack().push(style, context.vm(), fotb);
+        setter();
+        if (style != null)
+            context.currentStyleStack().pop();
     }
 
     public override bool hasNonInheritedC(Identifier? ident)
@@ -1565,6 +1598,63 @@ public class TableCellFlowObj : CompoundFlowObj
         return c;
     }
 
+    public override void pushStyle(ProcessContext context, ref uint flags)
+    {
+        // Start table row if needed
+        if (context.inTableRow())
+        {
+            if (startsRow_)
+            {
+                context.endTableRow();
+                context.startTableRow(null);
+            }
+        }
+        else
+            context.startTableRow(null);
+
+        // Count extra style pushes (stored in upper bits of flags)
+        uint extraPushes = 0;
+
+        // Get column style and wrap in sequence if present
+        uint columnNumber = hasColumnNumber_ ? nic_.columnIndex : context.currentTableColumn();
+        StyleObj? columnStyle = context.tableColumnStyle(columnNumber, nic_.nColumnsSpanned);
+        if (columnStyle != null)
+        {
+            context.currentStyleStack().push(columnStyle, context.vm(), context.currentFOTBuilder());
+            context.currentFOTBuilder().startSequence();
+            extraPushes++;
+        }
+
+        // Get row style and wrap in sequence if present
+        StyleObj? rowStyle = context.tableRowStyle();
+        if (rowStyle != null)
+        {
+            context.currentStyleStack().push(rowStyle, context.vm(), context.currentFOTBuilder());
+            context.currentFOTBuilder().startSequence();
+            extraPushes++;
+        }
+
+        // Store extra push count in upper bits (bits 8-31)
+        flags |= (extraPushes << 8);
+
+        base.pushStyle(context, ref flags);
+    }
+
+    public override void popStyle(ProcessContext context, uint flags)
+    {
+        base.popStyle(context, flags);
+
+        // Get extra push count from upper bits
+        uint extraPushes = flags >> 8;
+        for (uint i = 0; i < extraPushes; i++)
+        {
+            context.currentFOTBuilder().endSequence();
+            context.currentStyleStack().pop();
+        }
+        if (endsRow_)
+            context.endTableRow();
+    }
+
     public override void processInner(ProcessContext context)
     {
         if (!context.inTable())
@@ -1587,10 +1677,42 @@ public class TableCellFlowObj : CompoundFlowObj
             if (!nic_.missing)
                 context.noteTableCell(nic_.columnIndex, nic_.nColumnsSpanned, nic_.nRowsSpanned);
         }
+        // Output cell border flow objects
+        Interpreter interp = context.vm().interp;
+        cellBorder(interp.cellBeforeRowBorderC(), fotb.tableCellBeforeRowBorder, context);
+        cellBorder(interp.cellAfterRowBorderC(), fotb.tableCellAfterRowBorder, context);
+        cellBorder(interp.cellBeforeColumnBorderC(), fotb.tableCellBeforeColumnBorder, context);
+        cellBorder(interp.cellAfterColumnBorderC(), fotb.tableCellAfterColumnBorder, context);
         base.processInner(context);
         fotb.endTableCell();
-        if (endsRow_)
-            context.endTableRow();
+        // Note: endsRow_ is handled in popStyle() now
+    }
+
+    // Helper method to output a cell border flow object
+    private void cellBorder(ConstPtr<InheritedC>? ic, Action setter, ProcessContext context)
+    {
+        if (ic == null || ic.isNull())
+            return;
+        Interpreter interp = context.vm().interp;
+        var dep = new System.Collections.Generic.List<nuint>();
+        ELObj? obj = context.currentStyleStack().actual(ic, interp, dep);
+        StyleObj? style = null;
+        if (obj == interp.makeFalse())
+            style = interp.borderFalseStyle();
+        else if (obj == interp.makeTrue())
+            style = interp.borderTrueStyle();
+        else
+        {
+            SosofoObj? sosofo = obj?.asSosofo();
+            if (sosofo == null || !sosofo.tableBorderStyle(out style))
+                style = null;
+        }
+        FOTBuilder fotb = context.currentFOTBuilder();
+        if (style != null)
+            context.currentStyleStack().push(style, context.vm(), fotb);
+        setter();
+        if (style != null)
+            context.currentStyleStack().pop();
     }
 
     public override bool hasNonInheritedC(Identifier? ident)

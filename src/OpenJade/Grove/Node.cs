@@ -1679,6 +1679,13 @@ public class NodeListPtr
         return list.rest(ref ptr);
     }
 
+    public AccessResult chunkRest(ref NodeListPtr ptr)
+    {
+        if (list == null)
+            return AccessResult.accessNull;
+        return list.chunkRest(ref ptr);
+    }
+
     private void addRef() { if (list != null) list.addRef(); }
     private void release() { if (list != null) list.release(); }
 }

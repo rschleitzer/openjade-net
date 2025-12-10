@@ -865,12 +865,25 @@ public class ProcessContextImpl : ProcessContext
         if (tableStack_.Count > 0)
         {
             Table table = tableStack_[tableStack_.Count - 1];
-            // Decrement covered counts for each column
+            // Fill in blank cells (including a dummy cell at the end)
             var covered = table.covered;
-            for (int i = 0; i < (int)table.nColumns && i < covered.Count; i++)
+            for (int i = 0; i <= (int)table.nColumns; i++)
             {
-                if (covered[i] > 0)
-                    covered[i] -= 1;
+                if (i >= covered.Count || covered[i] == 0)
+                {
+                    table.currentColumn = (uint)i;
+                    SosofoObj content = new EmptySosofoObj();
+                    // The last cell (i == nColumns) is a dummy missing cell
+                    TableCellFlowObj cell = new TableCellFlowObj(i >= (int)table.nColumns);
+                    cell.setContent(content);
+                    cell.process(this);
+                }
+                // Decrement covered counts (cell.process() will cover it)
+                if (i < (int)table.nColumns && i < covered.Count)
+                {
+                    if (covered[i] > 0)
+                        covered[i] -= 1;
+                }
             }
             table.inTableRow = false;
         }

@@ -2530,7 +2530,36 @@ public class SchemeParser : Messenger
                         currentToken_.operatorPlusAssign((Char)c);
                         break;
                     default:
-                        currentToken_.operatorPlusAssign((Char)c);
+                        // C++ implementation: upstream/openjade/style/SchemeParser.cxx:792
+                        // Handle named character escapes like \em-dash;
+                        {
+                            StringC name = new StringC();
+                            name.operatorPlusAssign((Char)c);
+                            // Collect characters until ';' or invalid character
+                            while (true)
+                            {
+                                Xchar nc = getChar();
+                                if (nc < 0)
+                                    break;
+                                if (nc == ';')
+                                    break;
+                                // Check if it's a valid name character (letters, digits, hyphen)
+                                if ((nc >= 'a' && nc <= 'z') || (nc >= 'A' && nc <= 'Z') ||
+                                    (nc >= '0' && nc <= '9') || nc == '-')
+                                    name.operatorPlusAssign((Char)nc);
+                                else
+                                {
+                                    // Not a name character - put it back and treat as literal
+                                    ungetChar(nc);
+                                    break;
+                                }
+                            }
+                            Char ch;
+                            if (interp_.convertCharName(name, out ch))
+                                currentToken_.operatorPlusAssign(ch);
+                            else
+                                message(InterpreterMessages.unknownCharName, name.ToString());
+                        }
                         break;
                 }
             }

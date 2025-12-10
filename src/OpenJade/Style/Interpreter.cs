@@ -113,6 +113,51 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("break-before-priority", Identifier.SyntacticKey.keyBreakBeforePriority);
         installSyntacticKey("break-after-priority", Identifier.SyntacticKey.keyBreakAfterPriority);
         installSyntacticKey("coalesce-id", Identifier.SyntacticKey.keyCoalesceId);
+        // External graphic and box characteristics
+        installSyntacticKey("display?", Identifier.SyntacticKey.keyIsDisplay);
+        installSyntacticKey("scale", Identifier.SyntacticKey.keyScale);
+        installSyntacticKey("max-width", Identifier.SyntacticKey.keyMaxWidth);
+        installSyntacticKey("max-height", Identifier.SyntacticKey.keyMaxHeight);
+        installSyntacticKey("entity-system-id", Identifier.SyntacticKey.keyEntitySystemId);
+        installSyntacticKey("notation-system-id", Identifier.SyntacticKey.keyNotationSystemId);
+        installSyntacticKey("position-point-x", Identifier.SyntacticKey.keyPositionPointX);
+        installSyntacticKey("position-point-y", Identifier.SyntacticKey.keyPositionPointY);
+        installSyntacticKey("escapement-direction", Identifier.SyntacticKey.keyEscapementDirection);
+        // Character flow object characteristics
+        installSyntacticKey("char", Identifier.SyntacticKey.keyChar);
+        installSyntacticKey("glyph-id", Identifier.SyntacticKey.keyGlyphId);
+        installSyntacticKey("space?", Identifier.SyntacticKey.keyIsSpace);
+        installSyntacticKey("record-end?", Identifier.SyntacticKey.keyIsRecordEnd);
+        installSyntacticKey("input-tab?", Identifier.SyntacticKey.keyIsInputTab);
+        installSyntacticKey("input-whitespace?", Identifier.SyntacticKey.keyIsInputWhitespace);
+        installSyntacticKey("punct?", Identifier.SyntacticKey.keyIsPunct);
+        installSyntacticKey("drop-after-line-break?", Identifier.SyntacticKey.keyIsDropAfterLineBreak);
+        installSyntacticKey("drop-unless-before-line-break?", Identifier.SyntacticKey.keyIsDropUnlessBeforeLineBreak);
+        installSyntacticKey("math-class", Identifier.SyntacticKey.keyMathClass);
+        installSyntacticKey("math-font-posture", Identifier.SyntacticKey.keyMathFontPosture);
+        installSyntacticKey("script", Identifier.SyntacticKey.keyScript);
+        installSyntacticKey("stretch-factor", Identifier.SyntacticKey.keyStretchFactor);
+        // Rule characteristics
+        installSyntacticKey("orientation", Identifier.SyntacticKey.keyOrientation);
+        installSyntacticKey("length", Identifier.SyntacticKey.keyLength);
+        // Score characteristics
+        installSyntacticKey("type", Identifier.SyntacticKey.keyType);
+        // Table characteristics
+        installSyntacticKey("before-row-border", Identifier.SyntacticKey.keyBeforeRowBorder);
+        installSyntacticKey("after-row-border", Identifier.SyntacticKey.keyAfterRowBorder);
+        installSyntacticKey("before-column-border", Identifier.SyntacticKey.keyBeforeColumnBorder);
+        installSyntacticKey("after-column-border", Identifier.SyntacticKey.keyAfterColumnBorder);
+        installSyntacticKey("column-number", Identifier.SyntacticKey.keyColumnNumber);
+        installSyntacticKey("row-number", Identifier.SyntacticKey.keyRowNumber);
+        installSyntacticKey("n-columns-spanned", Identifier.SyntacticKey.keyNColumnsSpanned);
+        installSyntacticKey("n-rows-spanned", Identifier.SyntacticKey.keyNRowsSpanned);
+        installSyntacticKey("width", Identifier.SyntacticKey.keyWidth);
+        installSyntacticKey("starts-row?", Identifier.SyntacticKey.keyIsStartsRow);
+        installSyntacticKey("ends-row?", Identifier.SyntacticKey.keyIsEndsRow);
+        installSyntacticKey("table-width", Identifier.SyntacticKey.keyTableWidth);
+        // Multi-mode characteristics
+        installSyntacticKey("multi-modes", Identifier.SyntacticKey.keyMultiModes);
+        installSyntacticKey("data", Identifier.SyntacticKey.keyData);
 
         // Install built-in units
         installUnits();
@@ -128,6 +173,10 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
 
         // Install primitive procedures
         installPrimitives();
+
+        // Install character name tables (non-strict mode)
+        installCharNames();
+        installSdata();
 
         // Install builtins from builtins.dsl
         installBuiltins();
@@ -245,6 +294,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("attributes", new AttributesPrimitiveObj());
         installPrimitive("first-sibling?", new IsFirstSiblingPrimitiveObj());
         installPrimitive("last-sibling?", new IsLastSiblingPrimitiveObj());
+        installPrimitive("absolute-first-sibling?", new IsAbsoluteFirstSiblingPrimitiveObj());
+        installPrimitive("absolute-last-sibling?", new IsAbsoluteLastSiblingPrimitiveObj());
 
         // Note: node-list-some?, node-list-every?, node-list-filter, node-list-union-map
         // are defined in builtins.dsl (not as primitives), used by the special query syntax:
@@ -475,6 +526,22 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             (FOTBuilder fotb, long size) => fotb.setCellBeforeColumnMargin(size), 0));
         installInheritedC("cell-after-column-margin", new GenericLengthInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long size) => fotb.setCellAfterColumnMargin(size), 0));
+        // Table/cell border characteristics (IgnoredC - just store value, don't set FOTBuilder)
+        var tableBorderIC = new BorderC(null, nInheritedC_++, makeFalse(), this);
+        installInheritedC("table-border", tableBorderIC);
+        tableBorderC_ = new ConstPtr<InheritedC>(tableBorderIC);
+        var cellBeforeRowBorderIC = new BorderC(null, nInheritedC_++, makeFalse(), this);
+        installInheritedC("cell-before-row-border", cellBeforeRowBorderIC);
+        cellBeforeRowBorderC_ = new ConstPtr<InheritedC>(cellBeforeRowBorderIC);
+        var cellAfterRowBorderIC = new BorderC(null, nInheritedC_++, makeFalse(), this);
+        installInheritedC("cell-after-row-border", cellAfterRowBorderIC);
+        cellAfterRowBorderC_ = new ConstPtr<InheritedC>(cellAfterRowBorderIC);
+        var cellBeforeColumnBorderIC = new BorderC(null, nInheritedC_++, makeFalse(), this);
+        installInheritedC("cell-before-column-border", cellBeforeColumnBorderIC);
+        cellBeforeColumnBorderC_ = new ConstPtr<InheritedC>(cellBeforeColumnBorderIC);
+        var cellAfterColumnBorderIC = new BorderC(null, nInheritedC_++, makeFalse(), this);
+        installInheritedC("cell-after-column-border", cellAfterColumnBorderIC);
+        cellAfterColumnBorderC_ = new ConstPtr<InheritedC>(cellAfterColumnBorderIC);
         // Length specs
         installInheritedC("line-sep", new GenericLengthInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long size) => fotb.setLineSep(size), unitsPerInch_ / 72));
@@ -1065,6 +1132,196 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         // FIXME: set lexical category for character
     }
 
+    // C++ implementation: upstream/openjade/style/Interpreter.cxx:627
+    // Converts a character name to its Unicode code point
+    public bool convertCharName(StringC str, out Char c)
+    {
+        c = 0;
+        string key = str.ToString();
+        if (namedCharTable_.TryGetValue(key, out CharPart cp))
+        {
+            c = (Char)cp.c;
+            return true;
+        }
+        return convertUnicodeCharName(str, out c);
+    }
+
+    // C++ implementation: upstream/openjade/style/Interpreter.cxx:635
+    // Parses Unicode character names like U-2014
+    private bool convertUnicodeCharName(StringC str, out Char c)
+    {
+        c = 0;
+        if (str.size() != 6 || str[0] != 'U' || str[1] != '-')
+            return false;
+        Char value = 0;
+        for (int i = 2; i < 6; i++)
+        {
+            value <<= 4;
+            Char ch = str[(nuint)i];
+            if (ch >= '0' && ch <= '9')
+                value |= (Char)(ch - '0');
+            else if (ch >= 'A' && ch <= 'F')
+                value |= (Char)(ch - 'A' + 10);
+            else if (ch >= 'a' && ch <= 'f')
+                value |= (Char)(ch - 'a' + 10);
+            else
+                return false;
+        }
+        c = value;
+        return true;
+    }
+
+    // C++ implementation: upstream/openjade/style/Interpreter.cxx:428
+    // Install standard character names (from charNames.h)
+    private void installCharNames()
+    {
+        // Character names from upstream/openjade/style/charNames.h
+        var charNames = new (Char code, string name)[]
+        {
+            (0x000a, "line-feed"),
+            (0x000d, "carriage-return"),
+            (0x0020, "space"),
+            (0x0021, "exclamation-mark"),
+            (0x0022, "quotation-mark"),
+            (0x0023, "number-sign"),
+            (0x0024, "dollar-sign"),
+            (0x0025, "percent-sign"),
+            (0x0026, "ampersand"),
+            (0x0027, "apostrophe"),
+            (0x0028, "left-parenthesis"),
+            (0x0029, "right-parenthesis"),
+            (0x002a, "asterisk"),
+            (0x002b, "plus-sign"),
+            (0x002c, "comma"),
+            (0x002d, "hyphen-minus"),
+            (0x002e, "full-stop"),
+            (0x002f, "solidus"),
+            (0x0030, "digit-zero"),
+            (0x0031, "digit-one"),
+            (0x0032, "digit-two"),
+            (0x0033, "digit-three"),
+            (0x0034, "digit-four"),
+            (0x0035, "digit-five"),
+            (0x0036, "digit-six"),
+            (0x0037, "digit-seven"),
+            (0x0038, "digit-eight"),
+            (0x0039, "digit-nine"),
+            (0x003a, "colon"),
+            (0x003b, "semicolon"),
+            (0x003c, "less-than-sign"),
+            (0x003d, "equals-sign"),
+            (0x003e, "greater-than-sign"),
+            (0x003f, "question-mark"),
+            (0x0040, "commercial-at"),
+            (0x005b, "left-square-bracket"),
+            (0x005c, "reverse-solidus"),
+            (0x005d, "right-square-bracket"),
+            (0x005e, "circumflex-accent"),
+            (0x005f, "low-line"),
+            (0x0060, "grave-accent"),
+            (0x007b, "left-curly-bracket"),
+            (0x007c, "vertical-line"),
+            (0x007d, "right-curly-bracket"),
+            (0x007e, "tilde"),
+            (0x00a0, "no-break-space"),
+            (0x00a9, "copyright-sign"),
+            (0x00ab, "left-pointing-double-angle-quotation-mark"),
+            (0x00ad, "soft-hyphen"),
+            (0x00ae, "registered-sign"),
+            (0x00bb, "right-pointing-double-angle-quotation-mark"),
+            (0x00d7, "multiplication-sign"),
+            (0x00f7, "division-sign"),
+            // Important punctuation
+            (0x2013, "en-dash"),
+            (0x2014, "em-dash"),
+            (0x2015, "horizontal-bar"),
+            (0x2018, "left-single-quotation-mark"),
+            (0x2019, "right-single-quotation-mark"),
+            (0x201c, "left-double-quotation-mark"),
+            (0x201d, "right-double-quotation-mark"),
+            (0x2020, "dagger"),
+            (0x2021, "double-dagger"),
+            (0x2022, "bullet"),
+            (0x2026, "horizontal-ellipsis"),
+            (0x2032, "prime"),
+            (0x2033, "double-prime"),
+            (0x2039, "single-left-pointing-angle-quotation-mark"),
+            (0x203a, "single-right-pointing-angle-quotation-mark"),
+            (0x2122, "trade-mark-sign"),
+            // Mathematical operators
+            (0x2212, "minus-sign"),
+            (0x221e, "infinity"),
+            (0x2260, "not-equal-to"),
+            (0x2264, "less-than-or-equal-to"),
+            (0x2265, "greater-than-or-equal-to"),
+            // Arrows
+            (0x2190, "leftwards-arrow"),
+            (0x2191, "upwards-arrow"),
+            (0x2192, "rightwards-arrow"),
+            (0x2193, "downwards-arrow"),
+            (0x2194, "left-right-arrow"),
+            // Box drawing (commonly used)
+            (0x25a0, "black-square"),
+            (0x25a1, "white-square"),
+            (0x25cf, "black-circle"),
+            (0x25cb, "white-circle"),
+            // Dingbats - check marks and ballot boxes
+            (0x2713, "check-mark"),
+            (0x2714, "heavy-check-mark"),
+            (0x2717, "ballot-x"),
+            (0x2718, "heavy-ballot-x"),
+            (0x2610, "ballot-box"),
+            (0x2611, "ballot-box-with-check"),
+            (0x2612, "ballot-box-with-x"),
+            // Dingbats - negative circled sans-serif digits
+            (0x278a, "dingbat-negative-circled-sans-serif-digit-one"),
+            (0x278b, "dingbat-negative-circled-sans-serif-digit-two"),
+            (0x278c, "dingbat-negative-circled-sans-serif-digit-three"),
+            (0x278d, "dingbat-negative-circled-sans-serif-digit-four"),
+            (0x278e, "dingbat-negative-circled-sans-serif-digit-five"),
+            (0x278f, "dingbat-negative-circled-sans-serif-digit-six"),
+            (0x2790, "dingbat-negative-circled-sans-serif-digit-seven"),
+            (0x2791, "dingbat-negative-circled-sans-serif-digit-eight"),
+            (0x2792, "dingbat-negative-circled-sans-serif-digit-nine"),
+        };
+
+        foreach (var (code, name) in charNames)
+        {
+            namedCharTable_[name] = new CharPart { c = (int)code, defPart = uint.MaxValue };
+        }
+    }
+
+    // C++ implementation: upstream/openjade/style/Interpreter.cxx:445
+    // Install SDATA entity mappings - uses the existing sdataEntityNameTable_ declared later
+    private void installSdata()
+    {
+        // SDATA entity mappings from upstream/openjade/style/sdata.h
+        var sdataEntities = new (Char code, string name)[]
+        {
+            (0x2014, "mdash"),  // em dash
+            (0x2013, "ndash"),  // en dash
+            (0x2018, "lsquo"),  // left single quote
+            (0x2019, "rsquo"),  // right single quote
+            (0x201c, "ldquo"),  // left double quote
+            (0x201d, "rdquo"),  // right double quote
+            (0x2026, "hellip"), // horizontal ellipsis
+            (0x00a0, "nbsp"),   // non-breaking space
+            (0x00a9, "copy"),   // copyright
+            (0x00ae, "reg"),    // registered
+            (0x2122, "trade"),  // trademark
+            (0x0027, "apos"),   // apostrophe
+            (0x0022, "quot"),   // quotation mark
+            (0x0026, "amp"),    // ampersand
+            (0x003c, "lt"),     // less than
+            (0x003e, "gt"),     // greater than
+        };
+
+        foreach (var (code, name) in sdataEntities)
+        {
+            sdataEntityNameTable_[name] = code;
+        }
+    }
+
     // Create a StringC from string
     public StringC makeStringC(string s)
     {
@@ -1621,13 +1878,28 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     }
 
     // String conversion
+    // Accepts #f (false) as empty string for optional string characteristics
     public bool convertStringC(ELObj obj, Identifier? ident, Location loc, out StringC result)
     {
+        // Accept #f as empty string (common for optional characteristics like notation-system-id)
+        if (obj == makeFalse())
+        {
+            result = new StringC();
+            return true;
+        }
         Char[]? s;
         nuint n;
-        if (obj.stringData(out s, out n) && s != null)
+        if (obj.stringData(out s, out n))
         {
-            result = new StringC(s, n);
+            // s can be null for empty strings, which is valid
+            result = (s != null) ? new StringC(s, n) : new StringC();
+            return true;
+        }
+        // Try to convert to string (handles SymbolObj that can be converted)
+        StringObj? strObj = obj.convertToString();
+        if (strObj != null && strObj.stringData(out s, out n))
+        {
+            result = (s != null) ? new StringC(s, n) : new StringC();
             return true;
         }
         result = new StringC();
@@ -1971,6 +2243,7 @@ public enum InterpreterMessages
     unexpectedToken,
     unterminatedString,
     invalidCharName,
+    unknownCharName,
     invalidCharNumber,
     invalidNumber,
     invalidUnquoteSplicing,

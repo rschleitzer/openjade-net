@@ -672,6 +672,7 @@ public class ProcessNodeListSosofoObj : SosofoObj
     {
         NodeListObj nl = nodeList_;
         Interpreter interp = context.vm().interp;
+
         for (;;)
         {
             NodePtr? node = nl.nodeListFirst(context.vm(), interp);

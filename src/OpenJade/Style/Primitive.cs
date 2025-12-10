@@ -3315,40 +3315,46 @@ public class SelectElementsNodeListObj : NodeListObj
     }
 
     // C++ implementation: upstream/openjade/style/primitive.cxx:5625
-    // Note: The C++ version modifies nodeList_ as a side effect to advance past non-matching nodes
+    // IMPORTANT: nodeListFirst must be idempotent - calling it multiple times must return
+    // the same result. We use a LOCAL variable to iterate, never modifying nodeList_.
+    // This is critical because sosofos containing node lists may be processed multiple times
+    // (e.g., for different page types in simple-page-sequence headers).
     public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
     {
+        NodeListObj nl = nodeList_;  // Start from original, never modify nodeList_
         for (;;)
         {
-            NodePtr? node = nodeList_.nodeListFirst(ctx, interp);
+            NodePtr? node = nl.nodeListFirst(ctx, interp);
             if (node == null || !node)
                 return null;
             if (matchesGi(node))
                 return node;
-            // Advance nodeList_ to skip non-matching node (side effect like C++ version)
+            // Advance LOCAL nl to skip non-matching node
             bool chunk = false;
-            nodeList_ = nodeList_.nodeListChunkRest(ctx, interp, ref chunk);
+            nl = nl.nodeListChunkRest(ctx, interp, ref chunk);
         }
     }
 
     // C++ implementation: upstream/openjade/style/primitive.cxx:5641
     public override NodeListObj? nodeListRest(EvalContext ctx, Interpreter interp)
     {
-        // First, advance nodeList_ to point to the first matching node (same as nodeListFirst)
+        // Use local variable to iterate, don't modify nodeList_
+        NodeListObj nl = nodeList_;
+        // First, advance to the first matching node
         for (;;)
         {
-            NodePtr? node = nodeList_.nodeListFirst(ctx, interp);
+            NodePtr? node = nl.nodeListFirst(ctx, interp);
             if (node == null || !node)
                 break;
             if (matchesGi(node))
                 break;
-            // Advance nodeList_ to skip non-matching node
+            // Advance LOCAL nl to skip non-matching node
             bool chunk = false;
-            nodeList_ = nodeList_.nodeListChunkRest(ctx, interp, ref chunk);
+            nl = nl.nodeListChunkRest(ctx, interp, ref chunk);
         }
         // Now get the rest after the current (matching) node
         bool restChunk = false;
-        NodeListObj rest = nodeList_.nodeListChunkRest(ctx, interp, ref restChunk);
+        NodeListObj rest = nl.nodeListChunkRest(ctx, interp, ref restChunk);
         return new SelectElementsNodeListObj(rest, gis_);
     }
 
@@ -3642,6 +3648,84 @@ public class IsLastSiblingPrimitiveObj : PrimitiveObj
     }
 }
 
+// Absolute-first-sibling? primitive
+// Returns #t if there are no element siblings before this node
+// C++ implementation: upstream/openjade/style/primitive.cxx:3119
+public class IsAbsoluteFirstSiblingPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public IsAbsoluteFirstSiblingPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 0, args[0]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+
+        // Get first sibling
+        NodePtr p = new NodePtr();
+        if (node.node!.firstSibling(ref p) != AccessResult.accessOK)
+            return interp.makeFalse();
+
+        // Iterate through siblings until we reach the current node
+        // Use Equals to compare node identity (not object reference)
+        while (!p.node!.Equals(node.node!))
+        {
+            GroveString tem = new GroveString();
+            // If any sibling before us has a GI (is an element), return false
+            if (p.getGi(ref tem) == AccessResult.accessOK)
+                return interp.makeFalse();
+            if (p.assignNextChunkSibling() != AccessResult.accessOK)
+                break; // Should not happen
+        }
+        return interp.makeTrue();
+    }
+}
+
+// Absolute-last-sibling? primitive
+// Returns #t if there are no element siblings after this node
+// C++ implementation: upstream/openjade/style/primitive.cxx:3159
+public class IsAbsoluteLastSiblingPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(0, 1, false);
+    public IsAbsoluteLastSiblingPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        NodePtr? node = null;
+        if (nArgs > 0)
+        {
+            if (!args[0]!.optSingletonNodeList(ctx, interp, ref node) || node == null || !node)
+                return argError(interp, loc, InterpreterMessages.notASingletonNode, 0, args[0]);
+        }
+        else
+        {
+            node = ctx.currentNode;
+            if (node == null || !node)
+                return noCurrentNodeError(interp, loc);
+        }
+        // Iterate through siblings after the current node
+        NodePtr p = new NodePtr(node);
+        while (p.assignNextChunkSibling() == AccessResult.accessOK)
+        {
+            GroveString tem = new GroveString();
+            // If any sibling after us has a GI (is an element), return false
+            if (p.getGi(ref tem) == AccessResult.accessOK)
+                return interp.makeFalse();
+        }
+        return interp.makeTrue();
+    }
+}
+
 // ChildNumber primitive
 public class ChildNumberPrimitiveObj : PrimitiveObj
 {
@@ -3693,10 +3777,51 @@ public class ChildNumberPrimitiveObj : PrimitiveObj
 }
 
 // ElementNumber primitive - counts elements with same GI before current node in document order
+// C++ implementation: upstream/openjade/style/NumberCache.cxx:94
 public class ElementNumberPrimitiveObj : PrimitiveObj
 {
     private static readonly Signature sig = new Signature(0, 1, false);
     public ElementNumberPrimitiveObj() : base(sig) { }
+
+    // Helper to compare GroveStrings accounting for offset
+    private static bool groveStringEquals(GroveString a, GroveString b)
+    {
+        if (a.size() != b.size())
+            return false;
+        if (a.data() == null || b.data() == null)
+            return a.data() == b.data();
+        for (nuint i = 0; i < a.size(); i++)
+        {
+            if (a.data()![a.offset() + i] != b.data()![b.offset() + i])
+                return false;
+        }
+        return true;
+    }
+
+    // Document-order traversal that doesn't rely on chunk linkage.
+    // Traverses the element tree: first children, then siblings, then up to parent.
+    private static bool advanceDocumentOrder(ref NodePtr ptr)
+    {
+        // Try first child
+        NodePtr child = new NodePtr();
+        if (ptr.assignFirstChild() == AccessResult.accessOK)
+            return true;
+        // No child, try next sibling
+        while (true)
+        {
+            NodePtr next = new NodePtr();
+            if (ptr.node!.nextSibling(ref next) == AccessResult.accessOK)
+            {
+                ptr.assign(next.node);
+                return true;
+            }
+            // No sibling, go up to parent
+            NodePtr parent = new NodePtr();
+            if (ptr.getParent(ref parent) != AccessResult.accessOK)
+                return false; // Reached root
+            ptr.assign(parent.node);
+        }
+    }
 
     public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
     {
@@ -3716,6 +3841,7 @@ public class ElementNumberPrimitiveObj : PrimitiveObj
         GroveString gi = new GroveString();
         if (node.getGi(ref gi) != AccessResult.accessOK)
             return interp.makeFalse();
+
         // Get the document element to start traversal
         NodePtr start = new NodePtr();
         if (node.getGroveRoot(ref start) != AccessResult.accessOK)
@@ -3724,28 +3850,20 @@ public class ElementNumberPrimitiveObj : PrimitiveObj
             return interp.makeFalse();
         // Traverse document in order, counting elements with same GI
         ulong count = 0;
+
         while (start)
         {
             GroveString temGi = new GroveString();
             if (start.getGi(ref temGi) == AccessResult.accessOK)
             {
-                if (temGi.size() == gi.size())
-                {
-                    bool same = true;
-                    for (nuint i = 0; i < gi.size() && same; i++)
-                    {
-                        if (temGi.data()![i] != gi.data()![i])
-                            same = false;
-                    }
-                    if (same)
-                        count++;
-                }
+                if (groveStringEquals(temGi, gi))
+                    count++;
             }
             // Check if we've reached the target node
             if (start.node!.Equals(node.node!))
                 break;
-            // Advance to next element in document order
-            if (start.assignNextChunkAfter() != AccessResult.accessOK)
+            // Advance to next element in document order (element tree traversal)
+            if (!advanceDocumentOrder(ref start))
                 break;
         }
         return interp.makeInteger((long)count);

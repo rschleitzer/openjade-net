@@ -386,9 +386,11 @@ public class FOTBuilder
 
     public class ExternalGraphicNIC : DisplayNIC
     {
-        public bool isDisplay = true;
-        public Symbol scaleType = Symbol.symbolFalse;
-        public double[] scale = new double[2];
+        // C++ default: isDisplay(0), scaleType(symbolMaxUniform)
+        // upstream/openjade/style/FOTBuilder.cxx:1159
+        public bool isDisplay = false;
+        public Symbol scaleType = Symbol.symbolMaxUniform;
+        public double[] scale = new double[2] { 1.0, 1.0 };
         public StringC entitySystemId = new StringC();
         public StringC notationSystemId = new StringC();
         public bool hasMaxWidth = false;

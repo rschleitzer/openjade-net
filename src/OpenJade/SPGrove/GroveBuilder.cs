@@ -1737,20 +1737,39 @@ public class DataNode : ChunkNode
         return secondHash((uint)chunk_.GetHashCode() + (uint)index_);
     }
 
+    // C++ implementation: upstream/openjade/spgrove/GroveBuilder.cxx:2110
     public static void add(GroveImpl grove, DataEvent @event)
     {
         nuint dataLen = @event.dataLength();
         if (dataLen > 0)
         {
-            grove.setLocOrigin(@event.location().origin());
-            DataChunk chunk = new DataChunk();
-            chunk.size = dataLen;
-            chunk.locIndex = @event.location().index();
-            Char[] data = new Char[dataLen];
-            if (@event.data() != null)
-                Array.Copy(@event.data()!, (int)@event.dataOffset(), data, 0, (int)dataLen);
-            chunk.setData(data);
-            grove.appendSibling(chunk);
+            DataChunk? chunk = grove.pendingData();
+            // Try to extend existing pending chunk if data is contiguous
+            if (chunk != null
+                && @event.location().origin().pointer() == grove.currentLocOrigin()
+                && @event.location().index() == chunk.locIndex + chunk.size)
+            {
+                // Extend existing chunk - copy data to end, update size
+                Char[] oldData = chunk.data() ?? Array.Empty<Char>();
+                Char[] newData = new Char[chunk.size + dataLen];
+                Array.Copy(oldData, 0, newData, 0, (int)chunk.size);
+                if (@event.data() != null)
+                    Array.Copy(@event.data()!, (int)@event.dataOffset(), newData, (int)chunk.size, (int)dataLen);
+                chunk.setData(newData);
+                chunk.size += dataLen;
+            }
+            else
+            {
+                grove.setLocOrigin(@event.location().origin());
+                chunk = new DataChunk();
+                chunk.size = dataLen;
+                chunk.locIndex = @event.location().index();
+                Char[] data = new Char[dataLen];
+                if (@event.data() != null)
+                    Array.Copy(@event.data()!, (int)@event.dataOffset(), data, 0, (int)dataLen);
+                chunk.setData(data);
+                grove.appendSibling(chunk);
+            }
         }
     }
 
@@ -5680,12 +5699,16 @@ public class SiblingNodeList : BaseNodeList
 
     public SiblingNodeList(NodePtr first)
     {
-        first_ = first;
+        // Deep copy NodePtr to match C++ copy semantics
+        // In C++, first_(first) invokes the copy constructor
+        first_ = new NodePtr(first);
     }
 
     public override AccessResult first(ref NodePtr ptr)
     {
-        ptr = first_;
+        // In C++, ptr = first_ uses copy assignment operator, creating a copy
+        // In C#, we need to explicitly copy to avoid sharing the same NodePtr object
+        ptr.assign(first_);
         return AccessResult.accessOK;
     }
 
@@ -5747,7 +5770,8 @@ public class SiblingNodeList : BaseNodeList
     {
         if (i == 0)
         {
-            ptr = first_;
+            // In C++, ptr = first_ uses copy assignment operator
+            ptr.assign(first_);
             return AccessResult.accessOK;
         }
         return first_.node!.followSiblingRef(i - 1, ref ptr);

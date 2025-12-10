@@ -542,7 +542,9 @@ public class SgmlFOTBuilder : FOTBuilder
         for (int i = 0; i < pendingElements_.Count; i++)
             if (pendingElements_[i].Equals(node))
                 return;
-        pendingElements_.Add(node);
+        // C++ IList<NodePtr>::push_back copies the NodePtr by value
+        // In C#, we must explicitly copy to avoid the original being modified later
+        pendingElements_.Add(new NodePtr(node));
         pendingElementLevels_.Add(nodeLevel_);
     }
 
@@ -1232,22 +1234,22 @@ public class SgmlFOTBuilder : FOTBuilder
     // Table methods
     public override void tableBeforeRowBorder()
     {
-        simpleFlowObj("table-before-row-border");
+        simpleFlowObj("table.before-row-border");
     }
 
     public override void tableAfterRowBorder()
     {
-        simpleFlowObj("table-after-row-border");
+        simpleFlowObj("table.after-row-border");
     }
 
     public override void tableBeforeColumnBorder()
     {
-        simpleFlowObj("table-before-column-border");
+        simpleFlowObj("table.before-column-border");
     }
 
     public override void tableAfterColumnBorder()
     {
-        simpleFlowObj("table-after-column-border");
+        simpleFlowObj("table.after-column-border");
     }
 
     public override void startTablePartSerial(TablePartNIC nic)
@@ -1287,22 +1289,22 @@ public class SgmlFOTBuilder : FOTBuilder
 
     public override void tableCellBeforeRowBorder()
     {
-        simpleFlowObj("cell-before-row-border");
+        simpleFlowObj("table-cell.before-row-border");
     }
 
     public override void tableCellAfterRowBorder()
     {
-        simpleFlowObj("cell-after-row-border");
+        simpleFlowObj("table-cell.after-row-border");
     }
 
     public override void tableCellBeforeColumnBorder()
     {
-        simpleFlowObj("cell-before-column-border");
+        simpleFlowObj("table-cell.before-column-border");
     }
 
     public override void tableCellAfterColumnBorder()
     {
-        simpleFlowObj("cell-after-column-border");
+        simpleFlowObj("table-cell.after-column-border");
     }
 
     public override void currentNodePageNumber(NodePtr node)

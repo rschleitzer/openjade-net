@@ -1566,50 +1566,25 @@ public class NodeListPtrNodeListObj : NodeListObj
 {
     private static bool debugNodeListPtr = false; // Set to true for debugging
     private NodeListPtr nodeList_;
-    private NodePtr? current_;
-    private bool started_;
 
     public NodeListPtrNodeListObj(NodeListPtr nodeList)
     {
         nodeList_ = nodeList;
-        started_ = false;
     }
 
+    // IMPORTANT: nodeListFirst must be idempotent - always fetch from nodeList_, never cache.
+    // This is critical because node lists may be accessed multiple times when sosofos are
+    // processed for different page types (e.g., simple-page-sequence headers).
     public override NodePtr? nodeListFirst(EvalContext ctx, Interpreter interp)
     {
-        if (!started_)
-        {
-            started_ = true;
-            if (nodeList_ != null)
-            {
-                NodePtr temp = new NodePtr();
-                var result = nodeList_.first(ref temp);
-                if (debugNodeListPtr)
-                    Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: nodeList_.first() returned {result}");
-                if (result != AccessResult.accessOK)
-                    current_ = null;
-                else
-                {
-                    current_ = temp;
-                    if (debugNodeListPtr)
-                    {
-                        GroveString gi = new GroveString();
-                        if (current_.getGi(ref gi) == AccessResult.accessOK)
-                        {
-                            string giStr = "";
-                            for (nuint i = 0; i < gi.size(); i++)
-                                giStr += (char)gi.data()![i];
-                            Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: first node has GI '{giStr}'");
-                        }
-                        else
-                            Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: first node (cannot get GI)");
-                    }
-                }
-            }
-            else if (debugNodeListPtr)
-                Console.Error.WriteLine($"NodeListPtrNodeListObj.nodeListFirst: nodeList_ is null");
-        }
-        return current_;
+        if (nodeList_ == null)
+            return null;
+
+        NodePtr temp = new NodePtr();
+        var result = nodeList_.first(ref temp);
+        if (result != AccessResult.accessOK)
+            return null;
+        return temp;
     }
 
     public override NodeListObj nodeListRest(EvalContext ctx, Interpreter interp)
@@ -1629,6 +1604,27 @@ public class NodeListPtrNodeListObj : NodeListObj
         if (debugNodeListPtr)
             Console.Error.WriteLine("NodeListPtrNodeListObj.nodeListRest: returning empty");
         return new EmptyNodeListObj();
+    }
+
+    // C++ implementation: upstream/openjade/style/ELObj.cxx:1129
+    public override NodeListObj nodeListChunkRest(EvalContext ctx, Interpreter interp, ref bool chunk)
+    {
+        if (nodeList_ == null)
+        {
+            chunk = false;
+            return new EmptyNodeListObj();
+        }
+        NodeListPtr nl = new NodeListPtr();
+        if (nodeList_.chunkRest(ref nl) == AccessResult.accessOK)
+        {
+            chunk = true;
+            return new NodeListPtrNodeListObj(nl);
+        }
+        else
+        {
+            chunk = false;
+            return new EmptyNodeListObj();
+        }
     }
 }
 
