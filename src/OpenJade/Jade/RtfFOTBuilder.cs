@@ -318,12 +318,19 @@ public class RtfFOTBuilder : FOTBuilder
     {
         if (stream_ == null) return;
         os("{\\rtf1\\ansi\\deff0\n");
-        // Font table
-        os("{\\fonttbl");
-        os("{\\f0\\froman Times New Roman;}");
+        // Font table - f0=Times, f1=Helvetica (matching original OpenJade)
+        os("{\\fonttbl{\\f1\\fnil\\fcharset0 Helvetica;}\n");
+        os("{\\f0\\fnil\\fcharset0 Times New Roman;}\n");
         os("}\n");
         // Color table (starts with auto color)
-        os("{\\colortbl;}\n");
+        os("{\\colortbl;}");
+        // Stylesheet definitions
+        os("{\\stylesheet");
+        for (int i = 1; i <= 9; i++)
+            os($"{{\\s{i} Heading {i};}}");
+        os("}\n");
+        // Document settings
+        os("\\deflang1024\\notabind\\facingp\\hyphauto1\\widowctrl\n");
     }
 
     private void os(string s)
