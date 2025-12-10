@@ -1036,6 +1036,7 @@ public class FOTBuilder
     public virtual void setWidowCount(long count) { }
     public virtual void setOrphanCount(long count) { }
     public virtual void setHeadingLevel(long level) { }
+    public virtual void setPageNumberFormat(StringC format) { }
     public virtual void setExpandTabs(long tabs) { }
     public virtual void setHyphenationChar(Char c) { }
     public virtual void setLanguage(Letter2 lang) { }

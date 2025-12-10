@@ -703,6 +703,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         // heading-level (extension characteristic for RTF heading styles)
         installInheritedC("heading-level", new GenericIntegerInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long n) => fotb.setHeadingLevel(n), 0));
+        // page-number-format (extension characteristic)
+        installInheritedC("page-number-format", new GenericStringInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, StringC str) => fotb.setPageNumberFormat(str), new StringC()));
         // #f or strictly positive integer
         installInheritedC("expand-tabs?", new GenericMaybeIntegerInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long n) => fotb.setExpandTabs(n), 8));

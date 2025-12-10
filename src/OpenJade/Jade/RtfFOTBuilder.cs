@@ -36,6 +36,7 @@ public class RtfFOTBuilder : FOTBuilder
     private bool hadSection_;
     private bool hyphenateSuppressed_;
     private int inSimplePageSequence_;
+    private System.Collections.Generic.List<(uint groveIndex, GroveString id)> pendingBookmarks_;
     private BreakType doBreak_;
     private bool keep_;
     private bool hadParInKeep_;
@@ -132,7 +133,7 @@ public class RtfFOTBuilder : FOTBuilder
     public class OutputFormat : CommonFormat
     {
         public int charset = 0;
-        public uint lang = 1033; // US English
+        public uint lang = 1024; // DEFAULT_LANG (neutral)
         public uint langCharsets = 0;
 
         public OutputFormat() { }
@@ -179,7 +180,7 @@ public class RtfFOTBuilder : FOTBuilder
     public class Format : CommonFormat
     {
         public ParaFormat para = new ParaFormat();
-        public bool hyphenate = true;
+        public bool hyphenate = false;
         public int fieldWidth = 0;
         public Symbol fieldAlign = Symbol.symbolStart;
         public Symbol inputWhitespaceTreatment = Symbol.symbolPreserve;
@@ -259,7 +260,7 @@ public class RtfFOTBuilder : FOTBuilder
         public long topMargin = 1440; // 1in
         public long bottomMargin = 1440;
         public bool pageNumberRestart = false;
-        public string pageNumberFormat = "decimal";
+        public string pageNumberFormat = "dec";
         public long nColumns = 1;
         public long columnSep = 720; // 0.5in
         public bool balance = false;
@@ -320,6 +321,7 @@ public class RtfFOTBuilder : FOTBuilder
         displaySize_ = 0;
         hadSection_ = false;
         inSimplePageSequence_ = 0;
+        pendingBookmarks_ = new System.Collections.Generic.List<(uint, GroveString)>();
         doBreak_ = BreakType.breakNone;
         keep_ = false;
         hadParInKeep_ = false;
@@ -420,6 +422,7 @@ public class RtfFOTBuilder : FOTBuilder
 
     public override void characters(Char[] data, nuint size)
     {
+        flushPendingBookmarks();
         syncCharFormat();
         for (nuint i = 0; i < size; i++)
         {
@@ -496,6 +499,9 @@ public class RtfFOTBuilder : FOTBuilder
             outputFormat_.fontFamily = specFormat_.fontFamily;
             changed = true;
         }
+        // Track hyphenation suppression for paragraph end
+        if (!specFormat_.hyphenate)
+            hyphenateSuppressed_ = true;
         if (changed)
             os(" ");
     }
@@ -598,6 +604,18 @@ public class RtfFOTBuilder : FOTBuilder
 
     private void newPar(bool allowSpaceBefore = true)
     {
+        // Output page/column break BEFORE \pard (from previous display's breakAfter)
+        switch (doBreak_)
+        {
+            case BreakType.breakPage:
+                os("\\page");
+                doBreak_ = BreakType.breakNone;
+                break;
+            case BreakType.breakColumn:
+                os("\\column");
+                doBreak_ = BreakType.breakNone;
+                break;
+        }
         os("\\pard");
         // Space before from accumulated space
         if (accumSpace_ != 0)
@@ -634,12 +652,11 @@ public class RtfFOTBuilder : FOTBuilder
             os("\\fi");
             os(paraFormat_.firstLineIndent);
         }
-        switch (paraFormat_.quadding)
+        // Only output quadding if not default (left)
+        if (paraFormat_.quadding != 'l')
         {
-            case 'l': os("\\ql"); break;
-            case 'c': os("\\qc"); break;
-            case 'r': os("\\qr"); break;
-            case 'j': os("\\qj"); break;
+            os("\\q");
+            os(paraFormat_.quadding.ToString());
         }
         os(" ");
     }
@@ -656,18 +673,6 @@ public class RtfFOTBuilder : FOTBuilder
         // Check if current display has keepWithNext - apply it to THIS paragraph
         if (displayStack_.Count > 0 && displayStack_[displayStack_.Count - 1].keepWithNext)
             keepWithNext_ = true;
-        // Output page/column break before paragraph
-        switch (doBreak_)
-        {
-            case BreakType.breakPage:
-                os("\\page");
-                doBreak_ = BreakType.breakNone;
-                break;
-            case BreakType.breakColumn:
-                os("\\column");
-                doBreak_ = BreakType.breakNone;
-                break;
-        }
         // Output keep-with-next (only if no break pending)
         if (doBreak_ == BreakType.breakNone && keepWithNext_)
         {
@@ -681,6 +686,7 @@ public class RtfFOTBuilder : FOTBuilder
             hyphenateSuppressed_ = false;
         }
         os("\\par");
+        // Note: page/column break is output in newPar() to match C++ order
     }
 
     public override void startDisplayGroup(DisplayGroupNIC nic)
@@ -739,17 +745,8 @@ public class RtfFOTBuilder : FOTBuilder
         os("\\footery");
         os(0);
         os("\\pgn");
-        // Map page number format to RTF control word suffix
-        if (pageFormat_.pageNumberFormat == "lcrm" || pageFormat_.pageNumberFormat == "roman")
-            os("lcrm");
-        else if (pageFormat_.pageNumberFormat == "ucrm")
-            os("ucrm");
-        else if (pageFormat_.pageNumberFormat == "lcalpha")
-            os("lcalpha");
-        else if (pageFormat_.pageNumberFormat == "ucalpha")
-            os("ucalpha");
-        else
-            os("dec");
+        // Output page number format (value set by setPageNumberFormat)
+        os(pageFormat_.pageNumberFormat);
         if (pageFormat_.pageNumberRestart)
             os("\\pgnrestart");
         // Calculate display size for column support
@@ -1020,8 +1017,6 @@ public class RtfFOTBuilder : FOTBuilder
     public override void setHyphenate(bool hyphenate)
     {
         specFormat_.hyphenate = hyphenate;
-        if (!hyphenate)
-            hyphenateSuppressed_ = true;
     }
 
     public override void setHeadingLevel(long level)
@@ -1085,7 +1080,7 @@ public class RtfFOTBuilder : FOTBuilder
             pageFormat_.pageNumberRestart = b;
     }
 
-    public void setPageNumberFormat(StringC str)
+    public override void setPageNumberFormat(StringC str)
     {
         if (inSimplePageSequence_ > 0)
             return;
@@ -1248,23 +1243,72 @@ public class RtfFOTBuilder : FOTBuilder
     // Node tracking
     public override void startNode(NodePtr node, StringC processingMode)
     {
-        // Bookmark support - output bookmark if node has an ID
+        // Bookmark support - store bookmark if node has an ID (output later in flushPendingBookmarks)
         if (processingMode.size() == 0 && node != null)
         {
             GroveString id = new GroveString();
             if (node.getId(ref id) == AccessResult.accessOK && id.size() > 0)
             {
-                os("{\\*\\bkmkstart ");
-                outputBookmarkName(node.groveIndex(), id);
-                os("}{\\*\\bkmkend ");
-                outputBookmarkName(node.groveIndex(), id);
-                os("}");
+                // Store a copy of the id since it may be reused
+                uint[] copyData = new uint[id.size()];
+                for (nuint i = 0; i < id.size(); i++)
+                    copyData[i] = id[i];
+                GroveString idCopy = new GroveString(copyData, id.size());
+                pendingBookmarks_.Add((node.groveIndex(), idCopy));
             }
         }
     }
 
     public override void endNode()
     {
+        // If no content was output for this node, remove its pending bookmark
+        // (simplified version - full C++ implementation tracks node levels)
+    }
+
+    public override void currentNodePageNumber(NodePtr node)
+    {
+        inlinePrepare();
+        syncCharFormat();
+        GroveString id = new GroveString();
+        if (node.getId(ref id) == AccessResult.accessOK)
+        {
+            os("{\\field\\flddirty{\\*\\fldinst PAGEREF ");
+            outputBookmarkName(node.groveIndex(), id);
+            os("}{\\fldrslt 000}}");
+        }
+        else
+        {
+            ulong n = 0;
+            if (node.elementIndex(ref n) == AccessResult.accessOK)
+            {
+                os("{\\field\\flddirty{\\*\\fldinst PAGEREF ");
+                outputBookmarkName(node.groveIndex(), n);
+                os("}{\\fldrslt 000}}");
+            }
+        }
+    }
+
+    private void flushPendingBookmarks()
+    {
+        foreach (var (groveIndex, id) in pendingBookmarks_)
+        {
+            os("{\\*\\bkmkstart ");
+            outputBookmarkName(groveIndex, id);
+            os("}{\\*\\bkmkend ");
+            outputBookmarkName(groveIndex, id);
+            os("}");
+        }
+        pendingBookmarks_.Clear();
+    }
+
+    private void inlinePrepare()
+    {
+        // Simplified version - just make sure we're ready for inline content
+        // Don't output paragraph formatting if already in inline mode
+        if (inlineState_ == InlineState.inlineMiddle ||
+            inlineState_ == InlineState.inlineField)
+            return;
+        inlineState_ = InlineState.inlineMiddle;
     }
 
     private void outputBookmarkName(uint groveIndex, GroveString id)
@@ -1286,6 +1330,18 @@ public class RtfFOTBuilder : FOTBuilder
                 os("_");
             }
         }
+    }
+
+    private void outputBookmarkName(uint groveIndex, ulong elementIndex)
+    {
+        // For element index based bookmarks (when no id is available)
+        os("_");
+        if (groveIndex > 0)
+        {
+            os((int)groveIndex);
+            os("_");
+        }
+        os(elementIndex.ToString());
     }
 
     // Finalize RTF output
