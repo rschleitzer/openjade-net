@@ -702,6 +702,12 @@ public class RtfFOTBuilder : FOTBuilder
             hyphenateSuppressed_ = true;
     }
 
+    // Note: heading-level characteristic not yet implemented in style engine
+    public void setHeadingLevel(long level)
+    {
+        paraFormat_.headingLevel = (level >= 1 && level <= 9) ? (int)level : 0;
+    }
+
     public override void setPageWidth(long width)
     {
         pageFormat_.pageWidth = twips(width);
