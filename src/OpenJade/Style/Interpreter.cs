@@ -700,6 +700,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             (FOTBuilder fotb, long n) => fotb.setWidowCount(n), 2));
         installInheritedC("orphan-count", new GenericIntegerInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long n) => fotb.setOrphanCount(n), 2));
+        // heading-level (extension characteristic for RTF heading styles)
+        installInheritedC("heading-level", new GenericIntegerInheritedC(null, nInheritedC_++,
+            (FOTBuilder fotb, long n) => fotb.setHeadingLevel(n), 0));
         // #f or strictly positive integer
         installInheritedC("expand-tabs?", new GenericMaybeIntegerInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long n) => fotb.setExpandTabs(n), 8));

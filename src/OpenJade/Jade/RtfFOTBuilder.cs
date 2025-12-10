@@ -36,6 +36,9 @@ public class RtfFOTBuilder : FOTBuilder
     private bool hadSection_;
     private bool hyphenateSuppressed_;
     private int inSimplePageSequence_;
+    private BreakType doBreak_;
+    private bool keep_;
+    private bool hadParInKeep_;
 
     // Header/footer line spacing constants (in twips)
     // Use a line-spacing of 12pt for the header and footer
@@ -317,6 +320,9 @@ public class RtfFOTBuilder : FOTBuilder
         displaySize_ = 0;
         hadSection_ = false;
         inSimplePageSequence_ = 0;
+        doBreak_ = BreakType.breakNone;
+        keep_ = false;
+        hadParInKeep_ = false;
         hfPart_ = new string[nHF];
         for (int i = 0; i < nHF; i++)
             hfPart_[i] = "";
@@ -468,6 +474,21 @@ public class RtfFOTBuilder : FOTBuilder
             outputFormat_.fontSize = specFormat_.fontSize;
             changed = true;
         }
+        // Language output
+        if (specFormat_.language != outputFormat_.language ||
+            specFormat_.country != outputFormat_.country)
+        {
+            outputFormat_.language = specFormat_.language;
+            outputFormat_.country = specFormat_.country;
+            uint lang = convertLanguage(specFormat_.language, specFormat_.country);
+            if (lang != outputFormat_.lang)
+            {
+                outputFormat_.lang = lang;
+                os("\\lang");
+                os((int)lang);
+                changed = true;
+            }
+        }
         if (specFormat_.fontFamily != outputFormat_.fontFamily)
         {
             os("\\f");
@@ -482,19 +503,16 @@ public class RtfFOTBuilder : FOTBuilder
     public override void startParagraph(ParagraphNIC nic)
     {
         startDisplay(nic);
-        paraStack_.Add(new ParaFormat(paraFormat_));
-        newPar();
         start();
+        paraStack_.Add(new ParaFormat(paraFormat_));
+        paraFormat_ = new ParaFormat(specFormat_.para);
+        newPar();
     }
 
     public override void endParagraph()
     {
-        if (hyphenateSuppressed_)
-        {
-            os("\\hyphpar0");
-            hyphenateSuppressed_ = false;
-        }
-        os("\\par\n");
+        outputParEnd();
+        os("\n");
         if (paraStack_.Count > 0)
         {
             paraFormat_ = paraStack_[paraStack_.Count - 1];
@@ -510,9 +528,54 @@ public class RtfFOTBuilder : FOTBuilder
         int spaceBefore = twips(nic.spaceBefore.nominal.length);
         if (spaceBefore > accumSpace_)
             accumSpace_ = spaceBefore;
+        // Handle keep-with-previous
+        if (nic.keepWithPrevious)
+            keepWithNext_ = true;
+        // Handle break-before
+        switch (nic.breakBefore)
+        {
+            case Symbol.symbolPage:
+            case Symbol.symbolPageRegion:
+            case Symbol.symbolColumnSet:
+                doBreak_ = BreakType.breakPage;
+                break;
+            case Symbol.symbolColumn:
+                doBreak_ = BreakType.breakColumn;
+                break;
+        }
         DisplayInfo info = new DisplayInfo();
         info.spaceAfter = twips(nic.spaceAfter.nominal.length);
         info.keepWithNext = nic.keepWithNext;
+        // Handle break-after
+        switch (nic.breakAfter)
+        {
+            case Symbol.symbolPage:
+            case Symbol.symbolPageRegion:
+            case Symbol.symbolColumnSet:
+                info.breakAfter = BreakType.breakPage;
+                break;
+            case Symbol.symbolColumn:
+                info.breakAfter = BreakType.breakColumn;
+                break;
+            default:
+                info.breakAfter = BreakType.breakNone;
+                break;
+        }
+        // Handle keep
+        info.saveKeep = keep_;
+        switch (nic.keep)
+        {
+            case Symbol.symbolTrue:
+            case Symbol.symbolPage:
+            case Symbol.symbolColumnSet:
+            case Symbol.symbolColumn:
+                if (!keep_)
+                {
+                    hadParInKeep_ = false;
+                    keep_ = true;
+                }
+                break;
+        }
         displayStack_.Add(info);
     }
 
@@ -521,9 +584,14 @@ public class RtfFOTBuilder : FOTBuilder
         if (displayStack_.Count > 0)
         {
             DisplayInfo info = displayStack_[displayStack_.Count - 1];
+            // Restore break type
+            doBreak_ = info.breakAfter;
+            // Restore keep state
+            keep_ = info.saveKeep;
             // Accumulate space after (take maximum)
             if (info.spaceAfter > accumSpace_)
                 accumSpace_ = info.spaceAfter;
+            // Note: keepWithNext is now handled in outputParEnd, not here
             displayStack_.RemoveAt(displayStack_.Count - 1);
         }
     }
@@ -574,6 +642,45 @@ public class RtfFOTBuilder : FOTBuilder
             case 'j': os("\\qj"); break;
         }
         os(" ");
+    }
+
+    private void outputParEnd()
+    {
+        // Handle keep region - set keepWithNext_ for paragraphs after the first in a kept region
+        if (keep_)
+        {
+            if (hadParInKeep_ || continuePar_)
+                keepWithNext_ = true;
+            hadParInKeep_ = true;
+        }
+        // Check if current display has keepWithNext - apply it to THIS paragraph
+        if (displayStack_.Count > 0 && displayStack_[displayStack_.Count - 1].keepWithNext)
+            keepWithNext_ = true;
+        // Output page/column break before paragraph
+        switch (doBreak_)
+        {
+            case BreakType.breakPage:
+                os("\\page");
+                doBreak_ = BreakType.breakNone;
+                break;
+            case BreakType.breakColumn:
+                os("\\column");
+                doBreak_ = BreakType.breakNone;
+                break;
+        }
+        // Output keep-with-next (only if no break pending)
+        if (doBreak_ == BreakType.breakNone && keepWithNext_)
+        {
+            os("\\keepn");
+        }
+        keepWithNext_ = false;
+        // Output hyphenation suppression
+        if (hyphenateSuppressed_)
+        {
+            os("\\hyphpar0");
+            hyphenateSuppressed_ = false;
+        }
+        os("\\par");
     }
 
     public override void startDisplayGroup(DisplayGroupNIC nic)
@@ -805,6 +912,61 @@ public class RtfFOTBuilder : FOTBuilder
         specFormat_.charBackgroundColor = colorIndex;
     }
 
+    // Convert ISO language/country codes to RTF language code
+    private static uint convertLanguage(uint language, uint country)
+    {
+        const uint DEFAULT_LANG = 1024; // neutral
+        if (language == 0)
+            return DEFAULT_LANG;
+
+        // Helper to create 2-letter code
+        static uint L2(char c1, char c2) => (uint)((c1 << 8) | c2);
+
+        return language switch
+        {
+            var l when l == L2('E', 'N') => country switch
+            {
+                var c when c == L2('U', 'S') => 0x409,  // US English
+                var c when c == L2('G', 'B') => 0x809,  // British English
+                var c when c == L2('A', 'U') => 0xc09,  // Australian English
+                var c when c == L2('C', 'A') => 0x1009, // Canadian English
+                _ => 0x409 // Default to US English
+            },
+            var l when l == L2('D', 'E') => country switch
+            {
+                var c when c == L2('D', 'E') => 0x407,  // German
+                var c when c == L2('C', 'H') => 0x807,  // Swiss German
+                var c when c == L2('A', 'T') => 0xc07,  // Austrian German
+                _ => 0x407
+            },
+            var l when l == L2('F', 'R') => country switch
+            {
+                var c when c == L2('F', 'R') => 0x40c,  // French
+                var c when c == L2('B', 'E') => 0x80c,  // Belgian French
+                var c when c == L2('C', 'A') => 0xc0c,  // Canadian French
+                var c when c == L2('C', 'H') => 0x100c, // Swiss French
+                _ => 0x40c
+            },
+            var l when l == L2('E', 'S') => 0x40a,  // Spanish
+            var l when l == L2('I', 'T') => 0x410,  // Italian
+            var l when l == L2('P', 'T') => 0x416,  // Portuguese (Brazil)
+            var l when l == L2('N', 'L') => 0x413,  // Dutch
+            var l when l == L2('D', 'A') => 0x406,  // Danish
+            var l when l == L2('S', 'V') => 0x41d,  // Swedish
+            var l when l == L2('N', 'O') => 0x414,  // Norwegian
+            var l when l == L2('F', 'I') => 0x40b,  // Finnish
+            var l when l == L2('P', 'L') => 0x415,  // Polish
+            var l when l == L2('C', 'S') => 0x405,  // Czech
+            var l when l == L2('H', 'U') => 0x40e,  // Hungarian
+            var l when l == L2('R', 'U') => 0x419,  // Russian
+            var l when l == L2('E', 'L') => 0x408,  // Greek
+            var l when l == L2('J', 'A') => 0x411,  // Japanese
+            var l when l == L2('Z', 'H') => 0x804,  // Chinese (simplified)
+            var l when l == L2('K', 'O') => 0x412,  // Korean
+            _ => DEFAULT_LANG
+        };
+    }
+
     private int findOrAddColor(DeviceRGBColor color)
     {
         for (int i = 0; i < colorTable_.Count; i++)
@@ -820,7 +982,7 @@ public class RtfFOTBuilder : FOTBuilder
 
     public override void setQuadding(Symbol quadding)
     {
-        paraFormat_.quadding = quadding switch
+        specFormat_.para.quadding = quadding switch
         {
             Symbol.symbolStart => 'l',
             Symbol.symbolEnd => 'r',
@@ -832,27 +994,27 @@ public class RtfFOTBuilder : FOTBuilder
 
     public override void setStartIndent(LengthSpec indent)
     {
-        paraFormat_.leftIndent = twips(indent.length);
+        specFormat_.para.leftIndent = twips(indent.length);
     }
 
     public override void setEndIndent(LengthSpec indent)
     {
-        paraFormat_.rightIndent = twips(indent.length);
+        specFormat_.para.rightIndent = twips(indent.length);
     }
 
     public override void setFirstLineStartIndent(LengthSpec indent)
     {
-        paraFormat_.firstLineIndent = twips(indent.length);
+        specFormat_.para.firstLineIndent = twips(indent.length);
     }
 
     public override void setLineSpacing(LengthSpec spacing)
     {
-        paraFormat_.lineSpacing = twips(spacing.length);
+        specFormat_.para.lineSpacing = twips(spacing.length);
     }
 
     public override void setMinLeading(OptLengthSpec leading)
     {
-        paraFormat_.lineSpacingAtLeast = leading.hasLength;
+        specFormat_.para.lineSpacingAtLeast = leading.hasLength;
     }
 
     public override void setHyphenate(bool hyphenate)
@@ -862,10 +1024,19 @@ public class RtfFOTBuilder : FOTBuilder
             hyphenateSuppressed_ = true;
     }
 
-    // Note: heading-level characteristic not yet implemented in style engine
-    public void setHeadingLevel(long level)
+    public override void setHeadingLevel(long level)
     {
-        paraFormat_.headingLevel = (level >= 1 && level <= 9) ? (int)level : 0;
+        specFormat_.para.headingLevel = (level >= 1 && level <= 9) ? (int)level : 0;
+    }
+
+    public override void setLanguage(Letter2 lang)
+    {
+        specFormat_.language = lang.value;
+    }
+
+    public override void setCountry(Letter2 country)
+    {
+        specFormat_.country = country.value;
     }
 
     public override void setPageWidth(long width)
@@ -942,17 +1113,17 @@ public class RtfFOTBuilder : FOTBuilder
     public override void setWidowCount(long count)
     {
         if (count > 0)
-            paraFormat_.widowOrphanControl |= ParaFormat.widowControl;
+            specFormat_.para.widowOrphanControl |= ParaFormat.widowControl;
         else
-            paraFormat_.widowOrphanControl &= ~ParaFormat.widowControl;
+            specFormat_.para.widowOrphanControl &= ~ParaFormat.widowControl;
     }
 
     public override void setOrphanCount(long count)
     {
         if (count > 0)
-            paraFormat_.widowOrphanControl |= ParaFormat.orphanControl;
+            specFormat_.para.widowOrphanControl |= ParaFormat.orphanControl;
         else
-            paraFormat_.widowOrphanControl &= ~ParaFormat.orphanControl;
+            specFormat_.para.widowOrphanControl &= ~ParaFormat.orphanControl;
     }
 
     // Table support
@@ -1021,9 +1192,30 @@ public class RtfFOTBuilder : FOTBuilder
     public override void startLink(Address addr)
     {
         start();
-        os("{\\field{\\*\\fldinst HYPERLINK \"");
-        // Output URL if available
-        os("\"}{\\fldrslt ");
+        switch (addr.type)
+        {
+            case Address.Type.resolvedNode:
+                {
+                    // Link to a node - use bookmark reference
+                    GroveString id = new GroveString();
+                    if (addr.node.getId(ref id) == AccessResult.accessOK && id.size() > 0)
+                    {
+                        os("{\\field{\\*\\fldinst   HYPERLINK  \\\\l ");
+                        outputBookmarkName(addr.node.groveIndex(), id);
+                        os("}{\\fldrslt ");
+                    }
+                    else
+                    {
+                        // Fall back to empty hyperlink
+                        os("{\\field{\\*\\fldinst HYPERLINK \"\"}{\\fldrslt ");
+                    }
+                }
+                break;
+            default:
+                // External link or unknown - use empty hyperlink for now
+                os("{\\field{\\*\\fldinst HYPERLINK \"\"}{\\fldrslt ");
+                break;
+        }
     }
 
     public override void endLink()
