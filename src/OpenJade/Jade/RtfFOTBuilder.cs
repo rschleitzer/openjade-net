@@ -358,8 +358,10 @@ public class RtfFOTBuilder : FOTBuilder
     {
         if (specFormatStack_.Count > 0)
         {
-            specFormat_ = specFormatStack_[specFormatStack_.Count - 1];
+            // Remove top of stack first, then restore a COPY from new top (C++ copies by value)
             specFormatStack_.RemoveAt(specFormatStack_.Count - 1);
+            if (specFormatStack_.Count > 0)
+                specFormat_ = new Format(specFormatStack_[specFormatStack_.Count - 1]);
         }
     }
 
@@ -405,22 +407,28 @@ public class RtfFOTBuilder : FOTBuilder
     private void syncCharFormat()
     {
         // Sync output format with spec format
+        bool changed = false;
         if (specFormat_.isBold != outputFormat_.isBold)
         {
             os(specFormat_.isBold ? "\\b" : "\\b0");
             outputFormat_.isBold = specFormat_.isBold;
+            changed = true;
         }
         if (specFormat_.isItalic != outputFormat_.isItalic)
         {
             os(specFormat_.isItalic ? "\\i" : "\\i0");
             outputFormat_.isItalic = specFormat_.isItalic;
+            changed = true;
         }
         if (specFormat_.fontSize != outputFormat_.fontSize)
         {
             os("\\fs");
             os(specFormat_.fontSize);
             outputFormat_.fontSize = specFormat_.fontSize;
+            changed = true;
         }
+        if (changed)
+            os(" ");
     }
 
     public override void startParagraph(ParagraphNIC nic)
