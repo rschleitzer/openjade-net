@@ -241,6 +241,8 @@ public abstract class DssslApp : GroveApp, IGroveManager
         // Close FOT builder if it has a close method
         if (fotb is SgmlFOTBuilder sgmlFotb)
             sgmlFotb.close();
+        else if (fotb is RtfFOTBuilder rtfFotb)
+            rtfFotb.finish();
     }
 
     private Boolean initSpecParser()

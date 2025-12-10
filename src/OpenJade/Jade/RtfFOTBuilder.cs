@@ -798,5 +798,6 @@ public class RtfFOTBuilder : FOTBuilder
     public void finish()
     {
         os("}\n"); // Close RTF document
+        stream_?.flush();
     }
 }
