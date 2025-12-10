@@ -512,23 +512,24 @@ public class SimplePageSequenceFlowObj : CompoundFlowObj
         fotb.startSimplePageSequence(hf_fotb);
 
         // Process header/footer sosofos for each page type
-        // Matching C++: hf_fotb[i | (j << nPageTypeBits)]
+        // Use serial approach: call startSimplePageSequenceHeaderFooter/endSimplePageSequenceHeaderFooter
+        // for each header/footer part so RtfFOTBuilder can capture content
         for (int i = 0; i < (1 << nPageTypeBits); i++)  // 4 page types
         {
             context.setPageType((uint)i);
             for (int j = 0; j < nHeaderFooterParts; j++)  // 6 parts
             {
+                int hfSlot = i | (j << nPageTypeBits);
+                fotb.startSimplePageSequenceHeaderFooter((uint)hfSlot);
                 if (headerFooter_[j] != null)
                 {
-                    int hfSlot = i | (j << nPageTypeBits);
-                    context.pushPrincipalPort(hf_fotb[hfSlot]);
                     headerFooter_[j]!.process(context);
-                    context.popPrincipalPort();
                 }
+                fotb.endSimplePageSequenceHeaderFooter((uint)hfSlot);
             }
         }
 
-        fotb.endSimplePageSequenceHeaderFooter();
+        fotb.endAllSimplePageSequenceHeaderFooter();
         base.processInner(context);
         fotb.endSimplePageSequence();
     }

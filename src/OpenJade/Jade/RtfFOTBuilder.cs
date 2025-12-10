@@ -35,6 +35,19 @@ public class RtfFOTBuilder : FOTBuilder
     private long displaySize_;
     private bool hadSection_;
     private bool hyphenateSuppressed_;
+    private int inSimplePageSequence_;
+
+    // Header/footer line spacing constants (in twips)
+    // Use a line-spacing of 12pt for the header and footer
+    // and assume 2.5pt of it occur after the baseline
+    private const int hfPreSpace = 190;
+    private const int hfPostSpace = 50;
+
+    // Header/footer storage
+    private string[] hfPart_;
+    private StringBuilder hfBuilder_;
+    private bool inHeaderFooter_;
+    private OutputFormat saveOutputFormat_;
 
     // Font management
     private System.Collections.Generic.Dictionary<string, int> fontFamilyNameTable_;
@@ -303,6 +316,13 @@ public class RtfFOTBuilder : FOTBuilder
         keepWithNext_ = false;
         displaySize_ = 0;
         hadSection_ = false;
+        inSimplePageSequence_ = 0;
+        hfPart_ = new string[nHF];
+        for (int i = 0; i < nHF; i++)
+            hfPart_[i] = "";
+        hfBuilder_ = new StringBuilder();
+        inHeaderFooter_ = false;
+        saveOutputFormat_ = new OutputFormat();
         fontFamilyNameTable_ = new System.Collections.Generic.Dictionary<string, int>();
         nextRtfFontNumber_ = 0;
         colorTable_ = new System.Collections.Generic.List<DeviceRGBColor>();
@@ -338,6 +358,11 @@ public class RtfFOTBuilder : FOTBuilder
 
     private void os(string s)
     {
+        if (inHeaderFooter_)
+        {
+            hfBuilder_.Append(s);
+            return;
+        }
         if (stream_ == null) return;
         foreach (char c in s)
             stream_.sputc((sbyte)c);
@@ -346,6 +371,11 @@ public class RtfFOTBuilder : FOTBuilder
     private void os(int n)
     {
         os(n.ToString());
+    }
+
+    private void os(char c)
+    {
+        os(c.ToString());
     }
 
     // Convert points to twips (20 twips per point, length is in millipoints)
@@ -563,36 +593,166 @@ public class RtfFOTBuilder : FOTBuilder
         // Fill array with this builder for default behavior
         for (int i = 0; i < nHF; i++)
             headerFooter[i] = this;
+        inSimplePageSequence_++;
+        start();
         // Output section break if not first
         if (hadSection_)
-            os("\\sect\n");
-        hadSection_ = true;
-
-        // Output page setup
-        os("\\paperw");
+            os("\\sect");
+        else
+            hadSection_ = true;
+        // Ensure minimum margins for header/footer
+        if (pageFormat_.headerMargin < hfPreSpace)
+            pageFormat_.headerMargin = hfPreSpace;
+        if (pageFormat_.footerMargin < hfPostSpace)
+            pageFormat_.footerMargin = hfPostSpace;
+        // Word 97 seems to get very confused by top or bottom margins less than this
+        const int minVMargin = 12 * 20;  // 240 twips
+        if (pageFormat_.topMargin < minVMargin)
+            pageFormat_.topMargin = minVMargin;
+        if (pageFormat_.bottomMargin < minVMargin)
+            pageFormat_.bottomMargin = minVMargin;
+        // Output section formatting
+        os("\\sectd\\plain");
+        if (pageFormat_.pageWidth > pageFormat_.pageHeight)
+            os("\\lndscpsxn");
+        os("\\pgwsxn");
         os((int)pageFormat_.pageWidth);
-        os("\\paperh");
+        os("\\pghsxn");
         os((int)pageFormat_.pageHeight);
-        os("\\margl");
+        os("\\marglsxn");
         os((int)pageFormat_.leftMargin);
-        os("\\margr");
+        os("\\margrsxn");
         os((int)pageFormat_.rightMargin);
-        os("\\margt");
+        os("\\margtsxn");
         os((int)pageFormat_.topMargin);
-        os("\\margb");
+        os("\\margbsxn");
         os((int)pageFormat_.bottomMargin);
-        os("\n");
-        start();
+        os("\\headery");
+        os(0);
+        os("\\footery");
+        os(0);
+        os("\\pgn");
+        // Map page number format to RTF control word suffix
+        if (pageFormat_.pageNumberFormat == "lcrm" || pageFormat_.pageNumberFormat == "roman")
+            os("lcrm");
+        else if (pageFormat_.pageNumberFormat == "ucrm")
+            os("ucrm");
+        else if (pageFormat_.pageNumberFormat == "lcalpha")
+            os("lcalpha");
+        else if (pageFormat_.pageNumberFormat == "ucalpha")
+            os("ucalpha");
+        else
+            os("dec");
+        if (pageFormat_.pageNumberRestart)
+            os("\\pgnrestart");
+        // Calculate display size for column support
+        displaySize_ = pageFormat_.pageWidth - pageFormat_.leftMargin - pageFormat_.rightMargin;
+        outputFormat_ = new OutputFormat();
+        accumSpace_ = 0;
     }
 
     public override void endSimplePageSequence()
     {
+        inSimplePageSequence_--;
         end();
+    }
+
+    public override void startSimplePageSequenceHeaderFooter(uint flags)
+    {
+        inlineState_ = InlineState.inlineMiddle;
+        saveOutputFormat_ = new OutputFormat(outputFormat_);
+        outputFormat_ = new OutputFormat();
+        inHeaderFooter_ = true;
+        hfBuilder_.Clear();
+    }
+
+    public override void endSimplePageSequenceHeaderFooter(uint flags)
+    {
+        outputFormat_ = saveOutputFormat_;
+        hfPart_[flags] = hfBuilder_.ToString();
+        inHeaderFooter_ = false;
+    }
+
+    public override void endAllSimplePageSequenceHeaderFooter()
+    {
+        // Check if we have different first-page headers/footers
+        bool titlePage = false;
+        for (int i = 0; i < nHF; i += nHF / 6)
+        {
+            if (hfPart_[i | (int)HF.frontHF | (int)HF.firstHF] != hfPart_[i | (int)HF.frontHF | (int)HF.otherHF] ||
+                hfPart_[i | (int)HF.backHF | (int)HF.firstHF] != hfPart_[i | (int)HF.backHF | (int)HF.otherHF])
+            {
+                titlePage = true;
+                break;
+            }
+        }
+        if (titlePage)
+        {
+            os("\\titlepg");
+            outputHeaderFooter("f", (int)HF.frontHF | (int)HF.firstHF);
+        }
+        outputHeaderFooter("l", (int)HF.backHF | (int)HF.otherHF);
+        outputHeaderFooter("r", (int)HF.frontHF | (int)HF.otherHF);
+        // Clear header/footer storage
+        for (int i = 0; i < nHF; i++)
+            hfPart_[i] = "";
+        inlineState_ = InlineState.inlineFirst;
+        continuePar_ = false;
+    }
+
+    private void outputHeaderFooter(string suffix, int flags)
+    {
+        // Calculate tab stops for centering and right alignment
+        long tabCenter = (pageFormat_.pageWidth - pageFormat_.leftMargin - pageFormat_.rightMargin) / 2;
+        long tabRight = pageFormat_.pageWidth - pageFormat_.leftMargin - pageFormat_.rightMargin;
+
+        // Output header
+        os("{\\header");
+        os(suffix);
+        os("\\pard\\sl");
+        os(-(hfPreSpace + hfPostSpace));
+        os("\\sb");
+        os((int)(pageFormat_.headerMargin - hfPreSpace));
+        os("\\sa");
+        os((int)(pageFormat_.topMargin - hfPostSpace - pageFormat_.headerMargin));
+        os("\\plain\\tqc\\tx");
+        os((int)tabCenter);
+        os("\\tqr\\tx");
+        os((int)tabRight);
+        os(" {");
+        os(hfPart_[flags | (int)HF.headerHF | (int)HF.leftHF]);
+        os("}\\tab {");
+        os(hfPart_[flags | (int)HF.headerHF | (int)HF.centerHF]);
+        os("}\\tab {");
+        os(hfPart_[flags | (int)HF.headerHF | (int)HF.rightHF]);
+        os("}\\par}");
+
+        // Output footer
+        os("{\\footer");
+        os(suffix);
+        os("\\pard\\sl");
+        os(-(hfPreSpace + hfPostSpace));
+        os("\\sb");
+        os((int)(pageFormat_.bottomMargin - hfPreSpace - pageFormat_.footerMargin));
+        os("\\sa");
+        os((int)(pageFormat_.footerMargin - hfPostSpace));
+        os("\\plain\\tqc\\tx");
+        os((int)tabCenter);
+        os("\\tqr\\tx");
+        os((int)tabRight);
+        os(" {");
+        os(hfPart_[flags | (int)HF.footerHF | (int)HF.leftHF]);
+        os("}\\tab {");
+        os(hfPart_[flags | (int)HF.footerHF | (int)HF.centerHF]);
+        os("}\\tab {");
+        os(hfPart_[flags | (int)HF.footerHF | (int)HF.rightHF]);
+        os("}\\par}");
     }
 
     public override void pageNumber()
     {
-        os("{\\field{\\*\\fldinst PAGE}{\\fldrslt ?}}");
+        syncCharFormat();
+        os("\\chpgn ");
     }
 
     // Inherited characteristic setters
@@ -748,6 +908,37 @@ public class RtfFOTBuilder : FOTBuilder
         pageFormat_.footerMargin = twips(margin);
     }
 
+    public void setPageNumberRestart(bool b)
+    {
+        if (inSimplePageSequence_ == 0)
+            pageFormat_.pageNumberRestart = b;
+    }
+
+    public void setPageNumberFormat(StringC str)
+    {
+        if (inSimplePageSequence_ > 0)
+            return;
+        pageFormat_.pageNumberFormat = "dec";
+        if (str.size() == 1)
+        {
+            switch (str[0])
+            {
+                case 'A':
+                    pageFormat_.pageNumberFormat = "ucltr";
+                    break;
+                case 'a':
+                    pageFormat_.pageNumberFormat = "lcltr";
+                    break;
+                case 'I':
+                    pageFormat_.pageNumberFormat = "ucrm";
+                    break;
+                case 'i':
+                    pageFormat_.pageNumberFormat = "lcrm";
+                    break;
+            }
+        }
+    }
+
     public override void setWidowCount(long count)
     {
         if (count > 0)
@@ -865,11 +1056,44 @@ public class RtfFOTBuilder : FOTBuilder
     // Node tracking
     public override void startNode(NodePtr node, StringC processingMode)
     {
-        // Bookmark support
+        // Bookmark support - output bookmark if node has an ID
+        if (processingMode.size() == 0 && node != null)
+        {
+            GroveString id = new GroveString();
+            if (node.getId(ref id) == AccessResult.accessOK && id.size() > 0)
+            {
+                os("{\\*\\bkmkstart ");
+                outputBookmarkName(node.groveIndex(), id);
+                os("}{\\*\\bkmkend ");
+                outputBookmarkName(node.groveIndex(), id);
+                os("}");
+            }
+        }
     }
 
     public override void endNode()
     {
+    }
+
+    private void outputBookmarkName(uint groveIndex, GroveString id)
+    {
+        os("ID");
+        if (groveIndex > 1)
+            os((int)(groveIndex - 1));
+        os("_");
+        // Convert id characters: alphanumeric and underscore stays, others become _XX_
+        for (nuint i = 0; i < id.size(); i++)
+        {
+            uint c = id[i];
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')
+                os(((char)c).ToString());
+            else
+            {
+                os("_");
+                os((int)c);
+                os("_");
+            }
+        }
     }
 
     // Finalize RTF output
