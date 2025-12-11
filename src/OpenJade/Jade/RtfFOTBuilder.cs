@@ -41,6 +41,23 @@ public class RtfFOTBuilder : FOTBuilder
     private bool keep_;
     private bool hadParInKeep_;
 
+    // Character whitespace tracking (for display group handling)
+    private uint currentColumn_;
+    private bool followWhitespaceChar_;
+
+    // Table support
+    private uint tableLevel_;
+    private int tableLeftIndent_;
+    private long tableWidth_;
+    private struct Column
+    {
+        public bool hasWidth;
+        public TableLengthSpec width;
+    }
+    private System.Collections.Generic.List<Column> columns_ = new System.Collections.Generic.List<Column>();
+    private uint currentCellIndex_;
+    private uint currentRowCellCount_;
+
     // Leader support
     private int leaderDepth_;
     private OutputFormat? leaderSaveOutputFormat_;
@@ -589,6 +606,27 @@ public class RtfFOTBuilder : FOTBuilder
         return (int)((millipoints * 2) / 1000);
     }
 
+    // Compute length spec to twips (for table calculations)
+    private long computeLengthSpec(LengthSpec spec)
+    {
+        if (spec.displaySizeFactor == 0.0)
+        {
+            return twips(spec.length);
+        }
+        else
+        {
+            double tem = displaySize_ * spec.displaySizeFactor;
+            return twips(spec.length) + (long)(tem >= 0.0 ? tem + 0.5 : tem - 0.5);
+        }
+    }
+
+    // Compute table length spec to twips
+    private long computeLengthSpec(TableLengthSpec spec)
+    {
+        // TableLengthSpec has tableUnitFactor - for now just use the base length
+        return twips(spec.length);
+    }
+
     public override void start()
     {
         specFormatStack_.Add(new Format(specFormat_));
@@ -613,46 +651,160 @@ public class RtfFOTBuilder : FOTBuilder
 
     public override void characters(Char[] data, nuint size)
     {
-        flushPendingBookmarks();
-        syncCharFormat();
-        for (nuint i = 0; i < size; i++)
+        // Ignore record ends at the start of continuation paragraphs.
+        nuint idx = 0;
+        if (continuePar_
+            && (inlineState_ == InlineState.inlineStart || inlineState_ == InlineState.inlineFirst)
+            && paraFormat_.lines == Symbol.symbolWrap)
         {
-            Char c = data[i];
-            if (c == '\\' || c == '{' || c == '}')
+            while (idx < size && data[idx] == '\r')
+                idx++;
+            if (idx == size)
+                return;
+        }
+
+        // This avoids clearing followWhitespaceChar_.
+        if (inlineState_ != InlineState.inlineMiddle)
+            inlinePrepare();
+        else
+            flushPendingBookmarks();
+        syncCharFormat();
+
+        for (; idx < size; idx++)
+        {
+            Char c = data[idx];
+            bool prevWhitespaceChar = followWhitespaceChar_;
+            followWhitespaceChar_ = false;
+            currentColumn_++;
+
+            switch (c)
             {
-                os("\\");
-                os(((char)c).ToString());
-            }
-            else if (c == '\n')
-            {
-                os("\\line ");
-            }
-            else if (c < 0x80)
-            {
-                // ASCII characters output directly
-                os(((char)c).ToString());
-            }
-            else if (c >= 0xa0 && c <= 0xff)
-            {
-                // Latin-1 Supplement (U+00A0-U+00FF) maps directly to Windows-1252
-                hexChar(c);
-            }
-            else if (win1252Map_.TryGetValue(c, out byte win1252Code))
-            {
-                // Character has a Windows-1252 mapping
-                hexChar(win1252Code);
-            }
-            else if (symbolFontMap_.TryGetValue(c, out byte symbolCode))
-            {
-                // Character has a Symbol font mapping
-                symbolChar(symbolCode);
-            }
-            else
-            {
-                // Unicode escape with '?' fallback character
-                os("\\u");
-                os((int)(short)c);
-                hexChar('?');
+                case '\n':
+                    // LF - ignore, just track column/whitespace
+                    currentColumn_--;
+                    followWhitespaceChar_ = prevWhitespaceChar;
+                    break;
+                case '\r':
+                    // CR - line break
+                    followWhitespaceChar_ = true;
+                    switch (paraFormat_.lines)
+                    {
+                        case Symbol.symbolWrap:
+                            switch (specFormat_.inputWhitespaceTreatment)
+                            {
+                                case Symbol.symbolIgnore:
+                                    currentColumn_--;
+                                    break;
+                                case Symbol.symbolCollapse:
+                                    if (prevWhitespaceChar)
+                                    {
+                                        currentColumn_--;
+                                        break;
+                                    }
+                                    goto default;
+                                default:
+                                    os(" ");
+                                    break;
+                            }
+                            break;
+                        default:
+                            // Not wrap mode - output verbatim line break
+                            os("\\sa0\\par\\fi0\\sb0\n");
+                            currentColumn_ = 0;
+                            break;
+                    }
+                    break;
+                case '\t':
+                    if (specFormat_.expandTabs > 0 && specFormat_.inputWhitespaceTreatment == Symbol.symbolPreserve)
+                    {
+                        uint col = --currentColumn_ + (uint)specFormat_.expandTabs;
+                        col = (col / (uint)specFormat_.expandTabs) * (uint)specFormat_.expandTabs;
+                        for (; currentColumn_ < col; currentColumn_++)
+                            os(" ");
+                        followWhitespaceChar_ = true;
+                        break;
+                    }
+                    goto case ' ';
+                case ' ':
+                    followWhitespaceChar_ = true;
+                    switch (specFormat_.inputWhitespaceTreatment)
+                    {
+                        case Symbol.symbolIgnore:
+                            currentColumn_--;
+                            break;
+                        case Symbol.symbolCollapse:
+                            if (prevWhitespaceChar)
+                            {
+                                currentColumn_--;
+                                break;
+                            }
+                            goto default;
+                        default:
+                            os(" ");
+                            break;
+                    }
+                    break;
+                case 0x2002: // EN SPACE
+                    os("\\u8194\\'20");
+                    break;
+                case 0x2003: // EM SPACE
+                    os("\\u8195\\'20");
+                    break;
+                case 0x2010: // HYPHEN
+                    os("-");
+                    break;
+                case 0x2011: // NON-BREAKING HYPHEN
+                    os("\\_");
+                    break;
+                case 0x200c: // ZERO WIDTH NON-JOINER
+                    os("\\zwnj ");
+                    break;
+                case 0x200d: // ZERO WIDTH JOINER
+                    os("\\zwj ");
+                    break;
+                case 0xa0: // NO-BREAK SPACE
+                    os("\\~");
+                    break;
+                case 0xad: // SOFT HYPHEN
+                    os("\\-");
+                    break;
+                case '\0':
+                    break;
+                case '\\':
+                case '{':
+                case '}':
+                    os("\\");
+                    os(((char)c).ToString());
+                    break;
+                default:
+                    if (c < 0x80)
+                    {
+                        // ASCII characters output directly
+                        os(((char)c).ToString());
+                    }
+                    else if (c >= 0xa0 && c <= 0xff)
+                    {
+                        // Latin-1 Supplement (U+00A0-U+00FF) maps directly to Windows-1252
+                        hexChar(c);
+                    }
+                    else if (win1252Map_.TryGetValue(c, out byte win1252Code))
+                    {
+                        // Character has a Windows-1252 mapping
+                        hexChar(win1252Code);
+                    }
+                    else if (symbolFontMap_.TryGetValue(c, out byte symbolCode))
+                    {
+                        // Character has a Symbol font mapping
+                        symbolChar(symbolCode);
+                    }
+                    else
+                    {
+                        // Unicode escape with '?' fallback character
+                        os("\\u");
+                        os((int)(short)c);
+                        hexChar('?');
+                    }
+                    break;
             }
         }
     }
@@ -1247,6 +1399,21 @@ public class RtfFOTBuilder : FOTBuilder
         specFormat_.para.headingLevel = (level >= 1 && level <= 9) ? (int)level : 0;
     }
 
+    public override void setLines(Symbol lines)
+    {
+        specFormat_.para.lines = lines;
+    }
+
+    public override void setInputWhitespaceTreatment(Symbol treatment)
+    {
+        specFormat_.inputWhitespaceTreatment = treatment;
+    }
+
+    public override void setExpandTabs(long tabs)
+    {
+        specFormat_.expandTabs = tabs;
+    }
+
     public override void setLanguage(Letter2 lang)
     {
         specFormat_.language = lang.value;
@@ -1347,32 +1514,118 @@ public class RtfFOTBuilder : FOTBuilder
     // Table support
     public override void startTable(TableNIC nic)
     {
+        startDisplay(nic);
         start();
+        if (tableLevel_++ > 0)
+        {
+            // Nested tables not fully supported, just do basic start
+            return;
+        }
+        // At tableLevel_ == 1, we're in a real table
+        // Initialize table state
+        if (nic.widthType == TableNIC.WidthType.widthExplicit)
+            tableWidth_ = computeLengthSpec(nic.width);
+        else
+            tableWidth_ = displaySize_ - specFormat_.para.leftIndent - specFormat_.para.rightIndent;
+        tableLeftIndent_ = specFormat_.para.leftIndent;
+        columns_.Clear();
     }
 
     public override void endTable()
     {
+        if (--tableLevel_ == 0)
+        {
+            columns_.Clear();
+        }
         end();
+        endDisplay();
+    }
+
+    public override void tableColumn(TableColumnNIC nic)
+    {
+        if (tableLevel_ == 1 && nic.nColumnsSpanned == 1)
+        {
+            while (nic.columnIndex >= columns_.Count)
+                columns_.Add(new Column());
+            var col = columns_[(int)nic.columnIndex];
+            col.hasWidth = nic.hasWidth;
+            if (nic.hasWidth)
+                col.width = nic.width;
+            columns_[(int)nic.columnIndex] = col;
+        }
+        atomic();
     }
 
     public override void startTableRow()
     {
+        if (tableLevel_ != 1)
+        {
+            start();
+            return;
+        }
+        currentRowCellCount_ = 0;
         os("\\trowd");
+        if (tableLeftIndent_ != 0)
+            os("\\trleft" + tableLeftIndent_);
+        // Output cell definitions - use stored column widths or default
+        int numCols = columns_.Count > 0 ? columns_.Count : 1;
+        long pos = tableLeftIndent_;
+        for (int j = 0; j < numCols; j++)
+        {
+            os("\\clvertalt");
+            long colWidth;
+            if (j < columns_.Count && columns_[j].hasWidth)
+                colWidth = computeLengthSpec(columns_[j].width);
+            else
+                colWidth = tableWidth_ / numCols;
+            pos += colWidth;
+            os("\\cellx" + pos);
+        }
+        os(" ");
+        start();
     }
 
     public override void endTableRow()
     {
-        os("\\row\n");
+        if (tableLevel_ != 1)
+        {
+            end();
+            return;
+        }
+        os("\\row ");
+        end();
     }
 
     public override void startTableCell(TableCellNIC nic)
     {
+        if (tableLevel_ != 1)
+        {
+            start();
+            return;
+        }
+        currentCellIndex_ = nic.columnIndex;
         start();
+        int numCols = columns_.Count > 0 ? columns_.Count : 1;
+        // Only process cells that fit within defined columns
+        if (currentCellIndex_ < numCols && !nic.missing)
+        {
+            os("\\plain \\pard\\intbl ");
+        }
     }
 
     public override void endTableCell()
     {
-        os("\\cell");
+        if (tableLevel_ != 1)
+        {
+            end();
+            return;
+        }
+        int numCols = columns_.Count > 0 ? columns_.Count : 1;
+        // Only output \cell for cells within defined columns
+        if (currentCellIndex_ < numCols)
+        {
+            os("\\cell ");
+        }
         end();
     }
 
