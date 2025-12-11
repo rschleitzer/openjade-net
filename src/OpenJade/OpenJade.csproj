@@ -10,8 +10,24 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PackageId>OpenJade</PackageId>
+    <Version>1.3.2</Version>
+    <Authors>James Clark;OpenJade Team;Ralf Schleitzer</Authors>
+    <Description>DSSSL style engine library - a C# port of OpenJade. Transforms SGML/XML documents using DSSSL stylesheets to RTF, HTML, TeX, MIF, and other formats.</Description>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageProjectUrl>https://github.com/rschleitzer/openjade-net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/rschleitzer/openjade-net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>dsssl;sgml;xml;openjade;stylesheet;rtf;html;tex</PackageTags>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\OpenSP\OpenSP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../LICENSE" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>
