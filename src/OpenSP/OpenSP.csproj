@@ -12,7 +12,7 @@
 
   <PropertyGroup>
     <PackageId>OpenSP</PackageId>
-    <Version>1.5.2</Version>
+    <Version>1.5.3</Version>
     <Authors>James Clark;OpenJade Team;Ralf Schleitzer</Authors>
     <Description>SGML parser library - a C# port of OpenSP. Provides comprehensive SGML/XML parsing with full SP (SGML Parser) compatibility.</Description>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -20,6 +20,8 @@
     <RepositoryUrl>https://github.com/rschleitzer/openjade-net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>sgml;xml;parser;opensp;dsssl</PackageTags>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
