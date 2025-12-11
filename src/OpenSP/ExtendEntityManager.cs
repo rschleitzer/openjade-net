@@ -1,6 +1,8 @@
 // Copyright (c) 1994, 1995, 1996 James Clark
 // See the file COPYING for copying permission.
 
+using System.Runtime.InteropServices;
+
 namespace OpenSP;
 
 // StorageObjectSpec holds the specification for reading a storage object
@@ -215,12 +217,14 @@ public class ParsedSystemId : Vector<StorageObjectSpec>
             UnivChar univ;
             WideChar to;
             ISet<WideChar> toSet = new ISet<WideChar>();
+            // On Windows, don't escape backslashes since they are path separators
+            bool escapeBackslash = !RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
             if (!idCharset.descToUniv(soi[i], out univ)
                 || univ >= 127
                 || univ < 32
                 || univ == 36        // $
                 || univ == 96        // `
-                || univ == 92        // backslash
+                || (univ == 92 && escapeBackslash)  // backslash (not on Windows)
                 || univ == 94        // ^
                 || resultCharset.univToDesc(univ, out to, toSet) != 1)
             {
