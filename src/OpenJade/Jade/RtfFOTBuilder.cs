@@ -977,6 +977,28 @@ public class RtfFOTBuilder : FOTBuilder
 
     private void newPar(bool allowSpaceBefore = true)
     {
+        // Output \par for PREVIOUS paragraph (like C++ - at start of newPar, not at end of paragraph)
+        if (inlineState_ != InlineState.inlineFirst)
+        {
+            // Handle keep region - set keepWithNext_ for paragraphs after the first in a kept region
+            if (keep_)
+            {
+                if (hadParInKeep_ || continuePar_)
+                    keepWithNext_ = true;
+                hadParInKeep_ = true;
+            }
+            // Output keep-with-next (only if no break pending)
+            if (doBreak_ == BreakType.breakNone && keepWithNext_)
+                os("\\keepn");
+            keepWithNext_ = false;
+            // Output hyphenation suppression
+            if (hyphenateSuppressed_)
+            {
+                os("\\hyphpar0");
+                hyphenateSuppressed_ = false;
+            }
+            os("\\par");
+        }
         // Output page/column break BEFORE \pard (from previous display's breakAfter)
         switch (doBreak_)
         {
@@ -1032,36 +1054,18 @@ public class RtfFOTBuilder : FOTBuilder
             os(paraFormat_.quadding.ToString());
         }
         os(" ");
+        // Mark that we've output a paragraph (subsequent calls will output \par for previous)
+        inlineState_ = InlineState.inlineMiddle;
     }
 
     private void outputParEnd()
     {
-        // Handle keep region - set keepWithNext_ for paragraphs after the first in a kept region
-        if (keep_)
-        {
-            if (hadParInKeep_ || continuePar_)
-                keepWithNext_ = true;
-            hadParInKeep_ = true;
-        }
-        // Check if current display has keepWithNext - apply it to THIS paragraph
+        // Check if current display has keepWithNext - set flag for NEXT paragraph's \par output in newPar()
         if (displayStack_.Count > 0 && displayStack_[displayStack_.Count - 1].keepWithNext)
             keepWithNext_ = true;
-        // Output keep-with-next (only if no break pending)
-        if (doBreak_ == BreakType.breakNone && keepWithNext_)
-        {
-            os("\\keepn");
-        }
-        keepWithNext_ = false;
         // Sync character format before paragraph end (ensures format is output even for empty paragraphs)
         syncCharFormat();
-        // Output hyphenation suppression
-        if (hyphenateSuppressed_)
-        {
-            os("\\hyphpar0");
-            hyphenateSuppressed_ = false;
-        }
-        os("\\par");
-        // Note: page/column break is output in newPar() to match C++ order
+        // Note: \par is now output at the START of the next newPar() call, not here
     }
 
     public override void startDisplayGroup(DisplayGroupNIC nic)
@@ -1655,8 +1659,66 @@ public class RtfFOTBuilder : FOTBuilder
     // External graphic
     public override void externalGraphic(ExternalGraphicNIC nic)
     {
-        // RTF picture support would go here
+        if (nic.isDisplay)
+        {
+            startDisplay(nic);
+            newPar();
+            if (specFormat_.displayAlignment != 'l')
+            {
+                os("\\q");
+                os(specFormat_.displayAlignment.ToString());
+            }
+            flushPendingBookmarks();
+        }
+        else
+            inlinePrepare();
+        // Note: embedObject is Windows-only in C++ and not implemented here
+        includePicture(nic);
+        if (nic.isDisplay)
+            endDisplay();
         atomic();
+    }
+
+    private bool includePicture(ExternalGraphicNIC nic)
+    {
+        string? filename = systemIdFilename(nic.entitySystemId);
+        if (filename != null)
+        {
+            os("{\\field\\flddirty{\\*\\fldinst INCLUDEPICTURE \"");
+            // Escape backslashes for RTF field
+            foreach (char c in filename)
+            {
+                if (c == '\\')
+                    os("\\\\\\\\");
+                else
+                    os(c.ToString());
+            }
+            os("\" }{\\fldrslt }}");
+            return true;
+        }
+        return false;
+    }
+
+    private string? systemIdFilename(StringC systemId)
+    {
+        if (systemId.size() == 0)
+            return null;
+        // Convert StringC to string
+        string sysId = systemId.ToString();
+        // Handle file:// URLs
+        if (sysId.StartsWith("file://"))
+        {
+            string path = sysId.Substring(7);
+            // Handle file:///C:/... format (Windows)
+            if (path.Length > 2 && path[0] == '/' && path[2] == ':')
+                path = path.Substring(1);
+            return path;
+        }
+        // Handle direct file paths (absolute or relative)
+        if (sysId.StartsWith("/") || (sysId.Length > 1 && sysId[1] == ':'))
+            return sysId;
+        // For other system IDs, return as-is (might be a relative path)
+        return sysId;
     }
 
     // Link support
