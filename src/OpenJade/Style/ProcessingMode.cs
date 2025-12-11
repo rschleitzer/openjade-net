@@ -119,8 +119,7 @@ public class ProcessingMode : Named
         GroveString gi = new GroveString();
         if (nd.getGi(ref gi) == AccessResult.accessOK)
         {
-            var giStr = new StringC(gi.data(), gi.size());
-            return findElementMatch(giStr, nd, context, mgr, ref specificity);
+            return findElementMatch(gi, nd, context, mgr, ref specificity);
         }
         NodePtr tem = new NodePtr();
         if (nd.getOrigin(ref tem) != AccessResult.accessOK)
@@ -142,7 +141,7 @@ public class ProcessingMode : Named
     public bool defined() { return defined_; }
     public void setDefined() { defined_ = true; }
 
-    private Rule? findElementMatch(StringC gi, NodePtr nd,
+    private Rule? findElementMatch(GroveString gi, NodePtr nd,
                                    Pattern.MatchContext context, IMessenger? mgr,
                                    ref Specificity specificity)
     {
@@ -159,7 +158,11 @@ public class ProcessingMode : Named
                 {
                     GroveRules gr = mode.groveRulesForNode(nd, mgr);
                     // Use lowercase for lookup since SGML element names are case-insensitive
-                    string giKey = gi.ToString().ToLowerInvariant();
+                    var giData = gi.data();
+                    var sb = new System.Text.StringBuilder((int)gi.size());
+                    for (nuint i = 0; i < gi.size(); i++)
+                        sb.Append(char.ToLowerInvariant((char)giData![i]));
+                    string giKey = sb.ToString();
                     if (gr.elementTable.TryGetValue(giKey, out ElementRules? er))
                         vecP = er.rules;  // Element rules (already includes wildcards)
                     else
@@ -260,8 +263,8 @@ public class ProcessingMode : Named
         // For now, we'll just continue
     }
 
-    // Specificity of a pattern match
-    public class Specificity
+    // Specificity of a pattern match - struct to avoid allocations
+    public struct Specificity
     {
         private bool toInitial_; // true if match fell through from named to initial mode
         private RuleType ruleType_;
@@ -272,14 +275,6 @@ public class ProcessingMode : Named
             toInitial_ = false;
             ruleType_ = RuleType.styleRule;
             nextRuleIndex_ = 0;
-        }
-
-        // Copy constructor to match C++ behavior
-        public Specificity(Specificity other)
-        {
-            toInitial_ = other.toInitial_;
-            ruleType_ = other.ruleType_;
-            nextRuleIndex_ = other.nextRuleIndex_;
         }
 
         public bool isStyle()

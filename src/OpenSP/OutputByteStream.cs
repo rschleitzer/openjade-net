@@ -198,7 +198,6 @@ public class FileOutputByteStream : OutputByteStream, IDisposable
         attach(stream, closeStream);
     }
 
-
     // virtual ~FileOutputByteStream();
     public void Dispose()
     {
@@ -274,7 +273,6 @@ public class FileOutputByteStream : OutputByteStream, IDisposable
             for (nuint i = 0; i < n; i++)
                 bytes[i] = (byte)buf_[i];
             stream_.Write(bytes, 0, (int)n);
-            stream_.Flush();
         }
         ptrIndex_ = 0;
     }

@@ -407,7 +407,7 @@ public class ProcessContextImpl : ProcessContext
     public override void nextMatch(StyleObj? style)
     {
         // Save specificity and overriding style (matching C++)
-        var saveSpecificity = new ProcessingMode.Specificity(matchSpecificity_);
+        var saveSpecificity = matchSpecificity_;
         StyleObj? saveOverridingStyle = vm_.overridingStyle;
         if (style != null)
             vm_.overridingStyle = style;

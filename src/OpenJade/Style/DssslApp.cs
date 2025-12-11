@@ -166,8 +166,8 @@ public abstract class DssslApp : GroveApp, IGroveManager
         string sysidStr = sysid.ToString();
 
         // Get the directory where the executable is located
-        string? exePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        string? exeDir = System.IO.Path.GetDirectoryName(exePath);
+        // Use AppContext.BaseDirectory for AOT/single-file compatibility
+        string? exeDir = System.AppContext.BaseDirectory;
 
         // Try paths in order:
         // 1. sgml subdirectory next to executable

@@ -1738,7 +1738,7 @@ public class NamedNodeListPtr
     private void release() { if (list != null) list.release(); }
 }
 
-public class GroveString
+public struct GroveString
 {
     private GroveChar[]? data_;
     private nuint offset_;

@@ -6,10 +6,11 @@
 // Code in SP currently assumes that size_type is size_t.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSP;
 
-public class Vector<T>
+public class Vector<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)] T>
 {
     // typedef size_t size_type;
     // typedef T *iterator;
