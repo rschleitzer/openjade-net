@@ -243,14 +243,17 @@ public class ProcessContextImpl : ProcessContext
         connectionStack_.Add(new Connection(fotb));
     }
 
+    // connectionStack_ is used as a stack with index 0 as the "head" (top), matching
+    // the C++ IList convention. restoreConnection/endConnection insert/remove at [0],
+    // so the current builder must also be at [0].
     public override FOTBuilder currentFOTBuilder()
     {
-        return connectionStack_[connectionStack_.Count - 1].fotb!;
+        return connectionStack_[0].fotb!;
     }
 
     public override StyleStack currentStyleStack()
     {
-        return connectionStack_[connectionStack_.Count - 1].styleStack;
+        return connectionStack_[0].styleStack;
     }
 
     public void process(NodePtr node)
@@ -650,15 +653,15 @@ public class ProcessContextImpl : ProcessContext
 
     public override void pushPrincipalPort(FOTBuilder? principalPort)
     {
-        // Push to end so currentFOTBuilder() returns the new port
-        connectionStack_.Add(new Connection(principalPort));
+        // Push at head so currentFOTBuilder() returns the new port
+        connectionStack_.Insert(0, new Connection(principalPort));
     }
 
     public override void popPrincipalPort()
     {
-        // Pop from end to match push
+        // Pop from head to match push
         if (connectionStack_.Count > 1)  // Keep at least the main fotb
-            connectionStack_.RemoveAt(connectionStack_.Count - 1);
+            connectionStack_.RemoveAt(0);
     }
 
     public void startMapContent(ELObj? contentMap, Location loc)
@@ -845,7 +848,7 @@ public class ProcessContextImpl : ProcessContext
             table.rowStyle = style;
             table.currentColumn = 0;
             table.inTableRow = true;
-            table.rowConnectableLevel = connectionStack_[connectionStack_.Count - 1].connectableLevel;
+            table.rowConnectableLevel = connectionStack_[0].connectableLevel;
         }
         currentFOTBuilder().startTableRow();
     }

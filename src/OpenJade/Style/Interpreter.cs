@@ -81,6 +81,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("style", Identifier.SyntacticKey.style);
         installSyntacticKey("with-mode", Identifier.SyntacticKey.withMode);
         installSyntacticKey("use", Identifier.SyntacticKey.keyUse);
+        installSyntacticKey("label", Identifier.SyntacticKey.keyLabel);
+        installSyntacticKey("content-map", Identifier.SyntacticKey.keyContentMap);
         installSyntacticKey("else", Identifier.SyntacticKey.elseKey);
         installSyntacticKey("=>", Identifier.SyntacticKey.arrowKey);
         installSyntacticKey("begin", Identifier.SyntacticKey.begin);
