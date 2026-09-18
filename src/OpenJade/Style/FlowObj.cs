@@ -1558,11 +1558,23 @@ public class TableColumnFlowObj : FlowObj
                     return;
                 case Identifier.SyntacticKey.keyWidth:
                     {
-                        FOTBuilder.LengthSpec len = new FOTBuilder.LengthSpec();
-                        if (interp.convertLengthSpecC(obj, ident, loc, ref len))
+                        LengthSpec? ls = obj.lengthSpec();
+                        if (ls != null)
                         {
-                            nic_.width = new FOTBuilder.TableLengthSpec { length = len.length };
-                            nic_.hasWidth = true;
+                            // width is a TableLengthSpec not just a LengthSpec
+                            if (ls.convert(out nic_.width))
+                                nic_.hasWidth = true;
+                            else
+                                interp.invalidCharacteristicValue(ident, loc);
+                        }
+                        else
+                        {
+                            FOTBuilder.LengthSpec len = new FOTBuilder.LengthSpec();
+                            if (interp.convertLengthSpecC(obj, ident, loc, ref len))
+                            {
+                                nic_.width = new FOTBuilder.TableLengthSpec { length = len.length, displaySizeFactor = len.displaySizeFactor };
+                                nic_.hasWidth = true;
+                            }
                         }
                     }
                     return;

@@ -2727,18 +2727,9 @@ public class TableUnitPrimitiveObj : PrimitiveObj
         long k;
         if (!args[0]!.exactIntegerValue(out k))
             return argError(interp, loc, InterpreterMessages.notAnExactInteger, 0, args[0]);
-        FOTBuilder.TableLengthSpec spec = new FOTBuilder.TableLengthSpec();
-        spec.tableUnitFactor = (double)k;
-        return new TableLengthSpecObj(spec);
-    }
-}
 
-// TableLengthSpec object
-public class TableLengthSpecObj : ELObj
-{
-    private FOTBuilder.TableLengthSpec spec_;
-    public TableLengthSpecObj(FOTBuilder.TableLengthSpec spec) { spec_ = spec; }
-    public FOTBuilder.TableLengthSpec spec() { return spec_; }
+        return new LengthSpecObj(new LengthSpec(LengthSpec.Unknown.tableUnit, (double)k));
+    }
 }
 
 // <= primitive

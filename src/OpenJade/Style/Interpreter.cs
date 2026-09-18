@@ -363,6 +363,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         // Color primitives
         installPrimitive("color-space", new ColorSpacePrimitiveObj());
         installPrimitive("color", new ColorPrimitiveObj());
+        installPrimitive("table-unit", new TableUnitPrimitiveObj());
 
         // Address primitives
         installPrimitive("current-node-address", new CurrentNodeAddressPrimitiveObj());
