@@ -2516,15 +2516,6 @@ public class SchemeParser : Messenger
                     return false;
                 switch (c)
                 {
-                    case 'n':
-                        currentToken_.operatorPlusAssign((Char)'\n');
-                        break;
-                    case 't':
-                        currentToken_.operatorPlusAssign((Char)'\t');
-                        break;
-                    case 'r':
-                        currentToken_.operatorPlusAssign((Char)'\r');
-                        break;
                     case '\\':
                     case '"':
                         currentToken_.operatorPlusAssign((Char)c);
