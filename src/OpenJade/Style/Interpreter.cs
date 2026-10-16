@@ -364,6 +364,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("color-space", new ColorSpacePrimitiveObj());
         installPrimitive("color", new ColorPrimitiveObj());
         installPrimitive("table-unit", new TableUnitPrimitiveObj());
+        installPrimitive("display-space", new DisplaySpacePrimitiveObj());
+        installPrimitive("display-space?", new IsDisplaySpacePrimitiveObj());
 
         // Address primitives
         installPrimitive("current-node-address", new CurrentNodeAddressPrimitiveObj());
@@ -2312,4 +2314,10 @@ public enum InterpreterMessages
     unitLoop,
     duplicateUnitDefinition,
     invalidUnitName,
+    notALengthSpec,
+    notABoolean,
+    notAPriority,
+    oddKeyArgs,
+    keyArgsNotKey,
+    invalidKeyArg,
 }

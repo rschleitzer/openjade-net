@@ -2732,6 +2732,137 @@ public class TableUnitPrimitiveObj : PrimitiveObj
     }
 }
 
+// display-space? primitive
+public class IsDisplaySpacePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, false);
+    public IsDisplaySpacePrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        if (args[0]!.asDisplaySpace() != null)
+            return interp.makeTrue();
+        return interp.makeFalse();
+    }
+}
+
+// display-space primitive: (display-space length-spec #!key min: max: conditional?: priority:)
+// upstream/openjade/style/primitive.cxx DEFPRIMITIVE(DisplaySpace)
+public class DisplaySpacePrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(1, 0, true);
+    public DisplaySpacePrimitiveObj() : base(sig) { }
+
+    private static bool ConvertLengthSpec(ELObj? obj, out FOTBuilder.LengthSpec result)
+    {
+        result = new FOTBuilder.LengthSpec();
+        if (obj == null)
+            return false;
+        LengthObj? l = obj.asLength();
+        if (l != null)
+        {
+            result = new FOTBuilder.LengthSpec(l.value());
+            return true;
+        }
+        LengthSpecObj? ls = obj.asLengthSpec();
+        if (ls != null)
+        {
+            result = ls.lengthSpecFOT();
+            return true;
+        }
+        long lval;
+        double dval;
+        int dim;
+        switch (obj.quantityValue(out lval, out dval, out dim))
+        {
+            case ELObj.QuantityType.longQuantity:
+                if (dim == 1)
+                {
+                    result = new FOTBuilder.LengthSpec(lval);
+                    return true;
+                }
+                break;
+            case ELObj.QuantityType.doubleQuantity:
+                if (dim == 1)
+                {
+                    result = new FOTBuilder.LengthSpec((long)(dval < 0.0 ? dval - 0.5 : dval + 0.5));
+                    return true;
+                }
+                break;
+        }
+        return false;
+    }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        FOTBuilder.DisplaySpace displaySpace = new FOTBuilder.DisplaySpace();
+        if (!ConvertLengthSpec(args[0], out displaySpace.nominal))
+            return argError(interp, loc, InterpreterMessages.notALengthSpec, 0, args[0]);
+        displaySpace.min = displaySpace.nominal;
+        displaySpace.max = displaySpace.nominal;
+        // first specified keyword argument takes priority,
+        // so scan them backwards...
+        for (int i = nArgs - 1; i > 0; i -= 2)
+        {
+            if ((nArgs & 1) == 0)
+            {
+                interp.setNextLocation(loc);
+                interp.message(InterpreterMessages.oddKeyArgs);
+                return interp.makeError();
+            }
+            KeywordObj? keyObj = args[i - 1]!.asKeyword();
+            if (keyObj == null)
+            {
+                interp.setNextLocation(loc);
+                interp.message(InterpreterMessages.keyArgsNotKey);
+                return interp.makeError();
+            }
+            switch (keyObj.name().ToString())
+            {
+                case "min":
+                    if (!ConvertLengthSpec(args[i], out displaySpace.min))
+                        return argError(interp, loc, InterpreterMessages.notALengthSpec, i, args[i]);
+                    break;
+                case "max":
+                    if (!ConvertLengthSpec(args[i], out displaySpace.max))
+                        return argError(interp, loc, InterpreterMessages.notALengthSpec, i, args[i]);
+                    break;
+                case "conditional?":
+                    if (args[i] == interp.makeTrue())
+                        displaySpace.conditional = true;
+                    else if (args[i] == interp.makeFalse())
+                        displaySpace.conditional = false;
+                    else
+                        return argError(interp, loc, InterpreterMessages.notABoolean, i, args[i]);
+                    break;
+                case "priority":
+                    {
+                        long priority;
+                        if (args[i]!.exactIntegerValue(out priority))
+                        {
+                            displaySpace.priority = priority;
+                            displaySpace.force = false;
+                        }
+                        else
+                        {
+                            SymbolObj? sym = args[i]!.asSymbol();
+                            if (sym != null && sym.cValue() == FOTBuilder.Symbol.symbolForce)
+                                displaySpace.force = true;
+                            else
+                                return argError(interp, loc, InterpreterMessages.notAPriority, i, args[i]);
+                        }
+                    }
+                    break;
+                default:
+                    interp.setNextLocation(loc);
+                    interp.message(InterpreterMessages.invalidKeyArg, keyObj.name().ToString());
+                    return interp.makeError();
+            }
+        }
+        return new DisplaySpaceObj(displaySpace);
+    }
+}
+
 // <= primitive
 public class LessEqualPrimitiveObj : PrimitiveObj
 {

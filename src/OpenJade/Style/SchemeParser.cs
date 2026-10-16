@@ -336,7 +336,11 @@ public class SchemeParser : Messenger
                 // CloseParen can be allowed to signal end of a list - expr stays null
                 return true;
             case Token.Keyword:
-                // Keyword token - expr stays null, tok is set
+                // A keyword is self-evaluating (SchemeParser.cxx parseSelfEvaluating): in a call it is
+                // an argument, as the keyword arguments of display-space or of a #!key procedure.
+                // make and style look at tok and read the name themselves.
+                expr = new ConstantExpression(interp_.makeKeyword(new StringC(currentToken_.data(), currentToken_.size() - 1)),
+                    in_?.currentLocation() ?? new Location());
                 return true;
             default:
                 return false;
