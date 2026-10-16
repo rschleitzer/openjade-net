@@ -1126,7 +1126,7 @@ public class RealObj : ELObj
 
     public override void print(Interpreter interp, OutputCharStream os)
     {
-        os.put(n_.ToString("G"));
+        os.put(n_.ToString("G", System.Globalization.CultureInfo.InvariantCulture));
     }
 }
 
@@ -1157,7 +1157,7 @@ public class LengthObj : ELObj
     public override void print(Interpreter interp, OutputCharStream os)
     {
         double pt = n_ * 72.0 / interp.unitsPerInch();
-        os.put(pt.ToString("G") + "pt");
+        os.put(pt.ToString("G", System.Globalization.CultureInfo.InvariantCulture) + "pt");
     }
 
     protected override bool isEqual(ELObj other)
@@ -1200,7 +1200,7 @@ public class QuantityObj : ELObj
     public override void print(Interpreter interp, OutputCharStream os)
     {
         double val = val_ * Math.Pow(72.0 / interp.unitsPerInch(), (double)dim_);
-        os.put(val.ToString("G") + "pt" + dim_.ToString());
+        os.put(val.ToString("G", System.Globalization.CultureInfo.InvariantCulture) + "pt" + dim_.ToString());
     }
 
     protected override bool isEqual(ELObj other)

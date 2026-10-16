@@ -601,11 +601,11 @@ public class MifDoc : IDisposable
                 if ((properties & (uint)Flags.fFCase) != 0)
                     os.stream().operatorOutput($"\n <FCase {FCase}>");
                 if ((properties & (uint)Flags.fFDX) != 0)
-                    os.stream().operatorOutput($"\n <FDX {FDX:F6}>");
+                    os.stream().operatorOutput(FormattableString.Invariant($"\n <FDX {FDX:F6}>"));
                 if ((properties & (uint)Flags.fFDY) != 0)
-                    os.stream().operatorOutput($"\n <FDY {FDY:F6}>");
+                    os.stream().operatorOutput(FormattableString.Invariant($"\n <FDY {FDY:F6}>"));
                 if ((properties & (uint)Flags.fFDW) != 0)
-                    os.stream().operatorOutput($"\n <FDW {FDW:F6}>");
+                    os.stream().operatorOutput(FormattableString.Invariant($"\n <FDW {FDW:F6}>"));
                 os.undent();
                 os.stream().operatorOutput("\n >");
                 os.undent();
@@ -2810,7 +2810,7 @@ public class MifOutputByteStream
 
     public static MifOutputByteStream operator <<(MifOutputByteStream os, double p)
     {
-        os.stream().operatorOutput(string.Format("{0:F6}", p));
+        os.stream().operatorOutput(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F6}", p));
         return os;
     }
 

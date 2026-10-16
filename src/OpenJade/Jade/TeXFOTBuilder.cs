@@ -145,7 +145,7 @@ public class TeXFOTBuilder : FOTBuilder
     {
         // Convert from 1/1000 pt to pt
         double pts = units / 1000.0;
-        output(pts.ToString("F3"));
+        output(pts.ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         output("pt");
     }
 
@@ -756,11 +756,11 @@ public class TeXFOTBuilder : FOTBuilder
     {
         nextFormat_.color = color;
         output("\\color[rgb]{");
-        output((color.red / 255.0).ToString("F3"));
+        output((color.red / 255.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         output(",");
-        output((color.green / 255.0).ToString("F3"));
+        output((color.green / 255.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         output(",");
-        output((color.blue / 255.0).ToString("F3"));
+        output((color.blue / 255.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         output("}");
     }
 
@@ -774,11 +774,11 @@ public class TeXFOTBuilder : FOTBuilder
         nextFormat_.hasBackgroundColor = true;
         nextFormat_.backgroundColor = color;
         output("\\FOTBackgroundColor{");
-        output((color.red / 255.0).ToString("F3"));
+        output((color.red / 255.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         output(",");
-        output((color.green / 255.0).ToString("F3"));
+        output((color.green / 255.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         output(",");
-        output((color.blue / 255.0).ToString("F3"));
+        output((color.blue / 255.0).ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
         output("}");
     }
 
@@ -884,7 +884,7 @@ public class TeXFOTBuilder : FOTBuilder
                 if (ls.displaySizeFactor >= 0.0)
                     output("+");
             }
-            output((ls.displaySizeFactor * 100.0).ToString("F2"));
+            output((ls.displaySizeFactor * 100.0).ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
             output("%");
         }
         else
@@ -903,7 +903,7 @@ public class TeXFOTBuilder : FOTBuilder
         {
             if (needSign && ls.displaySizeFactor >= 0.0)
                 output("+");
-            output((ls.displaySizeFactor * 100.0).ToString("F2"));
+            output((ls.displaySizeFactor * 100.0).ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
             output("%");
             needSign = true;
         }
@@ -911,7 +911,7 @@ public class TeXFOTBuilder : FOTBuilder
         {
             if (needSign && ls.tableUnitFactor >= 0.0)
                 output("+");
-            output(ls.tableUnitFactor.ToString("F2"));
+            output(ls.tableUnitFactor.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
             output("*");
         }
         if (!needSign && ls.tableUnitFactor == 0.0)

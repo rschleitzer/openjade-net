@@ -284,6 +284,116 @@ public class StringInheritedC : InheritedC
     }
 }
 
+// Extension characteristics: declared with declare-characteristic and a public identifier that the FOT builder
+// lists in its extension table (InheritedC.cxx: ExtensionBoolInheritedC and its siblings).
+public class ExtensionBoolInheritedC : BoolInheritedC
+{
+    private readonly Action<FOTBuilder, bool> setter_;
+
+    public ExtensionBoolInheritedC(Identifier? ident, uint index, Action<FOTBuilder, bool> setter, bool value = false)
+        : base(ident, index, value)
+    {
+        setter_ = setter;
+    }
+
+    public override void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
+                             ref ELObj? cacheValue, System.Collections.Generic.List<nuint> dependencies)
+    {
+        fotb.extensionSet(setter_, value_);
+    }
+
+    public override ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp)
+    {
+        bool b;
+        if (interp.convertBooleanC(obj, identifier(), loc, out b))
+            return new ConstPtr<InheritedC>(new ExtensionBoolInheritedC(identifier(), index(), setter_, b));
+        return null;
+    }
+}
+
+public class ExtensionStringInheritedC : StringInheritedC
+{
+    private readonly Action<FOTBuilder, StringC> setter_;
+
+    public ExtensionStringInheritedC(Identifier? ident, uint index, Action<FOTBuilder, StringC> setter)
+        : base(ident, index, new StringC())
+    {
+        setter_ = setter;
+    }
+
+    public ExtensionStringInheritedC(Identifier? ident, uint index, Action<FOTBuilder, StringC> setter, Char[] s, nuint n)
+        : base(ident, index, s, n)
+    {
+        setter_ = setter;
+    }
+
+    public override void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
+                             ref ELObj? cacheValue, System.Collections.Generic.List<nuint> dependencies)
+    {
+        fotb.extensionSet(setter_, str_);
+    }
+
+    public override ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp)
+    {
+        Char[]? s;
+        nuint n;
+        if (obj.stringData(out s, out n))
+            return new ConstPtr<InheritedC>(new ExtensionStringInheritedC(identifier(), index(), setter_, s ?? System.Array.Empty<Char>(), n));
+        invalidValue(loc, interp);
+        return null;
+    }
+}
+
+public class ExtensionIntegerInheritedC : IntegerInheritedC
+{
+    private readonly Action<FOTBuilder, long> setter_;
+
+    public ExtensionIntegerInheritedC(Identifier? ident, uint index, Action<FOTBuilder, long> setter, long n = 0)
+        : base(ident, index, n)
+    {
+        setter_ = setter;
+    }
+
+    public override void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
+                             ref ELObj? cacheValue, System.Collections.Generic.List<nuint> dependencies)
+    {
+        fotb.extensionSet(setter_, n_);
+    }
+
+    public override ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp)
+    {
+        long n;
+        if (interp.convertIntegerC(obj, identifier(), loc, out n))
+            return new ConstPtr<InheritedC>(new ExtensionIntegerInheritedC(identifier(), index(), setter_, n));
+        return null;
+    }
+}
+
+public class ExtensionLengthInheritedC : LengthInheritedC
+{
+    private readonly Action<FOTBuilder, long> setter_;
+
+    public ExtensionLengthInheritedC(Identifier? ident, uint index, Action<FOTBuilder, long> setter, long n = 0)
+        : base(ident, index, n)
+    {
+        setter_ = setter;
+    }
+
+    public override void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
+                             ref ELObj? cacheValue, System.Collections.Generic.List<nuint> dependencies)
+    {
+        fotb.extensionSet(setter_, size_);
+    }
+
+    public override ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp)
+    {
+        long n;
+        if (interp.convertLengthC(obj, identifier(), loc, out n))
+            return new ConstPtr<InheritedC>(new ExtensionLengthInheritedC(identifier(), index(), setter_, n));
+        return null;
+    }
+}
+
 // Generic boolean inherited characteristic with FOTBuilder setter
 public class GenericBoolInheritedC : BoolInheritedC
 {

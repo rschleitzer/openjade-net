@@ -2176,7 +2176,7 @@ public class NumberToStringPrimitiveObj : PrimitiveObj
         double d = 0;
         if (args[0]!.realValue(out d))
         {
-            string s = d.ToString();
+            string s = d.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return interp.makeString(new StringC(s));
         }
         return argError(interp, loc, InterpreterMessages.notANumber, 0, args[0]);
@@ -2214,7 +2214,7 @@ public class StringToNumberPrimitiveObj : PrimitiveObj
             {
                 if (str.Contains('.') || str.Contains('e') || str.Contains('E'))
                 {
-                    double d = double.Parse(str);
+                    double d = double.Parse(str, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
                     return interp.makeReal(d);
                 }
             }

@@ -1347,7 +1347,7 @@ public class SgmlFOTBuilder : FOTBuilder
                     if (ols.length.displaySizeFactor >= 0.0)
                         ics_.Append('+');
                 }
-                ics_.Append((ols.length.displaySizeFactor * 100.0).ToString("F2")).Append('%');
+                ics_.Append((ols.length.displaySizeFactor * 100.0).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).Append('%');
             }
             else
             {
@@ -1608,7 +1608,7 @@ public class SgmlFOTBuilder : FOTBuilder
                 if (ls.displaySizeFactor >= 0.0)
                     os().put((Char)'+');
             }
-            os().write((ls.displaySizeFactor * 100.0).ToString("F2")).put((Char)'%');
+            os().write((ls.displaySizeFactor * 100.0).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).put((Char)'%');
         }
         else
             writeUnits(ls.length);
@@ -1626,14 +1626,14 @@ public class SgmlFOTBuilder : FOTBuilder
         {
             if (needSign && ls.displaySizeFactor >= 0.0)
                 os().put((Char)'+');
-            os().write((ls.displaySizeFactor * 100.0).ToString("F2")).put((Char)'%');
+            os().write((ls.displaySizeFactor * 100.0).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).put((Char)'%');
             needSign = true;
         }
         if (ls.tableUnitFactor != 0.0)
         {
             if (needSign && ls.tableUnitFactor >= 0.0)
                 os().put((Char)'+');
-            os().write(ls.tableUnitFactor.ToString("F2")).put((Char)'*');
+            os().write(ls.tableUnitFactor.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).put((Char)'*');
         }
         if (!needSign && ls.tableUnitFactor == 0.0)
             os().put((Char)'0').write("pt");
@@ -1689,7 +1689,7 @@ public class SgmlFOTBuilder : FOTBuilder
                 if (ls.displaySizeFactor >= 0.0)
                     ics_.Append('+');
             }
-            ics_.Append((ls.displaySizeFactor * 100.0).ToString("F2")).Append('%');
+            ics_.Append((ls.displaySizeFactor * 100.0).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)).Append('%');
         }
         else
         {

@@ -54,6 +54,22 @@ public class SaveFOTBuilder : FOTBuilder
         operations_.Add(fotb => fotb.startSequence());
     }
 
+    public override void extensionSet(Action<FOTBuilder, bool> func, bool arg)
+    {
+        operations_.Add(fotb => fotb.extensionSet(func, arg));
+    }
+
+    public override void extensionSet(Action<FOTBuilder, StringC> func, StringC arg)
+    {
+        var copy = new StringC(arg);
+        operations_.Add(fotb => fotb.extensionSet(func, copy));
+    }
+
+    public override void extensionSet(Action<FOTBuilder, long> func, long arg)
+    {
+        operations_.Add(fotb => fotb.extensionSet(func, arg));
+    }
+
     public override void endSequence()
     {
         operations_.Add(fotb => fotb.endSequence());
@@ -1141,8 +1157,17 @@ public class FOTBuilder
     public class ExtensionTableEntry
     {
         public string? pubid;
+        public Action<FOTBuilder, bool>? boolSetter;
+        public Action<FOTBuilder, StringC>? stringSetter;
+        public Action<FOTBuilder, long>? integerSetter;
+        public Action<FOTBuilder, long>? lengthSetter;
         public ExtensionFlowObj? flowObj;
     }
+
+    // Setting an extension characteristic (FOTBuilder::extensionSet); SaveFOTBuilder records the call.
+    public virtual void extensionSet(Action<FOTBuilder, bool> func, bool arg) { func(this, arg); }
+    public virtual void extensionSet(Action<FOTBuilder, StringC> func, StringC arg) { func(this, arg); }
+    public virtual void extensionSet(Action<FOTBuilder, long> func, long arg) { func(this, arg); }
 
     // Extension flow object methods
     public virtual void extension(ExtensionFlowObj fo, NodePtr currentNode) { atomic(); }

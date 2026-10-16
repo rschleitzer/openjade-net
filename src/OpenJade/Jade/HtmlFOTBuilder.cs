@@ -573,7 +573,7 @@ public class HtmlFOTBuilder : FOTBuilder
     public static void outputLength(long n, StringBuilder sb)
     {
         double pts = n / 1000.0;
-        sb.Append(pts.ToString("F3").TrimEnd('0').TrimEnd('.'));
+        sb.Append(pts.ToString("F3", System.Globalization.CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.'));
         sb.Append("pt");
     }
 

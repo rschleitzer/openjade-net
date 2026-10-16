@@ -2190,8 +2190,29 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             return;
         }
 
-        // For extension characteristics not in our built-in set, create an IgnoredC
-        var ic = new ConstPtr<InheritedC>(new IgnoredC(ident, nInheritedC_++, makeFalse(), this));
+        ConstPtr<InheritedC>? ic = null;
+        if (pubid.size() != 0 && extensionTable_ != null)
+        {
+            foreach (var ep in extensionTable_)
+            {
+                if (ep.pubid == null)
+                    break;
+                if (pubid.ToString() == ep.pubid)
+                {
+                    if (ep.boolSetter != null)
+                        ic = new ConstPtr<InheritedC>(new ExtensionBoolInheritedC(ident, nInheritedC_++, ep.boolSetter));
+                    else if (ep.stringSetter != null)
+                        ic = new ConstPtr<InheritedC>(new ExtensionStringInheritedC(ident, nInheritedC_++, ep.stringSetter));
+                    else if (ep.integerSetter != null)
+                        ic = new ConstPtr<InheritedC>(new ExtensionIntegerInheritedC(ident, nInheritedC_++, ep.integerSetter));
+                    else if (ep.lengthSetter != null)
+                        ic = new ConstPtr<InheritedC>(new ExtensionLengthInheritedC(ident, nInheritedC_++, ep.lengthSetter));
+                    break;
+                }
+            }
+        }
+        // FIXME (as in the C++ original): should call FOTBuilder with PublicId argument
+        ic ??= new ConstPtr<InheritedC>(new IgnoredC(ident, nInheritedC_++, makeFalse(), this));
 
         // Register the inherited characteristic on the identifier
         ident.setInheritedC(ic);
