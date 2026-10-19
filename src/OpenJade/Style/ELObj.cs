@@ -420,6 +420,8 @@ public class Identifier : Named
         declareFlowObjectClass,
         declareDefaultLanguage,
         defineLanguage,
+        keyDefinePageModel,
+        keyDefineColumnSetModel,
         // Expression keywords
         quote,
         quasiquote,

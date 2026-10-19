@@ -34,7 +34,24 @@ dotnet run --project src/Nsgmls -- document.sgm
 
 ## What is added to the original
 
-The additions live in a project of their own,
+One addition lives in this port itself, because the parser has to take it:
+**a part of the full page model** of ISO/IEC 10179 (12.6.4, 12.6.5). The
+original reads `define-page-model` and `define-column-set-model` and skips
+them, and has no `page-sequence` or `column-set-sequence`. Here they are
+taken in the features `page` and `multi-column`, restricted: a page model has
+one region filled top to bottom, a column-set model one column subset with
+its columns and `balance?`; `page-sequence` takes `initial-page-models` and
+`repeat-page-models`, `column-set-sequence` takes `column-set-model` and the
+display characteristics. Everything else of the page model is an error where
+it is written, and a characteristic outside the subset is allowed with its
+initial value only. It is all in `src/OpenJade/Style/PageModel.cs`; the
+backends get the models through `FOTBuilder`. The original's backends do not
+set them.
+
+Messages of the style engine go to the messenger with their location, as in
+the original; an error in a stylesheet fails the run.
+
+The other additions live in a project of their own,
 [dazzle-net](https://github.com/rschleitzer/dazzle-net), which builds on
 these packages:
 

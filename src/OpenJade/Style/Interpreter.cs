@@ -71,6 +71,8 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installSyntacticKey("declare-flow-object-class", Identifier.SyntacticKey.declareFlowObjectClass);
         installSyntacticKey("declare-default-language", Identifier.SyntacticKey.declareDefaultLanguage);
         installSyntacticKey("define-language", Identifier.SyntacticKey.defineLanguage);
+        installSyntacticKey("define-page-model", Identifier.SyntacticKey.keyDefinePageModel);
+        installSyntacticKey("define-column-set-model", Identifier.SyntacticKey.keyDefineColumnSetModel);
         installSyntacticKey("quote", Identifier.SyntacticKey.quote);
         installSyntacticKey("quasiquote", Identifier.SyntacticKey.quasiquote);
         installSyntacticKey("unquote", Identifier.SyntacticKey.unquote);
@@ -359,6 +361,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         installPrimitive("vector?", new IsVectorPrimitiveObj());
         installPrimitive("quantity?", new IsQuantityPrimitiveObj());
         installPrimitive("color?", new IsColorPrimitiveObj());
+        // Not in the original: see PageModel.cs
+        installPrimitive("page-model?", new IsPageModelPrimitiveObj());
+        installPrimitive("column-set-model?", new IsColumnSetModelPrimitiveObj());
         installPrimitive("color-space?", new IsColorSpacePrimitiveObj());
         installPrimitive("address?", new IsAddressPrimitiveObj());
 
@@ -420,6 +425,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
 
         // Simple page
         installFlowObj("simple-page-sequence", new SimplePageSequenceFlowObj());
+        // Not in the original: see PageModel.cs
+        installFlowObj("page-sequence", new PageSequenceFlowObj());
+        installFlowObj("column-set-sequence", new ColumnSetSequenceFlowObj());
 
         // Tables
         installFlowObj("table", new TableFlowObj());
@@ -702,6 +710,22 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             (FOTBuilder fotb, long n) => fotb.setLineRepeat(n), 1));
         installInheritedC("span", new GenericIntegerInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long n) => fotb.setSpan(n), 1));
+        // Not in the original: the characteristics of page-sequence and column-set-sequence (see PageModel.cs);
+        // those outside the subset take their initial values only
+        installInheritedC("initial-page-models", new PageModelsC(null, nInheritedC_++,
+            (FOTBuilder fotb, PageModel[] m) => fotb.setInitialPageModels(m), makeNil(), System.Array.Empty<PageModel>()));
+        installInheritedC("repeat-page-models", new PageModelsC(null, nInheritedC_++,
+            (FOTBuilder fotb, PageModel[] m) => fotb.setRepeatPageModels(m), makeNil(), System.Array.Empty<PageModel>()));
+        installInheritedC("column-set-model", new ColumnSetModelC(null, nInheritedC_++, null));
+        installInheritedC("column-set-model-map", new InitialOnlyC(null, nInheritedC_++, makeNil()));
+        installInheritedC("force-last-page", new InitialOnlyC(null, nInheritedC_++, makeFalse()));
+        installInheritedC("force-first-page", new InitialOnlyC(null, nInheritedC_++, makeFalse()));
+        installInheritedC("first-page-type", new InitialOnlyC(null, nInheritedC_++, makeSymbol(makeStringC("parent"))));
+        installInheritedC("blank-back-page-model", new InitialOnlyC(null, nInheritedC_++, makeFalse()));
+        installInheritedC("blank-front-page-model", new InitialOnlyC(null, nInheritedC_++, makeFalse()));
+        installInheritedC("justify-spread?", new InitialOnlyC(null, nInheritedC_++, makeFalse()));
+        installInheritedC("binding-edge", new InitialOnlyC(null, nInheritedC_++, makeSymbol(makeStringC("left"))));
+        installInheritedC("page-category", new InitialOnlyC(null, nInheritedC_++, makeFalse(), false));
         installInheritedC("min-leader-repeat", new GenericIntegerInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, long n) => fotb.setMinLeaderRepeat(n), 1));
         installInheritedC("hyphenation-remain-char-count", new GenericIntegerInheritedC(null, nInheritedC_++,
@@ -2299,6 +2323,9 @@ public enum InterpreterMessages
     caseFail,
     // Parser messages
     unknownTopLevelForm,
+    // Not in the original: see PageModel.cs
+    notSupportedInPageModel,
+    invalidPageModel,
     badTopLevelForm,
     badDeclaration,
     badExpression,

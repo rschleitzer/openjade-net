@@ -65,7 +65,7 @@ public enum Token
 }
 
 // DSSSL Scheme Parser
-public class SchemeParser : Messenger
+public partial class SchemeParser : Messenger
 {
     private const Char defaultChar = 0xfffd;
     private const Xchar noChar = -2;  // No pushed-back character
@@ -186,6 +186,11 @@ public class SchemeParser : Messenger
                         return doDeclareDefaultLanguage();
                     case Identifier.SyntacticKey.defineLanguage:
                         return doDefineLanguage();
+                    // Not in the original, which skips them: see PageModel.cs
+                    case Identifier.SyntacticKey.keyDefinePageModel:
+                        return doDefineModel("page-model");
+                    case Identifier.SyntacticKey.keyDefineColumnSetModel:
+                        return doDefineModel("column-set-model");
                     default:
                         break;
                 }

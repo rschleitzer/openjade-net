@@ -817,6 +817,64 @@ public class SgmlFOTBuilder : FOTBuilder
     public override void setEscapementSpaceBefore(InlineSpace @is) { inlineSpaceC("escapement-space-before", @is); }
     public override void setEscapementSpaceAfter(InlineSpace @is) { inlineSpaceC("escapement-space-after", @is); }
 
+    // Not in the original: page-sequence and column-set-sequence (see Style/PageModel.cs). A page model is
+    // written as the page's width and height, then the region's x and y origin, width and height; a column-set
+    // model as each column's x origin and width, then balance? and the model's width where given.
+    private static string unitsText(long units)
+    {
+        long whole = units / 1000;
+        long frac = Math.Abs(units % 1000);
+        return frac == 0 ? whole + "pt" : whole + "." + frac.ToString("D3").TrimEnd('0') + "pt";
+    }
+
+    private void pageModelsC(string name, PageModel[] models)
+    {
+        ics_.Append(' ').Append(name).Append("=\"");
+        for (int i = 0; i < models.Length; i++)
+        {
+            PageModel m = models[i];
+            if (i > 0)
+                ics_.Append("; ");
+            ics_.Append(unitsText(m.width)).Append(' ').Append(unitsText(m.height)).Append(' ')
+                .Append(unitsText(m.regionXOrigin)).Append(' ').Append(unitsText(m.regionYOrigin)).Append(' ')
+                .Append(unitsText(m.regionWidth)).Append(' ').Append(unitsText(m.regionHeight));
+        }
+        ics_.Append('"');
+    }
+
+    public override void setInitialPageModels(PageModel[] models) { pageModelsC("initial-page-models", models); }
+    public override void setRepeatPageModels(PageModel[] models) { pageModelsC("repeat-page-models", models); }
+
+    public override void setColumnSetModel(ColumnSetModel? model)
+    {
+        ics_.Append(" column-set-model=\"");
+        if (model == null)
+            ics_.Append(falseString);
+        else
+        {
+            for (int i = 0; i < model.columnXOrigin.Length; i++)
+                ics_.Append(i > 0 ? " " : "").Append(unitsText(model.columnXOrigin[i])).Append(':').Append(unitsText(model.columnWidth[i]));
+            if (model.balance)
+                ics_.Append(" balance");
+            if (model.hasWidth)
+                ics_.Append(" width ").Append(unitsText(model.width));
+        }
+        ics_.Append('"');
+    }
+
+    public override void startPageSequence() { startSimpleFlowObj("page-sequence"); }
+    public override void endPageSequence() { endFlow("page-sequence"); }
+
+    public override void startColumnSetSequence(DisplayNIC nic)
+    {
+        os().put((Char)'<').write("column-set-sequence");
+        displayNIC(nic);
+        outputIcs();
+        os().put((Char)'>').put((Char)RE);
+    }
+
+    public override void endColumnSetSequence() { endFlow("column-set-sequence"); }
+
     // Page sequence methods
     public override void startSimplePageSequence(FOTBuilder?[] headerFooter)
     {

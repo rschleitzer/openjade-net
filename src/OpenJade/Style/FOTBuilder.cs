@@ -92,6 +92,23 @@ public class SaveFOTBuilder : FOTBuilder
         operations_.Add(fotb => fotb.startDisplayGroup(copy));
     }
 
+    // Not in the original: see PageModel.cs
+    public override void setColumnSetModel(ColumnSetModel? model)
+    {
+        operations_.Add(fotb => fotb.setColumnSetModel(model));
+    }
+
+    public override void startColumnSetSequence(DisplayNIC nic)
+    {
+        var copy = nic;
+        operations_.Add(fotb => fotb.startColumnSetSequence(copy));
+    }
+
+    public override void endColumnSetSequence()
+    {
+        operations_.Add(fotb => fotb.endColumnSetSequence());
+    }
+
     public override void endDisplayGroup()
     {
         operations_.Add(fotb => fotb.endDisplayGroup());
@@ -925,12 +942,16 @@ public class FOTBuilder
     public virtual void startTablePartFooter() { start(); }
     public virtual void endTablePartFooter() { end(); }
 
-    // Page sequence
+    // Page sequence (not in the original: see PageModel.cs). The models come as inherited characteristics
+    // before startPageSequence, the column-set model before startColumnSetSequence.
+    public virtual void setInitialPageModels(PageModel[] models) { }
+    public virtual void setRepeatPageModels(PageModel[] models) { }
+    public virtual void setColumnSetModel(ColumnSetModel? model) { }
     public virtual void startPageSequence() { start(); }
     public virtual void endPageSequence() { end(); }
 
     // Column set sequence
-    public virtual void startColumnSetSequence() { start(); }
+    public virtual void startColumnSetSequence(DisplayNIC nic) { start(); }
     public virtual void endColumnSetSequence() { end(); }
 
     // Extension flow objects - default to atomic
