@@ -18,7 +18,7 @@ public class StyleEngine : IDisposable
                        int unitsPerInch, bool debugMode, bool dsssl2,
                        bool strictMode, FOTBuilder.ExtensionTableEntry[]? extensionTable = null)
     {
-        interpreter_ = new Interpreter(groveManager, extensionTable);
+        interpreter_ = new Interpreter(groveManager, mgr, extensionTable);
         interpreter_.setUnitsPerInch(unitsPerInch);
         interpreter_.setDebugMode(debugMode);
         interpreter_.setDsssl2(dsssl2);

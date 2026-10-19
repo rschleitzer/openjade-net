@@ -40,11 +40,18 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // Grove manager for loading external files
     private GroveManager? groveManager_;
 
+    // Where the messages go, as in the original (Interpreter::messenger_); without one they go to the console
+    private Messenger? messenger_;
+
     public Interpreter() : this(null, null) { }
 
     public Interpreter(GroveManager? groveManager, FOTBuilder.ExtensionTableEntry[]? extensionTable)
+        : this(groveManager, null, extensionTable) { }
+
+    public Interpreter(GroveManager? groveManager, Messenger? messenger, FOTBuilder.ExtensionTableEntry[]? extensionTable)
     {
         groveManager_ = groveManager;
+        messenger_ = messenger;
         extensionTable_ = extensionTable;
 
         // Create the default/initial processing mode
@@ -1036,6 +1043,16 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
 
     public void message(MessageType.Severity severity, Location loc, string text)
     {
+        if (messenger_ != null)
+        {
+            // As the original: the message goes to the messenger, at the location given or set before
+            Location at = loc;
+            if (loc.origin().isNull() && haveNextLocation_)
+                at = nextLocation_;
+            haveNextLocation_ = false;
+            messenger_.message(severity, at, text);
+            return;
+        }
         string typeStr = severity switch
         {
             MessageType.Severity.warning => "warning",
@@ -1069,17 +1086,30 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
     // IMessenger implementation
     public void dispatchMessage(Message msg)
     {
+        if (messenger_ != null)
+        {
+            messenger_.dispatchMessage(msg);
+            return;
+        }
         message(msg.type.severity(), new Location(), msg.type.ToString());
     }
 
     public void initMessage(Message msg)
     {
-        // Initialize message with context
+        if (haveNextLocation_)
+        {
+            msg.loc = new Location(nextLocation_);
+            haveNextLocation_ = false;
+        }
     }
+
+    private Location nextLocation_ = new Location();
+    private bool haveNextLocation_ = false;
 
     public void setNextLocation(Location loc)
     {
-        // Set the next location for error messages
+        nextLocation_ = new Location(loc);
+        haveNextLocation_ = true;
     }
 
     // Debug mode
