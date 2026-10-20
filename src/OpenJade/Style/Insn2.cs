@@ -123,7 +123,7 @@ public class SetNonInheritedCsSosofoInsn : Insn
             display![displayLength_] = null;
         FlowObj flowObj = (FlowObj)vm.sbase[--tem]!;
         System.Diagnostics.Debug.Assert(vm.sbase[tem]!.asSosofo() != null);
-        vm.sbase[tem++] = new SetNonInheritedCsSosofoObj(flowObj, code_, display, vm.currentNode);
+        vm.sbase[tem++] = new SetNonInheritedCsSosofoObj(flowObj, code_, display, new NodePtr(vm.currentNode));
         vm.sp = tem;
         return next_.pointer();
     }
@@ -355,7 +355,7 @@ public class VarStyleInsn : Insn
         StyleObj? use = null;
         if (hasUse_)
             use = (StyleObj?)vm.sbase[--tem];
-        vm.sbase[tem++] = new VarStyleObj(styleSpec_, use, display, vm.currentNode);
+        vm.sbase[tem++] = new VarStyleObj(styleSpec_, use, display, new NodePtr(vm.currentNode));
         vm.sp = tem;
         vm.interp.makePermanent(vm.sbase[tem - 1]!);
         return next_.pointer();
