@@ -1592,14 +1592,13 @@ public partial class SchemeParser : Messenger
         {
             case Token.Number:
                 {
-                    long val = 0;
-                    for (nuint i = 0; i < currentToken_.size(); i++)
+                    // as an expression reads it (C++: convertNumber), not its digits alone
+                    datum = interp_.convertNumber(currentToken_);
+                    if (datum == null)
                     {
-                        Char c = currentToken_[i];
-                        if (c >= '0' && c <= '9')
-                            val = val * 10 + (c - '0');
+                        message(InterpreterMessages.invalidNumber);
+                        datum = interp_.makeError();
                     }
-                    datum = interp_.makeInteger(val);
                     return true;
                 }
             case Token.String:
