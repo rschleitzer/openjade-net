@@ -645,6 +645,9 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
             (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLineJoin(sym), FOTBuilder.Symbol.symbolMiter));
         installInheritedC("line-cap", new GenericSymbolInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLineCap(sym), FOTBuilder.Symbol.symbolButt));
+        // Not in the original (IGNORED_C there): line-dash reaches the FOTBuilder, see LineDashC
+        installInheritedC("line-dash", new LineDashC(null, nInheritedC_++, makePair(makeLength(0), makeNil()), 0,
+            new System.Collections.Generic.List<long>()));
         installInheritedC("line-number-side", new GenericSymbolInheritedC(null, nInheritedC_++,
             (FOTBuilder fotb, FOTBuilder.Symbol sym) => fotb.setLineNumberSide(sym), FOTBuilder.Symbol.symbolStart));
         installInheritedC("kern-mode", new GenericSymbolInheritedC(null, nInheritedC_++,

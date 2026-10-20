@@ -48,6 +48,14 @@ initial value only. It is all in `src/OpenJade/Style/PageModel.cs`; the
 backends get the models through `FOTBuilder`. The original's backends do not
 set them.
 
+A second addition, since 1.5.0: **`line-dash`** (ISO/IEC 10179), a list of
+lengths, which the original installs as a characteristic it ignores, reaches
+the backends. `FOTBuilder.setLineDash` gets the offset into the pattern, the
+first length of the list, and the others, alternately the lengths of dashes and
+gaps. The initial value is the original's, `(0pt)`: a solid line. It is in
+`src/OpenJade/Style/InheritedC.cs` (`LineDashC`); the original's backends do
+not set it.
+
 Messages of the style engine go to the messenger with their location, as in
 the original; an error in a stylesheet fails the run.
 

@@ -919,6 +919,62 @@ public class IgnoredC : InheritedC
     }
 }
 
+// Not in the original: line-dash (inherited, ISO/IEC 10179), a list of lengths. The C++ original installs it with
+// IGNORED_C; here it reaches the FOTBuilder through setLineDash. The first length is the offset into the pattern, the others
+// are alternately the lengths of dashes and gaps; the initial value (0pt) of the original, without dashes, is a solid line.
+public class LineDashC : InheritedC
+{
+    private readonly ELObj? list_;
+    private readonly long offset_;
+    private readonly System.Collections.Generic.List<long> dashes_;
+
+    public LineDashC(Identifier? ident, uint index, ELObj? list, long offset, System.Collections.Generic.List<long> dashes)
+        : base(ident, index)
+    {
+        list_ = list;
+        offset_ = offset;
+        dashes_ = dashes;
+    }
+
+    public override void set(VM vm, VarStyleObj? style, FOTBuilder fotb,
+                             ref ELObj? cacheValue, System.Collections.Generic.List<nuint> dependencies)
+    {
+        fotb.setLineDash(dashes_, offset_);
+    }
+
+    public override ELObj? value(VM vm, VarStyleObj? style, System.Collections.Generic.List<nuint> dependencies)
+    {
+        return list_;
+    }
+
+    public override ConstPtr<InheritedC>? make(ELObj obj, Location loc, Interpreter interp)
+    {
+        var lengths = new System.Collections.Generic.List<long>();
+        ELObj p = obj;
+        for (;;)
+        {
+            if (p.isNil())
+                break;
+            PairObj? pair = p.asPair();
+            long n;
+            if (pair == null || pair.car() == null || !interp.convertLengthC(pair.car()!, identifier(), loc, out n))
+            {
+                if (pair == null)
+                    interp.invalidCharacteristicValue(identifier(), loc);
+                return null;
+            }
+            lengths.Add(n);
+            p = pair.cdr()!;
+        }
+        if (lengths.Count == 0)
+        {
+            interp.invalidCharacteristicValue(identifier(), loc);
+            return null;
+        }
+        return new ConstPtr<InheritedC>(new LineDashC(identifier(), index(), obj, lengths[0], lengths.GetRange(1, lengths.Count - 1)));
+    }
+}
+
 // Border inherited characteristic
 public class BorderC : IgnoredC
 {
