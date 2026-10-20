@@ -415,6 +415,18 @@ internal class PosixStorageObject : RewindStorageObject, IDisposable
         }
     }
 
+    // void willNotRewind();
+    public override void willNotRewind()
+    {
+        base.willNotRewind();
+        if (eof_ && stream_ != null)
+        {
+            descriptorManager_?.releaseD();
+            stream_.Dispose();
+            stream_ = null;
+        }
+    }
+
     public void Dispose()
     {
         if (!disposed_)

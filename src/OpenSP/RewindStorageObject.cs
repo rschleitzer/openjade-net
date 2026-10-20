@@ -83,7 +83,7 @@ public abstract class RewindStorageObject : StorageObject
     }
 
     // void willNotRewind();
-    protected new void willNotRewind()
+    public override void willNotRewind()
     {
         mayRewind_ = false;
         savingBytes_ = false;
