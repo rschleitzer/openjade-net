@@ -949,6 +949,10 @@ public class FOTBuilder
     public virtual void setColumnSetModel(ColumnSetModel? model) { }
     public virtual void startPageSequence() { start(); }
     public virtual void endPageSequence() { end(); }
+    // After startPageSequence, before its content: what the header or the footer of the region of a page model
+    // generates, for each model of initial-page-models and repeat-page-models that has one, each model once
+    public virtual void startPageModelHeaderFooter(PageModel model, bool footer) { start(); }
+    public virtual void endPageModelHeaderFooter(PageModel model, bool footer) { end(); }
 
     // Column set sequence
     public virtual void startColumnSetSequence(DisplayNIC nic) { start(); }

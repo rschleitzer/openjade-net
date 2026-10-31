@@ -39,7 +39,8 @@ One addition lives in this port itself, because the parser has to take it:
 original reads `define-page-model` and `define-column-set-model` and skips
 them, and has no `page-sequence` or `column-set-sequence`. Here they are
 taken in the features `page` and `multi-column`, restricted: a page model has
-one region filled top to bottom, a column-set model one column subset with
+one region filled top to bottom (since 1.6.0 with a header and a footer, each
+the sosofo it generates and its height), a column-set model one column subset with
 its columns and `balance?`; `page-sequence` takes `initial-page-models` and
 `repeat-page-models`, `column-set-sequence` takes `column-set-model` and the
 display characteristics. Everything else of the page model is an error where

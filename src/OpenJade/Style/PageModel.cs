@@ -6,7 +6,10 @@
 // ISO/IEC 10179:1996 (12.6.4, 12.6.5): the features page and multi-column, restricted, and not nested-column-set.
 //
 // - a page model has the size of the page and exactly one region, filled top to bottom, with its origin and size
-//   (the origin at the lower left, y going up, 12.3.1) and the principal port as its flow;
+//   (the origin at the lower left, y going up, 12.3.1) and the principal port as its flow; the region may have a
+//   header and a footer, each with the sosofo it generates and its height (without one, the height of what it
+//   generates), filled top to bottom -- the header at the top of the region, the footer at its bottom, the flow
+//   between them;
 // - a column-set model has exactly one column subset, its columns each with an x origin and a width, the
 //   principal port flowed into the body-text zone, and balance?;
 // - page-sequence takes initial-page-models and repeat-page-models, column-set-sequence column-set-model and the
@@ -29,6 +32,13 @@ public sealed class PageModel
     public long regionYOrigin;
     public long regionWidth;
     public long regionHeight;
+    // the header and the footer of the region: what they generate (null: none), and their height where given
+    public SosofoObj? header;
+    public SosofoObj? footer;
+    public bool hasHeaderHeight;
+    public bool hasFooterHeight;
+    public long headerHeight;
+    public long footerHeight;
 }
 
 // A column-set model as the backend gets it: the columns of its one subset, from the left edge of the column set
@@ -46,6 +56,14 @@ public class PageModelObj : ELObj
     private readonly PageModel model_;
     public PageModelObj(PageModel model) { model_ = model; }
     public PageModel pageModel() { return model_; }
+
+    public override void traceSubObjects(Collector c)
+    {
+        if (model_.header != null)
+            c.trace(model_.header);
+        if (model_.footer != null)
+            c.trace(model_.footer);
+    }
 }
 
 public class ColumnSetModelObj : ELObj
@@ -193,6 +211,35 @@ internal class ModelBuilderPrimitiveObj : PrimitiveObj
             || !required(region, "height", "region", out m.regionHeight, interp, loc)
             || !topToBottom(region, "region", interp, loc))
             return interp.makeError();
+        foreach (var part in parts[0].parts)
+        {
+            bool footer = part.kind == "footer";
+            if ((footer ? m.footer : m.header) != null)
+                return error(interp, loc, "a region with more than one " + part.kind);
+            if (!topToBottom(part.clauses, part.kind, interp, loc))
+                return interp.makeError();
+            if (!part.clauses.TryGetValue("generate", out var generated))
+                return error(interp, loc, "missing: generate of " + part.kind);
+            SosofoObj? sosofo = generated.asSosofo();
+            if (sosofo == null)
+                return error(interp, loc, "not a sosofo: generate of " + part.kind);
+            long height = 0;
+            bool hasHeight = part.clauses.ContainsKey("height");
+            if (hasHeight && !required(part.clauses, "height", part.kind, out height, interp, loc))
+                return interp.makeError();
+            if (footer)
+            {
+                m.footer = sosofo;
+                m.hasFooterHeight = hasHeight;
+                m.footerHeight = height;
+            }
+            else
+            {
+                m.header = sosofo;
+                m.hasHeaderHeight = hasHeight;
+                m.headerHeight = height;
+            }
+        }
         return new PageModelObj(m);
     }
 
@@ -400,6 +447,29 @@ public class PageSequenceFlowObj : CompoundFlowObj
     {
         FOTBuilder fotb = context.currentFOTBuilder();
         fotb.startPageSequence();
+        // the headers and footers of its page models, each model once, the initial ones first
+        Interpreter interp = context.vm().interp;
+        var dep = new System.Collections.Generic.List<nuint>();
+        var done = new System.Collections.Generic.HashSet<PageModel>();
+        foreach (string name in new[] { "initial-page-models", "repeat-page-models" })
+        {
+            ELObj? p = context.currentStyleStack().actual(interp.lookup(interp.makeStringC(name)).inheritedC(), interp, dep);
+            for (PairObj? pair = p?.asPair(); pair != null; pair = pair.cdr()?.asPair())
+            {
+                if (pair.car() is not PageModelObj obj || !done.Add(obj.pageModel()))
+                    continue;
+                PageModel m = obj.pageModel();
+                foreach (bool footer in new[] { false, true })
+                {
+                    SosofoObj? sosofo = footer ? m.footer : m.header;
+                    if (sosofo == null)
+                        continue;
+                    fotb.startPageModelHeaderFooter(m, footer);
+                    sosofo.process(context);
+                    fotb.endPageModelHeaderFooter(m, footer);
+                }
+            }
+        }
         base.processInner(context);
         fotb.endPageSequence();
     }
@@ -481,7 +551,11 @@ public partial class SchemeParser
                                  ["filling-direction"] = ClauseKind.Expr, ["region"] = ClauseKind.Part },
         ["region"] = new() { ["x-origin"] = ClauseKind.Expr, ["y-origin"] = ClauseKind.Expr, ["width"] = ClauseKind.Expr,
                              ["height"] = ClauseKind.Expr, ["filling-direction"] = ClauseKind.Expr,
-                             ["flow"] = ClauseKind.PageFlow },
+                             ["flow"] = ClauseKind.PageFlow, ["header"] = ClauseKind.Part, ["footer"] = ClauseKind.Part },
+        ["header"] = new() { ["height"] = ClauseKind.Expr, ["filling-direction"] = ClauseKind.Expr,
+                             ["generate"] = ClauseKind.Expr },
+        ["footer"] = new() { ["height"] = ClauseKind.Expr, ["filling-direction"] = ClauseKind.Expr,
+                             ["generate"] = ClauseKind.Expr },
         ["column-set-model"] = new() { ["column-subset"] = ClauseKind.Part, ["fill-out"] = ClauseKind.Expr,
                                        ["filling-direction"] = ClauseKind.Expr, ["width"] = ClauseKind.Expr },
         ["column-subset"] = new() { ["column"] = ClauseKind.Part, ["flow"] = ClauseKind.SubsetFlow,
