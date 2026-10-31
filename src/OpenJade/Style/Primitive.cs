@@ -4315,6 +4315,30 @@ public class CurrentNodeAddressPrimitiveObj : PrimitiveObj
 }
 
 // IdrefAddress primitive
+// sgml-document-address (primitive.cxx SgmlDocumentAddress): the address of another document by its system
+// identifier and a second string, with no node
+public class SgmlDocumentAddressPrimitiveObj : PrimitiveObj
+{
+    private static readonly Signature sig = new Signature(2, 0, false);
+    public SgmlDocumentAddressPrimitiveObj() : base(sig) { }
+
+    public override ELObj? primitiveCall(int nArgs, ELObj?[] args, EvalContext ctx, Interpreter interp, Location loc)
+    {
+        Char[]? s = null;
+        nuint n = 0;
+        if (!args[0]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 0, args[0]);
+        StringC sysid = new StringC(s!, n);
+        if (!args[1]!.stringData(out s, out n))
+            return argError(interp, loc, InterpreterMessages.notAString, 1, args[1]);
+        FOTBuilder.Address addr = new FOTBuilder.Address();
+        addr.type = FOTBuilder.Address.Type.sgmlDocument;
+        addr.@params[0] = sysid;
+        addr.@params[1] = new StringC(s!, n);
+        return new AddressObj(addr);
+    }
+}
+
 public class IdrefAddressPrimitiveObj : PrimitiveObj
 {
     private static readonly Signature sig = new Signature(1, 0, false);

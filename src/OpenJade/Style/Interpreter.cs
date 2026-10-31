@@ -382,6 +382,7 @@ public class Interpreter : Pattern.MatchContext, IInterpreter, IMessenger
         // Address primitives
         installPrimitive("current-node-address", new CurrentNodeAddressPrimitiveObj());
         installPrimitive("idref-address", new IdrefAddressPrimitiveObj());
+        installPrimitive("sgml-document-address", new SgmlDocumentAddressPrimitiveObj());
         installPrimitive("entity-address", new EntityAddressPrimitiveObj());
         installPrimitive("node-list-address", new NodeListAddressPrimitiveObj());
 
